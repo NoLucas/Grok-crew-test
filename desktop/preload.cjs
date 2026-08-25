@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('grokCrew', Object.freeze({
     method: request.method ?? 'GET',
     body: request.body ?? null,
   }),
+  applyTimelinePatch: (projectId, timelinePatch) => ipcRenderer.invoke(
+    'timeline:apply-patch', projectId, timelinePatch,
+  ),
   selectMedia: () => ipcRenderer.invoke('desktop:select-media'),
   showOutput: (relativePath) => ipcRenderer.invoke('desktop:show-output', relativePath),
   appInfo: () => ipcRenderer.invoke('desktop:app-info'),

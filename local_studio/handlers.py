@@ -59,6 +59,7 @@ from studio_server import (
     update_artifact,
 )
 from desktop_domain import (
+    TimelinePatchError,
     answer_control_job,
     apply_timeline_patch,
     control_control_job,
@@ -391,6 +392,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 job_id = path.split("/")[3]; self._json(200, {"job": start_job(job_id, wait=bool(body.get("wait", False)))})
             else:
                 self._json(404, {"error": "Not found"})
+        except TimelinePatchError as exc:
+            self._json(exc.status, exc.payload())
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001
