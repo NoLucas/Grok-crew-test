@@ -7,7 +7,7 @@ import { useTimelineEditing } from './timeline/use-timeline-editing';
 import { findClip, timelineDuration } from './timeline/geometry';
 import { buildSplitOperation } from './timeline/operations';
 import type { TimelinePatch } from './timeline/operations';
-import type { Timeline, TimelineTrack, TrackType } from './timeline/types';
+import type { Timeline, TrackType } from './timeline/types';
 
 declare global {
   interface Window {
@@ -39,9 +39,6 @@ function studioBase() {
   return typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214';
 }
 type PublishMode = 'export_only' | 'ask' | 'auto';
-// Timeline v2 shapes live in app/timeline/types.ts so the editing UI and this
-// workspace never drift apart.
-type Track = TimelineTrack;
 type Project = { id: string; title: string; source_path: string; output_path: string; updated_at: string; current_revision: number };
 type TimelineConflict = { schema: string; reason: string; expected_revision: number; current_revision: number; timeline_patch?: { operations?: unknown[] } };
 type ControlJob = { id: string; project_id: string; status: string; execution_policy: string; updated_at: string; error_text?: string; result_revision?: number; attempt?: number; control_sequence?: number; runner_id?: string; render_job_id?: string; conflict_json?: TimelineConflict };
