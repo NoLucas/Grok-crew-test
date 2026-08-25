@@ -1,0 +1,48 @@
+{
+  "schema": "local-video-workspace.bot-contract/v1",
+  "scope": "127.0.0.1 only",
+  "handoff_channel": "A remote or cloud-hosted bot that cannot reach 127.0.0.1 on this PC must not attempt to. See local_studio/handoff-guide.json (or handoff-guide.ko.json, handoff-guide.zh.json, handoff-guide.ja.json) for the offline handoff channel instead: https://github.com/NoLucas/handoff-inbox (main branch).",
+  "allowed": [
+    "create_project",
+    "read_project",
+    "record_bot_heartbeat",
+    "read_bot_status",
+    "read_bot_guide",
+    "read_terminal_contract",
+    "download_local_terminal_cli",
+    "read_bot_entry",
+    "enter_local_workspace",
+    "read_execution_policy",
+    "set_execution_policy",
+    "read_edit_method",
+    "configure_edit_method",
+    "inspect_local_media",
+    "create_transcript_cut_map",
+    "record_project_memory",
+    "manage_bot_tasks",
+    "run_local_quality_checks",
+    "save_brand_and_overlay_plans",
+    "record_local_performance_notes",
+    "queue_and_run_local_render_when_auto_local",
+    "queue_render_after_human_approval_when_required",
+    "queue_or_auto_upload_instagram",
+    "run_queued_job",
+    "poll_job_progress",
+    "cancel_local_job"
+  ],
+  "prohibited": [
+    "read_credentials",
+    "access_paths_outside_workspace",
+    "bypass_local_token",
+    "publish_to_unconfigured_platforms"
+  ],
+  "token_rule": "Once LOCAL_STUDIO_TOKEN is configured it is required on GET requests as well as POST requests. Only /health, /api/terminal-contract, /api/bot-guide, /api/bot-entry (GET), and the CLI download stay open without it. Cross-origin requests (a browser Origin header outside http://localhost:3000 / http://127.0.0.1:3000) are rejected regardless of token configuration.",
+  "execution_policy": {
+    "on_entry": "auto_local",
+    "choices": ["auto_local", "approval_required"],
+    "local_render_rule": "auto_local may queue and run this bot's local render; approval_required needs recorded human approval.",
+    "instagram_rule": "Instagram can upload immediately when auto_upload is enabled for the job, or remain queued for direct execution."
+  },
+  "review_required": "Only for bots that choose approval_required for local rendering.",
+  "workspace_rule": "Use only files under local_studio/workspace."
+}

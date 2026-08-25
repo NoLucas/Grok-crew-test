@@ -1,0 +1,114 @@
+{
+  "name": "grok-crew",
+  "version": "0.2.3",
+  "license": "BUSL-1.1",
+  "author": "Grok Crew contributors",
+  "description": "Local-first video editing workspace for people and same-PC bots.",
+  "main": "desktop/main.mjs",
+  "keywords": [
+    "video-editing",
+    "local-first",
+    "moviepy",
+    "ai-agents",
+    "grok",
+    "reels",
+    "instagram",
+    "automation"
+  ],
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vinext dev",
+    "local": "node scripts/start-local.mjs",
+    "desktop": "node scripts/start-desktop.mjs",
+    "typecheck": "tsc --noEmit",
+    "desktop:smoke": "electron scripts/smoke-preload.mjs",
+    "desktop:tray-smoke": "electron scripts/smoke-tray.mjs",
+    "verify:core": "npm run typecheck && npm run lint && npm run runner:test && npm run build",
+    "verify:desktop": "npm run desktop:smoke && npm run desktop:tray-smoke",
+    "sidecar:build": "python -m pip install -r local_studio/requirements-build.txt && python -m PyInstaller --clean --distpath build/sidecar --workpath build/pyinstaller local_studio/grok_crew_sidecar.spec",
+    "desktop:pack": "npm run build && npm run sidecar:build && electron-builder --dir",
+    "desktop:dist": "npm run build && npm run sidecar:build && electron-builder",
+    "runner:test": "node scripts/test-relay.mjs",
+    "sample": "node scripts/run-sample-project.mjs",
+    "build": "vinext build",
+    "start": "vinext start",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern build --ignore-pattern release"
+  },
+  "dependencies": {
+    "next": "^16.3.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vinext": "^1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.53.1",
+    "@cloudflare/workers-types": "^5.20260825.1",
+    "@openai/sites-vite-plugin": "0.2.0",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "^0.5.34",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "^19.2.8",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vite": "^8.2.2",
+    "wrangler": "^4.125.0"
+  },
+  "type": "module",
+  "build": {
+    "appId": "com.grokcrew.desktop",
+    "productName": "Grok Crew Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "asar": true,
+    "files": [
+      "desktop/**",
+      "runner/crypto.mjs",
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/sidecar",
+        "to": "sidecar",
+        "filter": [
+          "grok-crew-studio*",
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

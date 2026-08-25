@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    name: Python (syntax + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile all local_studio sources
+        run: python -m compileall -q local_studio
+      - name: Install test dependencies
+        run: python -m pip install -r local_studio/requirements-dev.txt
+      - name: Run pytest
+        run: python -m pytest -q
+        working-directory: local_studio
+
+  web:
+    name: Web (typecheck + lint + runner + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Verify core workspace
+        run: npm run verify:core

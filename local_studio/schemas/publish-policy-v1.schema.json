@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-crew.publish-policy/v1",
+  "type": "object",
+  "required": ["schema", "instagram", "tiktok", "youtube"],
+  "properties": {
+    "schema": { "const": "grok-crew.publish-policy/v1" },
+    "instagram": { "enum": ["export_only", "ask", "auto"] },
+    "tiktok": { "enum": ["export_only", "ask", "auto"] },
+    "youtube": { "enum": ["export_only", "ask", "auto"] }
+  },
+  "additionalProperties": false
+}

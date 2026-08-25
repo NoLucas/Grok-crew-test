@@ -1,0 +1,54 @@
+{
+  "schema": "local-video-workspace.handoff-guide/v1",
+  "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 이 PC로의 네트워크 호출 대신, 완성된 미디어와 편집 계획을 전용 git 브랜치로 인계합니다.",
+  "why_this_exists": "Local Studio는 설계상 127.0.0.1에만 바인딩되며 다른 기기나 컨테이너에서 접근할 수 없습니다(README.md, CONTRIBUTING.md 참고). 이 채널은 원격 API가 아니라 오프라인 인계이며, 이 저장소가 원격 봇으로부터 받아들이는 유일한 것은 아래 지정된 브랜치로의 git push입니다.",
+  "channel": {
+    "medium": "git",
+    "repository": "https://github.com/NoLucas/handoff-inbox.git",
+    "branch": "main",
+    "rule": "오직 이 저장소의 main 브랜치에만 커밋을 push하세요. 로컬 운영자 PC의 IP나 호스트명에 접속을 시도하지 마세요 — 이 저장소만이 허용된 채널입니다.",
+    "folder_naming": "제출 하나당 최상위 폴더 하나, 이름은 '<UTC 타임스탬프>-<짧은 슬러그>' 형식입니다 (예: 2026-08-23T07-19-00Z-payoff-hook). 폴더명은 제출마다 고유해야 하며 중복 감지에 사용됩니다."
+  },
+  "limits": {
+    "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "media_max_bytes": 2147483648,
+    "media_max_bytes_note": "기본값 2GB. 운영자가 local_studio/.env의 HANDOFF_MAX_MEDIA_BYTES로 올리거나 낮출 수 있습니다. 허용되지 않는 확장자나 크기 초과 파일은 잘라내지 않고 패키지 전체를 건너뜁니다.",
+    "bundle_max_bytes": 4194304,
+    "bundle_max_bytes_note": "기본값 4MB(HANDOFF_MAX_BUNDLE_BYTES). bundle.json은 메타데이터·EDL·아티팩트일 뿐이라 이만큼 클 필요가 없습니다.",
+    "packages_per_cycle": 5,
+    "packages_per_cycle_note": "워처는 폴링 1회당 이 개수만큼만 대기 중인 폴더를 처리합니다(HANDOFF_MAX_PACKAGES_PER_CYCLE 또는 운영자가 바꾼 --max-per-cycle). 나머지는 다음 주기에 처리되니, 지연됐다고 재제출하거나 실패로 간주하지 마세요."
+  },
+  "package_contents": {
+    "bundle_json": "폴더 최상위에 bundle.json 파일을 두며, Local Studio 자체의 프로젝트 번들 export/import가 이미 쓰는 스키마(local-video-workspace.project-bundle/v1)를 그대로 사용합니다.",
+    "bundle_json_shape": {
+      "schema": "local-video-workspace.project-bundle/v1",
+      "project": {
+        "title": "문자열",
+        "source_path": "이 미디어가 복사될 워크스페이스 상대경로, 예: inputs/handoff/<폴더명>/source.mp4",
+        "output_path": "렌더 결과의 워크스페이스 상대경로, 예: outputs/handoff/<폴더명>.mp4",
+        "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "문자열", "word_timings": "선택 사항, bot-guide.json 참고" }], "render_settings": "선택 사항, Production의 Finish Rack과 같은 필드(platform, quality, caption_bg, music_track 등)" },
+        "caption": "Instagram 캡션, 최대 2200자",
+        "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
+      },
+      "jobs": [
+        { "kind": "render", "approved": true, "payload": {} },
+        { "kind": "instagram_publish", "approved": true, "payload": { "auto_upload": true } }
+      ],
+      "artifacts": []
+    },
+    "media_file": "source_path가 가리키는 실제 영상 파일을 같은 폴더 최상위에, 경로의 마지막 부분만 딴 파일명으로 둡니다 (예: inputs/handoff/.../source.mp4이 아니라 그냥 source.mp4).",
+    "rule": "새 작업을 요청하려면 job의 'status' 필드를 아예 생략하세요 — 그러면 새로 만들어져 queued+approved 상태가 됩니다. 과거 이력을 재현하려는 의도가 아니라면 'status'를 succeeded/failed로 설정하지 마세요."
+  },
+  "auto_upload_policy": {
+    "rule": "bundle.project.handoff_auto_upload_requested: true와 jobs[].payload.auto_upload: true는 즉시 Instagram 게시를 '요청'할 뿐입니다. PC 운영자가 별도로 local_studio/handoff_watcher.py를 --allow-auto-upload와 함께 실행해두지 않으면 아무 효과가 없습니다. 두 조건이 모두 필요합니다.",
+    "default": "그 로컬 옵트인이 없으면 instagram_publish 작업은 만들어진 뒤 대기 상태로 남고, 사람이 준비되면 Production 페이지에서 직접 실행합니다.",
+    "render_is_different": "렌더 작업은 로컬 MP4 파일만 만들 뿐 외부 효과가 없으므로, approved: true만 설정되면 --allow-auto-upload와 무관하게 자동으로 실행됩니다."
+  },
+  "processing": "운영자 PC에서 도는 백그라운드 스크립트(local_studio/handoff_watcher.py)가 이 브랜치를 주기적으로 확인해 미디어를 자신의 워크스페이스로 복사하고, bundle.json을 그대로 자신의 POST /api/projects/import에 전달합니다. 처리된 폴더는 보통 브랜치에서 제거되므로, 폴더가 영구 기록으로 남아있을 거라 가정하지 마세요.",
+  "never": [
+    "이 프로젝트와 관련해 127.0.0.1, localhost, 또는 어떤 LAN/WAN 주소로도 접속을 시도하지 마세요 — 위 git 브랜치만이 허용된 채널입니다.",
+    "패키지 안에 LOCAL_STUDIO_TOKEN, INSTAGRAM_ACCESS_TOKEN, 또는 다른 어떤 자격증명도 요청·포함·추측하지 마세요.",
+    "channel에 지정된 저장소·브랜치 외에는 어디에도 push하지 마세요.",
+    "제출이 실제로 적용됐는지는 이 채널로는 확인할 수 없습니다 — 운영자의 로컬 로그 외에는 전달 확인 수단이 없습니다."
+  ]
+}

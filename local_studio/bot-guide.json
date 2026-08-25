@@ -1,0 +1,214 @@
+{
+  "schema": "local-video-workspace.bot-guide/v1",
+  "title": "Local Video Workspace Editing Playbook",
+  "scope": "This guide is for a bot running on the same workstation as Local Video Studio.",
+  "first_action": "Enter Local Video Studio. Entry records the first heartbeat before any work starts.",
+  "non_negotiables": [
+    "Use only files under local_studio/workspace.",
+    "Keep the first useful idea or visible change within the first 1.5 seconds when possible.",
+    "Remove filler, long silence, duplicate points, and weak setup before adding effects.",
+    "For vertical output, preserve the subject with left, center, or right reframing rather than stretching video.",
+    "Do not access credentials or leave the workspace. Local rendering follows this bot's execution policy, and Instagram upload follows the job's auto_upload setting."
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "enter_local_studio",
+      "action": "POST /api/bot-entry with bot_id, display_name, purpose, and task.",
+      "goal": "Create a local entry record and first heartbeat. A new bot receives auto_local for local rendering by default and can choose approval_required instead."
+    },
+    {
+      "step": 2,
+      "name": "inspect",
+      "action": "Read GET /api/bot-guide, Cut Log, edit map, existing projects, and queued jobs.",
+      "goal": "Do not overwrite an existing approved project or retry a job that is already running."
+    },
+    {
+      "step": 3,
+      "name": "set_edit_method",
+      "action": "POST /api/edit-method with the selected hook strategy, pacing, filler policy, captions, reframe, look, audio, speed, FPS, and quality.",
+      "goal": "Configure only the allowed local edit controls. This records a plan; it does not render or publish."
+    },
+    {
+      "step": 4,
+      "name": "plan_the_cut",
+      "action": "Create a transcript-first EDL with only kept spoken segments.",
+      "goal": "Use contiguous source timecodes, two-word readable captions, and a clear hook."
+    },
+    {
+      "step": 5,
+      "name": "prepare_finish",
+      "action": "Set reframe anchor, speed, audio, look, captions, quality, and FPS in render_settings.",
+      "goal": "Choose the smallest changes that solve the communication problem; avoid effect stacking."
+    },
+    {
+      "step": 6,
+      "name": "choose_execution_policy",
+      "action": "Read GET /api/bots/{bot_id}/execution-policy. Keep auto_local for automatic local rendering, or POST /api/bots/execution-policy with mode=approval_required before requesting review.",
+      "goal": "The bot chooses its own local-rendering gate. This choice is recorded in SQLite and shown in Bot Check."
+    },
+    {
+      "step": 7,
+      "name": "render",
+      "action": "With auto_local, queue and run the local render. With approval_required, record a concise review request and use a human-approved render job.",
+      "goal": "Check final job status and report output path or exact failure reason."
+    },
+    {
+      "step": 8,
+      "name": "publish_or_queue",
+      "action": "Queue an Instagram job after a completed render, with auto_upload=true to upload immediately.",
+      "goal": "With auto_upload enabled, the local service starts upload immediately; otherwise the queued job can be run directly."
+    }
+  ],
+  "edit_heuristics": {
+    "hook": "Start with the surprise, pain point, or payoff. Avoid greetings and context dumps.",
+    "cutting": "Prefer transcript-led hard cuts. Keep intentional pauses only when they create emphasis.",
+    "captions": "Use short uppercase-friendly phrases. Keep captions inside safe vertical space and do not cover the speaker's face.",
+    "reframe": "Use center unless the subject is visibly left or right. Never stretch source video.",
+    "audio": "Default to 30fps, normal volume, and 80ms edge fades. Normalize only when source levels vary.",
+    "look": "Natural is the default. Punchy is for contrast-heavy social clips. Mono is a deliberate style choice, not a repair tool.",
+    "quality": "Use balanced for normal publication, compact for review, and high for archival or visually detailed content."
+  },
+  "edit_method_contract": {
+    "endpoint": "POST /api/edit-method",
+    "write_rule": "A bot may set an edit method after checking local scope. The method can be applied to the Finish Rack and does not itself start rendering or upload.",
+    "body": {
+      "bot_id": "local-editor-bot",
+      "display_name": "Local Editor Bot",
+      "method": {
+        "hook_strategy": "payoff_first | question_first | chronological",
+        "pacing": "tight | balanced | deliberate",
+        "filler_policy": "remove | review | keep",
+        "caption_mode": "burn_in | off",
+        "reframe_anchor": "left | center | right",
+        "look": "natural | punchy | mono | night",
+        "audio_policy": "preserve | normalize | mute",
+        "speed": "0.5 through 2.0",
+        "fps": "24 | 30 | 60",
+        "quality": "compact | balanced | high"
+      }
+    }
+  },
+  "render_settings_contract": {
+    "presets_endpoint": "GET /api/presets returns quality_presets, caption_layout_presets, and platform_presets. Merge a chosen preset's fields directly into a project's timeline.render_settings.",
+    "platform": "Set render_settings.platform to one of the keys from platform_presets (default reels_tiktok_shorts, 1080x1920). feed_square (1080x1080) and landscape_x (1920x1080) are also available.",
+    "caption_background": "Set render_settings.caption_bg=true and caption_bg_color (hex) to draw a background panel behind burned-in captions.",
+    "word_level_captions": "Add an optional word_timings array (each item: {text, start, end} in seconds relative to the clip's own start, i.e. 0 = the instant the clip's in point begins) to any timeline clip to render sequential per-word captions instead of one static caption for that clip. Omit it to keep the existing single-caption behavior.",
+    "background_music": "Set render_settings.music_track to a workspace-relative audio file path to mix a background music bed under the source audio (music_volume 0-100, default 30; music_loop true loops the track to match the render length, false trims it once). When the clip still has its own dialogue audio, the music automatically ducks under it instead of mixing in at one flat level (music_ducking, default true; music_duck_floor 5-100, default 35, is how low it ducks to, as a percent of music_volume). Set music_ducking=false for a flat mix.",
+    "jobs_are_async": "Starting a render or Instagram job (via /render, /instagram, or /api/jobs/{id}/run) returns immediately with a queued or running job. Poll GET /api/jobs/{id} for live progress (0-100) until status is succeeded or failed, or pass wait: true in the request body to block until it finishes. POST /api/jobs/{id}/cancel requests cancellation before the next clip is processed."
+  },
+  "operations_contract": {
+    "read": "GET /api/projects/{id}/operations returns the project, jobs, saved cut maps, quality reports, bot tasks, memory, overlays, variants, and performance notes.",
+    "write": [
+      "POST /api/projects/{id}/inspect for a local media preflight.",
+      "POST /api/projects/{id}/cut-map with timestamped transcript segments for non-destructive cut suggestions.",
+      "POST /api/projects/{id}/quality-check with stage=pre_render, post_render, or publish.",
+      "POST /api/projects/{id}/artifacts for project_memory, bot_task, audio_plan, edit_variant, overlay_slots, or performance_note.",
+      "POST /api/artifacts/{id}/update to change a saved task status or local plan.",
+      "POST /api/brand-kits for reusable local style settings."
+    ],
+    "rule": "Operations artifacts are plans, checks, and local memory. They never start rendering or publishing."
+  },
+  "site_features": [
+    {"id":"01","area":"PRODUCTION","name":"Project setup","use_when":"Starting a new video or checking its source/output paths.","bot_action":"Create or select the project, then read its saved settings and job history.","result":"A clear local project scope without overwriting another active job."},
+    {"id":"02","area":"EDIT METHOD","name":"Shared edit method","use_when":"The bot needs to establish the creative approach before making cuts.","bot_action":"Set hook, pace, filler policy, captions, reframe, look, audio, speed, FPS, and quality through /api/edit-method.","result":"A reusable plan that can be applied to the Finish Rack."},
+    {"id":"03","area":"CUT LOG","name":"Transcript cut map","use_when":"A spoken source has filler, silence, retakes, or a weak opening.","bot_action":"Save kept timestamped segments with /api/projects/{id}/cut-map before changing the EDL.","result":"A non-destructive, reviewable map of the proposed edit."},
+    {"id":"04","area":"FINISH RACK","name":"Frame, captions, and sound","use_when":"The visual finish needs reframing, readable captions, audio cleanup, or export settings.","bot_action":"Set render settings in Production; keep the subject inside the vertical safe area and select only necessary effects.","result":"A ready-to-render local MP4 specification."},
+    {"id":"05","area":"OPERATIONS","name":"Media preflight","use_when":"Media has just arrived or its format and health are unknown.","bot_action":"Run /api/projects/{id}/inspect to record orientation, FPS, duration, audio presence, black frames, and silence.","result":"A local inspection report that identifies source risks before editing."},
+    {"id":"06","area":"OPERATIONS","name":"Render quality check","use_when":"Before rendering, after rendering, or before delivery.","bot_action":"Run /api/projects/{id}/quality-check with pre_render, post_render, or publish stage.","result":"A saved pass/fail report for cut boundaries, audio, captions, format, and delivery readiness."},
+    {"id":"07","area":"OPERATIONS","name":"Project memory","use_when":"A future bot must understand an edit decision, open issue, or the next step.","bot_action":"Save a project_memory artifact with the decision, reason, and unresolved work.","result":"Persistent local context for the next editing session."},
+    {"id":"08","area":"OPERATIONS","name":"Bot task board","use_when":"Work needs ownership, a status, retries, or a completion report.","bot_action":"Create or update bot_task artifacts; use the task status rather than assuming work is complete.","result":"A visible local board of assigned, active, failed, and finished work."},
+    {"id":"09","area":"OPERATIONS","name":"Audio plan","use_when":"Silence trimming, volume normalization, edge fades, muting, or BGM balance is needed.","bot_action":"Save an audio_plan artifact and apply the matching audio policy in render settings.","result":"Documented audio decisions that can be reused and checked."},
+    {"id":"10","area":"OPERATIONS","name":"A/B edit comparison","use_when":"Two hooks, lengths, caption styles, or cut rhythms need comparison.","bot_action":"Save each alternative as an edit_variant with its hook, cut count, and notes.","result":"Comparable options without replacing the current edit."},
+    {"id":"11","area":"OPERATIONS","name":"Brand kit","use_when":"Several projects need the same font, safe area, colors, logo, intro/outro, or look.","bot_action":"Save a reusable local brand kit and apply its values to the project plan.","result":"Consistent brand decisions across local projects."},
+    {"id":"12","area":"OPERATIONS","name":"Overlay slots","use_when":"A reel needs CTA, progress bar, title card, arrow, or emphasis graphics.","bot_action":"Save overlay_slots with timing and placement; keep captions readable above overlays.","result":"A time-based overlay plan that does not alter source media."},
+    {"id":"13","area":"OPERATIONS","name":"Failure and performance notes","use_when":"A job fails, or posted content has view, save, or comment feedback to reuse.","bot_action":"Read failed job errors, record recovery notes, and save performance_note artifacts after delivery.","result":"Exact failure context and learning for the next hook or edit."},
+    {"id":"14","area":"RENDER","name":"Local render queue","use_when":"The edit and render settings are ready for MP4 output.","bot_action":"Use jobs render with the bot's execution policy; read the resulting job status and output path.","result":"A local 1080×1920 MP4 or a precise failure record."},
+    {"id":"15","area":"DELIVERY","name":"Instagram delivery","use_when":"A completed local MP4 and caption are ready for an Instagram professional account.","bot_action":"Use jobs instagram --auto-upload for immediate delivery, or omit it to leave a runnable queued job.","result":"An upload job result; local credentials and a supported MP4 are required."},
+    {"id":"16","area":"BOT CHECK","name":"Presence and progress","use_when":"The bot starts, changes stage, finishes, or encounters a failure.","bot_action":"Send a heartbeat with bot_id, action, project, decision, and next step; then inspect Bot Check.","result":"Verified activity and a real entry → edit → render/upload progress trail."},
+    {"id":"17","area":"TERMINAL","name":"Bot CLI and page links","use_when":"The bot works from a terminal instead of clicking through the browser.","bot_action":"Run python local_studio/grok_crew.py contract, then use its project, operation, job, and site commands.","result":"The same local Studio functions without browser automation."},
+    {"id":"18","area":"PRIVACY","name":"Local-only boundaries","use_when":"Any action needs files, access tokens, or a publication destination.","bot_action":"Use only local_studio/workspace media and runtime-provided tokens; never read .env, browser storage, or SQLite for secrets.","result":"Work remains local and credentials stay outside bot-readable project records."}
+  ],
+  "workspace_pages": [
+    {"id":"01","url":"/","name":"Studio","purpose":"A visual overview of the reel concept, project state, and local creative direction.","bot_use":"Read the current creative context before selecting a project action."},
+    {"id":"02","url":"/edit","name":"Edit Lab","purpose":"Frame, motion, typography, timing, caption, and preview controls.","bot_use":"Use it to inspect or align visual-edit decisions with the shared edit method."},
+    {"id":"03","url":"/cut","name":"Cut Log","purpose":"Transcript-led clip review, keep/remove decisions, and time-based cut planning.","bot_use":"Review the planned cut, then save a non-destructive cut map through Local Studio."},
+    {"id":"04","url":"/production","name":"Production","purpose":"Projects, media paths, finish settings, render queue, and Instagram delivery.","bot_use":"Create or select the local project, apply settings, render, and queue or auto-upload delivery."},
+    {"id":"05","url":"/operations","name":"Operations Center","purpose":"Media inspection, quality reports, project memory, tasks, variants, audio, overlays, brand kits, and recovery notes.","bot_use":"Record plans and checks here before or after rendering; use artifacts for durable teamwork."},
+    {"id":"06","url":"/bots","name":"Bot Check","purpose":"Verified bot entry, heartbeat, capability status, recent activity, and connection flow.","bot_use":"Check in at every meaningful state change and use this page to verify the bot is truly active."},
+    {"id":"07","url":"/terminal","name":"Terminal","purpose":"Copy-ready local CLI and API entry instructions for same-PC bots.","bot_use":"Start with the contract, enter Local Studio, and use the listed local commands."},
+    {"id":"08","url":"/bot-guide","name":"Bot Guide","purpose":"The machine-readable playbook, feature manual, workflow, boundaries, and examples.","bot_use":"Read GET /api/bot-guide before work and refresh it when instructions change."},
+    {"id":"09","url":"/library","name":"Library","purpose":"Local creative references, reusable ideas, and source context.","bot_use":"Use as local inspiration and context; do not assume it grants access beyond the workspace."},
+    {"id":"10","url":"/agent","name":"Agent Desk","purpose":"A browser-local brief, rules, source scope, task queue, and handoff record.","bot_use":"Read the saved brief and task state before proposing or recording new work."},
+    {"id":"11","url":"/connect","name":"Local Desk","purpose":"Offline handoff, local project snapshot, and manual bot-return area.","bot_use":"Use the local manifest when a browser-only workflow needs a portable brief."},
+    {"id":"12","url":"/packet","name":"Packet","purpose":"A packaged creative brief and delivery-ready content details.","bot_use":"Inspect and preserve its constraints when preparing captions or a final handoff."},
+    {"id":"13","url":"/gates","name":"Gate Board","purpose":"Project readiness and quality checkpoints.","bot_use":"Use it to identify unfinished checks instead of claiming a project is ready early."},
+    {"id":"14","url":"/export","name":"Export","purpose":"Output format, size, caption package, and final delivery details.","bot_use":"Match the final local render and delivery settings to the selected platform requirements."},
+    {"id":"15","url":"/privacy","name":"Privacy & Settings","purpose":"Device-local workspace identity and privacy boundaries.","bot_use":"Respect the current local scope; never read secret values from browser storage or configuration files."}
+  ],
+  "terminal_cli_contract": {
+    "api_base_url": "http://127.0.0.1:7214",
+    "browser_site_base_url": "http://localhost:3000",
+    "browser_rule": "Port 7214 is only for CLI download and JSON API requests. For browser use or screenshots, run python grok-crew.py site --page production and open the printed http://localhost:3000 URL. Never open /production on port 7214.",
+    "clone_cli_path": "local_studio/grok_crew.py",
+    "clone_bootstrap": "python local_studio/grok_crew.py contract",
+    "browser_pages": {
+      "studio": "http://localhost:3000/",
+      "edit": "http://localhost:3000/edit",
+      "cut": "http://localhost:3000/cut",
+      "production": "http://localhost:3000/production",
+      "operations": "http://localhost:3000/operations",
+      "bot_check": "http://localhost:3000/bots",
+      "bot_guide": "http://localhost:3000/bot-guide",
+      "terminal": "http://localhost:3000/terminal",
+      "library": "http://localhost:3000/library",
+      "agent_desk": "http://localhost:3000/agent",
+      "local_desk": "http://localhost:3000/connect",
+      "packet": "http://localhost:3000/packet",
+      "gate_board": "http://localhost:3000/gates",
+      "export": "http://localhost:3000/export",
+      "privacy": "http://localhost:3000/privacy"
+    },
+    "download": "GET /downloads/grok-crew.py",
+    "bootstrap": "python grok-crew.py contract",
+    "purpose": "A dependency-free CLI for a bot running in a terminal on the same PC. It can use the Local Studio and Operations endpoints without browser interaction.",
+    "token_rule": "If token protection is enabled, pass LOCAL_STUDIO_TOKEN through the bot terminal environment. Never read .env, browser storage, or SQLite for it. The token is required on every reading request as well as every writing request once configured; only /health, /api/terminal-contract, /api/bot-guide, /api/bot-entry (GET), and the CLI download stay open without it.",
+    "approval_rule": "A connected bot starts in auto_local and can render with jobs render --bot-id. Use policy set --bot-id <id> --mode approval_required to require --human-approved for that bot's renders. Use jobs instagram --auto-upload to start Instagram upload immediately, or omit it to queue the upload."
+  },
+  "execution_policy": {
+    "on_entry": "Every bot that enters Local Studio receives auto_local unless it explicitly chooses approval_required.",
+    "read": "GET /api/bots/{bot_id}/execution-policy",
+    "write": "POST /api/bots/execution-policy with bot_id and mode.",
+    "modes": {
+      "auto_local": "The bot can queue and start its own local MP4 render after it is connected.",
+      "approval_required": "The bot can use every planning, inspection, project, and operations feature, but its render request requires approved: true or --human-approved."
+    },
+    "external_boundary": "Instagram upload is separate from local rendering. The job's auto_upload setting chooses immediate upload or a manual queued run."
+  },
+  "approval_gates": [
+    "Instagram upload requires valid local Instagram credentials and a supported rendered file.",
+    "Use auto_upload=true for immediate upload, or leave it false to keep the job queued."
+  ],
+  "allowed_endpoints": {
+    "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits"],
+    "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel"],
+    "local_render": ["POST /api/projects/{id}/render when the connected bot's policy is auto_local or a human approval is recorded."],
+    "write_for_delivery": ["POST /api/projects/{id}/instagram with auto_upload=true or false"]
+  },
+  "never": [
+    "Read or reveal LOCAL_STUDIO_TOKEN, INSTAGRAM_ACCESS_TOKEN, or .env contents.",
+    "Use a path outside local_studio/workspace.",
+    "Claim a bot is active without a current heartbeat.",
+    "Change completed output files unless the owner requests a new edit."
+  ],
+  "heartbeat_example": {
+    "bot_id": "local-editor-bot",
+    "display_name": "Local Editor Bot",
+    "action": "render_or_upload_ready",
+    "detail": {
+      "project": "six-lines-reel",
+      "decision": "Removed filler, retained 3 spoken cuts, centered 9:16 reframe.",
+      "next": "Run local rendering by bot policy, then queue or auto-upload Instagram as needed."
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "local-video-workspace.handoff-guide/v1",
+  "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. It hands off finished media and an edit plan through a dedicated git branch instead of any network call to this PC.",
+  "why_this_exists": "Local Studio binds to 127.0.0.1 only and is not reachable from another machine or container by design (see README.md and CONTRIBUTING.md). This channel is an offline handoff, not a remote API — the only thing this repository accepts from a remote bot is a git push to the branch named below.",
+  "channel": {
+    "medium": "git",
+    "repository": "https://github.com/NoLucas/handoff-inbox.git",
+    "branch": "main",
+    "rule": "Push commits only to this repository's main branch. Never attempt to reach an IP address or hostname belonging to the local operator's machine — this repository is the only sanctioned channel.",
+    "folder_naming": "One top-level folder per submission, named '<UTC timestamp>-<short-slug>' (e.g. 2026-08-23T07-19-00Z-payoff-hook). The folder name must be unique per submission; it is used to detect duplicates."
+  },
+  "limits": {
+    "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "media_max_bytes": 2147483648,
+    "media_max_bytes_note": "2 GB by default; the operator can raise or lower this with HANDOFF_MAX_MEDIA_BYTES in local_studio/.env. A package with an unsupported extension or an oversized file is skipped entirely, not truncated.",
+    "bundle_max_bytes": 4194304,
+    "bundle_max_bytes_note": "4 MB by default (HANDOFF_MAX_BUNDLE_BYTES). bundle.json is metadata/EDL/artifacts only — it should never need to be this large.",
+    "packages_per_cycle": 5,
+    "packages_per_cycle_note": "The watcher processes at most this many pending folders per poll (HANDOFF_MAX_PACKAGES_PER_CYCLE via --max-per-cycle, if the operator changes it). Extra submissions simply wait for a later cycle — do not resubmit or assume a delay means failure."
+  },
+  "package_contents": {
+    "bundle_json": "A file named bundle.json at the folder root, using the same schema Local Studio's own project-bundle export/import already uses: local-video-workspace.project-bundle/v1.",
+    "bundle_json_shape": {
+      "schema": "local-video-workspace.project-bundle/v1",
+      "project": {
+        "title": "string",
+        "source_path": "workspace-relative path this media will be copied to, e.g. inputs/handoff/<folder-name>/source.mp4",
+        "output_path": "workspace-relative path for the render, e.g. outputs/handoff/<folder-name>.mp4",
+        "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "string", "word_timings": "optional, see bot-guide.json" }], "render_settings": "optional, same fields Production's Finish Rack uses (platform, quality, caption_bg, music_track, ...)" },
+        "caption": "Instagram caption text, up to 2200 characters",
+        "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
+      },
+      "jobs": [
+        { "kind": "render", "approved": true, "payload": {} },
+        { "kind": "instagram_publish", "approved": true, "payload": { "auto_upload": true } }
+      ],
+      "artifacts": []
+    },
+    "media_file": "The actual video file referenced by source_path, placed at the top level of the same folder and named with just its final path segment (e.g. source.mp4, not inputs/handoff/.../source.mp4).",
+    "rule": "Omit a job's 'status' field entirely so it is created fresh as queued+approved. Do not set 'status' to succeeded/failed unless you are intentionally replaying history, not requesting new work."
+  },
+  "auto_upload_policy": {
+    "rule": "Setting bundle.project.handoff_auto_upload_requested: true and jobs[].payload.auto_upload: true only requests immediate Instagram publishing. It has no effect unless the PC's operator has separately started local_studio/handoff_watcher.py with --allow-auto-upload. Both conditions are required.",
+    "default": "Without that local opt-in, the instagram_publish job is created and left queued; a person runs it from the Production page when ready.",
+    "render_is_different": "A render job only produces a local MP4 file — it has no external effect — so it runs automatically once approved: true is set, independent of --allow-auto-upload."
+  },
+  "processing": "A background script on the operator's PC (local_studio/handoff_watcher.py) polls this branch, copies the media into its own workspace, and calls its own POST /api/projects/import with bundle.json verbatim. Processed folders are normally removed from the branch afterward — do not assume a folder stays on the branch as a permanent record.",
+  "never": [
+    "Never attempt to connect to 127.0.0.1, localhost, or any LAN/WAN address for this project — only the git branch above is a sanctioned channel.",
+    "Never request, embed, or guess LOCAL_STUDIO_TOKEN, INSTAGRAM_ACCESS_TOKEN, or any other credential in a package.",
+    "Never push to any repository or branch other than the one named in 'channel'.",
+    "Never assume a submission was applied — this channel has no delivery confirmation beyond the operator's own local logs."
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "title": "Grok Crew Sample — two-cut Reel",
+  "source_path": "inputs/grok-crew-sample.mp4",
+  "output_path": "outputs/grok-crew-sample-render.mp4",
+  "caption": "A bundled local Grok Crew sample render. No Instagram upload.",
+  "timeline": {
+    "schema": "local-video-workspace.edl/v1",
+    "clips": [
+      {
+        "in": 0,
+        "out": 4,
+        "keep": true,
+        "caption": "ONE ASK"
+      },
+      {
+        "in": 4,
+        "out": 8,
+        "keep": true,
+        "caption": "SIX LINES"
+      }
+    ],
+    "render_settings": {
+      "platform": "reels_tiktok_shorts",
+      "quality": "compact",
+      "fps": 24,
+      "crop_anchor": "center",
+      "look": "natural",
+      "captions_enabled": true,
+      "caption_size": 56,
+      "caption_y": 78,
+      "caption_stroke": 2,
+      "caption_bg": true,
+      "caption_bg_color": "#000000",
+      "mute_audio": true,
+      "fade_in": 0.04,
+      "fade_out": 0.04
+    }
+  }
+}

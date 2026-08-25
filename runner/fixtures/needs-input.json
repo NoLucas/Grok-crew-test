@@ -1,0 +1,9 @@
+{
+  "schema": "grok-crew.runner-needs-input/v1",
+  "question_id": "hook-tone",
+  "question": "Which opening tone should lead the edit?",
+  "options": [
+    { "value": "direct", "label": "Direct payoff", "description": "Show the strongest result immediately." },
+    { "value": "curious", "label": "Curiosity gap", "description": "Open on a short unanswered question." }
+  ]
+}

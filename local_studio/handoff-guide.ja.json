@@ -1,0 +1,54 @@
+{
+  "schema": "local-video-workspace.handoff-guide/v1",
+  "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドホストのボットのための契約です。このPCへのネットワーク呼び出しの代わりに、専用の git ブランチを通じて完成した素材と編集計画を引き継ぎます。",
+  "why_this_exists": "Local Studio は設計上 127.0.0.1 にのみバインドされ、別のマシンやコンテナからはアクセスできません(README.md と CONTRIBUTING.md を参照)。このチャネルはリモート API ではなくオフラインの引き継ぎであり、本リポジトリがリモートボットから受け付けるのは、下記に指定されたブランチへの git push だけです。",
+  "channel": {
+    "medium": "git",
+    "repository": "https://github.com/NoLucas/handoff-inbox.git",
+    "branch": "main",
+    "rule": "本リポジトリの main ブランチにのみコミットを push してください。ローカル運用者のマシンに属する IP アドレスやホスト名に接続を試みないでください——このリポジトリだけが許可されたチャネルです。",
+    "folder_naming": "1回の提出につきトップレベルフォルダを1つ、'<UTC タイムスタンプ>-<短いスラッグ>' の形式で命名します(例: 2026-08-23T07-19-00Z-payoff-hook)。フォルダ名は提出ごとに一意である必要があり、重複検出に使われます。"
+  },
+  "limits": {
+    "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "media_max_bytes": 2147483648,
+    "media_max_bytes_note": "デフォルトは2GBです。運用者は local_studio/.env の HANDOFF_MAX_MEDIA_BYTES で引き上げたり引き下げたりできます。対応していない拡張子や大きすぎるファイルを含むパッケージは、切り詰められるのではなくパッケージごとスキップされます。",
+    "bundle_max_bytes": 4194304,
+    "bundle_max_bytes_note": "デフォルトは4MB(HANDOFF_MAX_BUNDLE_BYTES)です。bundle.json はメタデータ・EDL・アーティファクトのみなので、これほど大きくなる必要はないはずです。",
+    "packages_per_cycle": 5,
+    "packages_per_cycle_note": "ウォッチャーは1回のポーリングにつき、待機中のフォルダをこの件数までしか処理しません(HANDOFF_MAX_PACKAGES_PER_CYCLE、または運用者が変更した --max-per-cycle)。それを超えた提出は次のサイクルで処理されるのを待つだけです——再提出したり、遅延を失敗と見なしたりしないでください。"
+  },
+  "package_contents": {
+    "bundle_json": "フォルダのルートに bundle.json という名前のファイルを置き、Local Studio 自身のプロジェクトバンドルのエクスポート/インポートで既に使われているのと同じスキーマ local-video-workspace.project-bundle/v1 を使用します。",
+    "bundle_json_shape": {
+      "schema": "local-video-workspace.project-bundle/v1",
+      "project": {
+        "title": "文字列",
+        "source_path": "この素材がコピーされるワークスペース相対パス。例: inputs/handoff/<フォルダ名>/source.mp4",
+        "output_path": "レンダー結果のワークスペース相対パス。例: outputs/handoff/<フォルダ名>.mp4",
+        "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "文字列", "word_timings": "任意、bot-guide.json を参照" }], "render_settings": "任意。Production の Finish Rack と同じフィールド(platform、quality、caption_bg、music_track など)" },
+        "caption": "Instagram キャプションのテキスト、最大2200文字",
+        "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
+      },
+      "jobs": [
+        { "kind": "render", "approved": true, "payload": {} },
+        { "kind": "instagram_publish", "approved": true, "payload": { "auto_upload": true } }
+      ],
+      "artifacts": []
+    },
+    "media_file": "source_path が参照する実際の動画ファイル。同じフォルダのトップレベルに、パスの最後のセグメントのみを名前として配置します(例: inputs/handoff/.../source.mp4 ではなく source.mp4)。",
+    "rule": "新しい作業を依頼する場合は job の 'status' フィールドを完全に省略してください。そうすると queued+approved の状態で新規作成されます。過去の履歴を意図的に再現する場合を除き、'status' を succeeded/failed に設定しないでください。"
+  },
+  "auto_upload_policy": {
+    "rule": "bundle.project.handoff_auto_upload_requested: true と jobs[].payload.auto_upload: true を設定しても、それは即座の Instagram 公開を「依頼」するだけです。PC の運用者が別途 --allow-auto-upload を付けて local_studio/handoff_watcher.py を起動していない限り、効果はありません。両方の条件が必要です。",
+    "default": "そのローカルでのオプトインがない場合、instagram_publish ジョブは作成されてキューに残ったままになり、準備ができた人が Production ページから実行します。",
+    "render_is_different": "レンダージョブはローカルの MP4 ファイルを生成するだけで外部への影響がないため、approved: true が設定されていれば --allow-auto-upload とは無関係に自動的に実行されます。"
+  },
+  "processing": "運用者の PC 上で動くバックグラウンドスクリプト(local_studio/handoff_watcher.py)がこのブランチをポーリングし、素材を自分のワークスペースにコピーして、bundle.json をそのまま自分の POST /api/projects/import に渡します。処理済みのフォルダは通常その後ブランチから削除されます——フォルダが永久的な記録としてブランチに残り続けると仮定しないでください。",
+  "never": [
+    "このプロジェクトに関して 127.0.0.1、localhost、または LAN/WAN 上のいかなるアドレスにも接続を試みないでください——上記の git ブランチのみが許可されたチャネルです。",
+    "パッケージ内で LOCAL_STUDIO_TOKEN、INSTAGRAM_ACCESS_TOKEN、その他いかなる認証情報も要求・埋め込み・推測しないでください。",
+    "'channel' で指定されたもの以外のリポジトリやブランチに push しないでください。",
+    "提出が適用されたと仮定しないでください——このチャネルには、運用者自身のローカルログ以外に配信確認の手段がありません。"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-crew.runner-control/v1",
+  "type": "object",
+  "required": ["schema", "control_job_id", "runner_id", "command", "sequence", "attempt", "requested_at", "origin"],
+  "properties": {
+    "schema": { "const": "grok-crew.runner-control/v1" },
+    "control_job_id": { "type": "string", "minLength": 1 },
+    "runner_id": { "type": "string", "minLength": 1 },
+    "command": { "enum": ["cancel", "pause", "resume", "retry"] },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "reason": { "type": "string", "maxLength": 500 },
+    "requested_at": { "type": "string" },
+    "origin": { "const": "human" }
+  },
+  "additionalProperties": false
+}

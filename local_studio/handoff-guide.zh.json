@@ -1,0 +1,54 @@
+{
+  "schema": "local-video-workspace.handoff-guide/v1",
+  "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。它不通过任何网络调用连接这台 PC,而是通过一个专用的 git 分支交接完成的素材和剪辑计划。",
+  "why_this_exists": "Local Studio 按设计只绑定 127.0.0.1,无法从另一台机器或容器访问(参见 README.md 和 CONTRIBUTING.md)。这个通道是离线交接,不是远程 API——本仓库从远程机器人那里接受的唯一内容,就是向下面指定的分支执行一次 git push。",
+  "channel": {
+    "medium": "git",
+    "repository": "https://github.com/NoLucas/handoff-inbox.git",
+    "branch": "main",
+    "rule": "只能向本仓库的 main 分支 push 提交。绝不要尝试连接本地运营者机器所属的任何 IP 地址或主机名——本仓库是唯一被允许的通道。",
+    "folder_naming": "每次提交一个顶层文件夹,命名为 '<UTC 时间戳>-<短标签>'(例如 2026-08-23T07-19-00Z-payoff-hook)。文件夹名必须在每次提交中唯一,用于检测重复提交。"
+  },
+  "limits": {
+    "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "media_max_bytes": 2147483648,
+    "media_max_bytes_note": "默认 2GB;运营者可以通过 local_studio/.env 中的 HANDOFF_MAX_MEDIA_BYTES 调高或调低。扩展名不受支持或文件过大的包会被整体跳过,而不是截断。",
+    "bundle_max_bytes": 4194304,
+    "bundle_max_bytes_note": "默认 4MB(HANDOFF_MAX_BUNDLE_BYTES)。bundle.json 只是元数据/EDL/产物,不应该需要这么大。",
+    "packages_per_cycle": 5,
+    "packages_per_cycle_note": "监视脚本每次轮询最多处理这么多个待处理文件夹(HANDOFF_MAX_PACKAGES_PER_CYCLE,或运营者改用的 --max-per-cycle)。多余的提交只是等待下一个周期处理——不要重新提交,也不要把延迟当作失败。"
+  },
+  "package_contents": {
+    "bundle_json": "在文件夹根目录放一个名为 bundle.json 的文件,使用与 Local Studio 自身的项目打包导出/导入相同的模式:local-video-workspace.project-bundle/v1。",
+    "bundle_json_shape": {
+      "schema": "local-video-workspace.project-bundle/v1",
+      "project": {
+        "title": "字符串",
+        "source_path": "该素材将被复制到的工作区相对路径,例如 inputs/handoff/<文件夹名>/source.mp4",
+        "output_path": "渲染结果的工作区相对路径,例如 outputs/handoff/<文件夹名>.mp4",
+        "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "字符串", "word_timings": "可选,参见 bot-guide.json" }], "render_settings": "可选,字段与 Production 的 Finish Rack 相同(platform、quality、caption_bg、music_track 等)" },
+        "caption": "Instagram 文案,最多 2200 字符",
+        "handoff_auto_upload_requested": "布尔值,可选——参见下方 auto_upload_policy"
+      },
+      "jobs": [
+        { "kind": "render", "approved": true, "payload": {} },
+        { "kind": "instagram_publish", "approved": true, "payload": { "auto_upload": true } }
+      ],
+      "artifacts": []
+    },
+    "media_file": "source_path 指向的实际视频文件,放在同一文件夹的顶层,只用路径的最后一段作为文件名(例如 source.mp4,而不是 inputs/handoff/.../source.mp4)。",
+    "rule": "请求新任务时完全省略 job 的 'status' 字段,这样它会被新建为 queued+approved 状态。除非有意重放历史记录,否则不要把 'status' 设为 succeeded/failed。"
+  },
+  "auto_upload_policy": {
+    "rule": "设置 bundle.project.handoff_auto_upload_requested: true 和 jobs[].payload.auto_upload: true 只是请求立即发布到 Instagram。除非 PC 运营者另外以 --allow-auto-upload 启动了 local_studio/handoff_watcher.py,否则不会生效。两个条件缺一不可。",
+    "default": "如果没有那个本地开启项,instagram_publish 任务会被创建但保持排队状态,由人工在准备好时于 Production 页面手动运行。",
+    "render_is_different": "渲染任务只会生成本地 MP4 文件,没有外部影响,因此只要设置了 approved: true 就会自动运行,与 --allow-auto-upload 无关。"
+  },
+  "processing": "运营者 PC 上的一个后台脚本(local_studio/handoff_watcher.py)会轮询这个分支,把素材复制到自己的工作区,并把 bundle.json 原样传给自己的 POST /api/projects/import。处理完的文件夹通常会从分支上删除——不要假设文件夹会作为永久记录留在分支上。",
+  "never": [
+    "绝不要为本项目尝试连接 127.0.0.1、localhost 或任何局域网/广域网地址——只有上面的 git 分支是被允许的通道。",
+    "绝不要在包中请求、内嵌或猜测 LOCAL_STUDIO_TOKEN、INSTAGRAM_ACCESS_TOKEN 或任何其他凭证。",
+    "绝不要 push 到 'channel' 中指定之外的任何仓库或分支。",
+    "绝不要假设提交已经生效——除了运营者自己的本地日志外,这个通道没有任何送达确认方式。"
+  ]
+}

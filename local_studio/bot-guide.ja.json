@@ -1,0 +1,105 @@
+{
+  "schema": "local-video-workspace.bot-guide/v1",
+  "title": "ローカルビデオワークスペース編集プレイブック",
+  "scope": "このガイドは、Local Video Studio と同じワークステーションで動作するボット向けです。",
+  "first_action": "Local Video Studio に入場してください。作業を始める前に、入場によって最初のハートビートが記録されます。",
+  "non_negotiables": [
+    "local_studio/workspace 配下のファイルのみを使用してください。",
+    "可能な限り、最初の1.5秒以内に最初の有用なアイデアや目に見える変化を示してください。",
+    "エフェクトを追加する前に、フィラー、長い無音、重複箇所、弱い導入部を取り除いてください。",
+    "縦型出力では、映像を引き伸ばすのではなく、左・中央・右のリフレームで被写体を保持してください。",
+    "認証情報にアクセスしたり、ワークスペースの外に出たりしないでください。ローカルレンダーはこのボットの実行ポリシーに従い、Instagram アップロードはジョブの auto_upload 設定に従います。"
+  ],
+  "workflow": [
+    { "step": 1, "name": "ローカルスタジオに入場", "action": "bot_id・display_name・purpose・task を指定して POST /api/bot-entry を呼び出します。", "goal": "ローカルの入場記録と最初のハートビートを作成します。新しいボットはデフォルトでローカルレンダーの auto_local を受け取り、代わりに approval_required を選ぶこともできます。" },
+    { "step": 2, "name": "現状を確認", "action": "GET /api/bot-guide、Cut Log、編集マップ、既存プロジェクト、キュー内のジョブを読み取ります。", "goal": "承認済みの既存プロジェクトを上書きしたり、実行中のジョブを再試行したりしないでください。" },
+    { "step": 3, "name": "編集方式を設定", "action": "選択したフック戦略・テンポ・フィラーポリシー・キャプション・リフレーム・ルック・オーディオ・速度・FPS・品質を指定して POST /api/edit-method を呼び出します。", "goal": "許可されたローカル編集コントロールのみを設定します。これは計画の記録であり、レンダーや公開は行いません。" },
+    { "step": 4, "name": "カットを計画", "action": "採用する発話区間のみを含む、文字起こし優先の EDL を作成します。", "goal": "連続したソースのタイムコード、読みやすい2単語のキャプション、明確なフックを使用してください。" },
+    { "step": 5, "name": "仕上げを準備", "action": "render_settings でリフレームアンカー・速度・オーディオ・ルック・キャプション・品質・FPS を設定します。", "goal": "コミュニケーション上の課題を解決する最小限の変更を選び、エフェクトの重ね掛けは避けてください。" },
+    { "step": 6, "name": "実行ポリシーを選択", "action": "GET /api/bots/{bot_id}/execution-policy を読み取ります。自動ローカルレンダーのためには auto_local のままにするか、レビューを依頼する前に mode=approval_required で POST /api/bots/execution-policy を呼び出します。", "goal": "ボットは自分自身のローカルレンダーのゲートを選びます。この選択は SQLite に記録され、Bot Check に表示されます。" },
+    { "step": 7, "name": "レンダー", "action": "auto_local の場合はローカルレンダーをキューに入れて実行します。approval_required の場合は簡潔なレビュー依頼を記録し、人による承認済みのレンダージョブを使用します。", "goal": "最終的なジョブ状態を確認し、出力パスまたは正確な失敗理由を報告します。" },
+    { "step": 8, "name": "公開またはキュー", "action": "レンダー完了後に Instagram ジョブをキューに入れます。auto_upload=true にすると即座にアップロードされます。", "goal": "auto_upload が有効な場合、ローカルサービスは即座にアップロードを開始します。無効な場合はキュー内のジョブを直接実行できます。" }
+  ],
+  "edit_heuristics": {
+    "hook": "驚き・痛点・結論から始めてください。挨拶や背景説明の羅列は避けます。",
+    "cutting": "文字起こし主導のハードカットを優先します。意図的な間は、強調につながる場合のみ残します。",
+    "captions": "大文字表示に適した短いフレーズを使います。キャプションは縦型のセーフエリア内に収め、話者の顔を隠さないようにします。",
+    "reframe": "被写体が明らかに左右に寄っている場合を除き、中央を使用します。ソース映像を引き伸ばすことは絶対にしないでください。",
+    "audio": "デフォルトは30fps、通常音量、80ms のエッジフェードです。ソースの音量差が大きい場合のみノーマライズしてください。",
+    "look": "デフォルトはナチュラルです。パンチの効いたコントラストはソーシャル向けの強めのクリップに使います。モノクロは意図的なスタイル選択であり、問題を修正する手段ではありません。",
+    "quality": "通常の公開にはバランスを、レビューにはコンパクトを、アーカイブや視覚的に細かい内容には高品質を使用してください。"
+  },
+  "edit_method_contract": {
+    "endpoint": "POST /api/edit-method",
+    "write_rule": "ボットはローカルの範囲を確認した上で編集方式を設定できます。この方式は Finish Rack に適用できますが、それ自体でレンダーやアップロードが始まることはありません。",
+    "body": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "method": { "hook_strategy": "payoff_first | question_first | chronological", "pacing": "tight | balanced | deliberate", "filler_policy": "remove | review | keep", "caption_mode": "burn_in | off", "reframe_anchor": "left | center | right", "look": "natural | punchy | mono | night", "audio_policy": "preserve | normalize | mute", "speed": "0.5 から 2.0", "fps": "24 | 30 | 60", "quality": "compact | balanced | high" } }
+  },
+  "render_settings_contract": {
+    "presets_endpoint": "GET /api/presets は quality_presets・caption_layout_presets・platform_presets を返します。選んだプリセットのフィールドをそのままプロジェクトの timeline.render_settings にマージしてください。",
+    "platform": "render_settings.platform を platform_presets のキーのいずれかに設定します(デフォルトは reels_tiktok_shorts、1080x1920)。feed_square(1080x1080)と landscape_x(1920x1080)も利用できます。",
+    "caption_background": "render_settings.caption_bg=true と caption_bg_color(16進数)を設定すると、焼き込みキャプションの背後に背景パネルが描画されます。",
+    "word_level_captions": "任意の word_timings 配列(各要素は {text, start, end} で、単位は秒、クリップ自身の開始を基準とする、つまり0はクリップの in 点が始まる瞬間)をタイムラインクリップに追加すると、そのクリップで1つの固定キャプションの代わりに単語ごとに順次表示されるキャプションをレンダーします。省略した場合は従来の単一キャプションの動作が維持されます。",
+    "background_music": "render_settings.music_track にワークスペース基準の相対パスの音声ファイルを設定すると、ソース音声の下に BGM をミックスします(music_volume 0-100、デフォルト30。music_loop が true ならレンダー長に合わせてループし、false なら一度だけトリムします)。クリップに自身のセリフ音声がある場合、音楽は一定のレベルで混ざるのではなく、自動的にその下でダッキングされます(music_ducking、デフォルト true。music_duck_floor 5-100、デフォルト35は、music_volume に対して何パーセントまで下げるかです)。固定ミックスにしたい場合は music_ducking=false に設定してください。",
+    "jobs_are_async": "/render、/instagram、または /api/jobs/{id}/run でレンダーまたは Instagram ジョブを開始すると、即座に queued または running 状態のジョブが返されます。GET /api/jobs/{id} をポーリングして status が succeeded または failed になるまで進捗(0-100)を確認するか、リクエストボディに wait: true を渡して完了までブロックすることもできます。POST /api/jobs/{id}/cancel は次のクリップが処理される前にキャンセルをリクエストします。"
+  },
+  "operations_contract": {
+    "read": "GET /api/projects/{id}/operations はプロジェクト、ジョブ、保存済みカットマップ、品質レポート、ボットタスク、メモリ、オーバーレイ、バリアント、成果ノートを返します。",
+    "write": ["ローカル素材のプリフライトのための POST /api/projects/{id}/inspect。", "非破壊的なカット提案のための、タイムスタンプ付き文字起こし区間を伴う POST /api/projects/{id}/cut-map。", "stage=pre_render、post_render、または publish を伴う POST /api/projects/{id}/quality-check。", "project_memory、bot_task、audio_plan、edit_variant、overlay_slots、または performance_note のための POST /api/projects/{id}/artifacts。", "保存済みタスクの状態やローカル計画を変更するための POST /api/artifacts/{id}/update。", "再利用可能なローカルスタイル設定のための POST /api/brand-kits。"],
+    "rule": "運用アーティファクトは計画・チェック・ローカルメモリです。それら自体がレンダーや公開を開始することはありません。"
+  },
+  "site_features": [
+    {"id":"01","area":"制作","name":"プロジェクト設定","use_when":"新しい動画を開始するとき、またはソース/出力パスを確認するとき。","bot_action":"プロジェクトを作成または選択し、保存済みの設定とジョブ履歴を読み取ります。","result":"他の進行中のジョブを上書きしない、明確なローカルプロジェクトの範囲が得られます。"},
+    {"id":"02","area":"編集方式","name":"共有編集方式","use_when":"カットを作る前にボットが創作的な方向性を確立する必要があるとき。","bot_action":"/api/edit-method でフック・テンポ・フィラーポリシー・キャプション・リフレーム・ルック・オーディオ・速度・FPS・品質を設定します。","result":"Finish Rack に適用できる再利用可能な計画が得られます。"},
+    {"id":"03","area":"カットログ","name":"文字起こしカットマップ","use_when":"発話ソースにフィラー、無音、撮り直し、弱いオープニングがあるとき。","bot_action":"EDL を変更する前に、/api/projects/{id}/cut-map で採用するタイムスタンプ付き区間を保存します。","result":"非破壊的でレビュー可能な編集提案のマップが得られます。"},
+    {"id":"04","area":"仕上げ","name":"フレーム・キャプション・サウンド","use_when":"視覚的な仕上げにリフレーム、読みやすいキャプション、オーディオのクリーンアップ、または書き出し設定が必要なとき。","bot_action":"Production でレンダー設定を行い、被写体を縦型セーフエリア内に保ち、必要なエフェクトのみを選択します。","result":"レンダー準備が整ったローカル MP4 の仕様が得られます。"},
+    {"id":"05","area":"運用","name":"素材プリフライト","use_when":"素材が届いたばかり、またはそのフォーマットや状態が不明なとき。","bot_action":"/api/projects/{id}/inspect を実行し、向き・FPS・長さ・音声の有無・黒フレーム・無音を記録します。","result":"編集前にソースのリスクを特定するローカル検査レポートが得られます。"},
+    {"id":"06","area":"運用","name":"レンダー品質チェック","use_when":"レンダー前、レンダー後、または納品前。","bot_action":"pre_render・post_render・publish のいずれかの段階で /api/projects/{id}/quality-check を実行します。","result":"カット境界・音声・キャプション・フォーマット・納品準備状況についての合格/不合格レポートが保存されます。"},
+    {"id":"07","area":"運用","name":"プロジェクト記憶","use_when":"将来のボットが編集判断・未解決の問題・次のステップを理解する必要があるとき。","bot_action":"判断・理由・未解決の作業を含む project_memory アーティファクトを保存します。","result":"次の編集セッションのための永続的なローカルコンテキストが得られます。"},
+    {"id":"08","area":"運用","name":"ボットタスクボード","use_when":"作業に担当者・状態・再試行・完了報告が必要なとき。","bot_action":"bot_task アーティファクトを作成または更新し、作業が完了したと決めつけずタスク状態を使用します。","result":"割り当て済み・進行中・失敗・完了の作業を可視化するローカルボードが得られます。"},
+    {"id":"09","area":"運用","name":"オーディオ計画","use_when":"無音のトリミング、音量ノーマライズ、エッジフェード、ミュート、BGM バランスが必要なとき。","bot_action":"audio_plan アーティファクトを保存し、対応するオーディオポリシーをレンダー設定に適用します。","result":"再利用・確認可能な形でオーディオの判断が記録されます。"},
+    {"id":"10","area":"運用","name":"A/B 編集比較","use_when":"2つのフック、長さ、キャプションスタイル、またはカットのリズムを比較する必要があるとき。","bot_action":"それぞれの代替案を、フック・カット数・メモとともに edit_variant として保存します。","result":"現在の編集を置き換えることなく、比較可能な選択肢が得られます。"},
+    {"id":"11","area":"運用","name":"ブランドキット","use_when":"複数のプロジェクトで同じフォント・セーフエリア・色・ロゴ・イントロ/アウトロ・ルックが必要なとき。","bot_action":"再利用可能なローカルブランドキットを保存し、その値をプロジェクト計画に適用します。","result":"ローカルプロジェクト全体で一貫したブランド判断が保たれます。"},
+    {"id":"12","area":"運用","name":"オーバーレイスロット","use_when":"リールに CTA・プログレスバー・タイトルカード・矢印・強調グラフィックが必要なとき。","bot_action":"タイミングと配置を含む overlay_slots を保存し、オーバーレイの上でもキャプションが読めるようにします。","result":"ソース素材を変更しない、時間ベースのオーバーレイ計画が得られます。"},
+    {"id":"13","area":"運用","name":"失敗と成果のメモ","use_when":"ジョブが失敗したとき、または公開済みコンテンツに再利用できる視聴・保存・コメントのフィードバックがあるとき。","bot_action":"失敗したジョブのエラーを読み、復旧メモを記録し、納品後に performance_note アーティファクトを保存します。","result":"次のフックや編集のための、正確な失敗の背景と学びが得られます。"},
+    {"id":"14","area":"レンダー","name":"ローカルレンダーキュー","use_when":"編集とレンダー設定が MP4 出力の準備が整ったとき。","bot_action":"ボットの実行ポリシーに従って jobs render を使用し、結果のジョブ状態と出力パスを読み取ります。","result":"ローカルの 1080×1920 MP4、または正確な失敗記録が得られます。"},
+    {"id":"15","area":"配信","name":"Instagram 配信","use_when":"完成したローカル MP4 とキャプションが Instagram プロアカウント向けに準備できたとき。","bot_action":"即座に配信するには jobs instagram --auto-upload を使用し、実行可能なキュー済みジョブとして残すにはそれを省略します。","result":"アップロードジョブの結果が得られます。ローカルの認証情報と対応する MP4 が必要です。"},
+    {"id":"16","area":"ボット確認","name":"在場状況と進捗","use_when":"ボットが開始・段階変更・完了・失敗のいずれかになったとき。","bot_action":"bot_id・action・project・判断・次のステップを含むハートビートを送信し、Bot Check を確認します。","result":"確認済みの活動と、実際の入場 → 編集 → レンダー/アップロードの進捗の軌跡が得られます。"},
+    {"id":"17","area":"ターミナル","name":"ボット CLI とページリンク","use_when":"ボットがブラウザをクリックする代わりにターミナルから作業するとき。","bot_action":"python local_studio/grok_crew.py contract を実行し、その後プロジェクト・運用・ジョブ・サイトコマンドを使用します。","result":"ブラウザ自動化なしに、同じローカル Studio 機能が使えます。"},
+    {"id":"18","area":"プライバシー","name":"ローカル専用の境界","use_when":"ファイル・アクセストークン・公開先が必要なあらゆる操作。","bot_action":"local_studio/workspace のメディアと実行時に提供されるトークンのみを使用し、秘密情報のために .env・ブラウザストレージ・SQLite を読み取ってはいけません。","result":"作業はローカルに留まり、認証情報はボットが読めるプロジェクト記録の外に保たれます。"}
+  ],
+  "workspace_pages": [
+    {"id":"01","url":"/","name":"スタジオ","purpose":"リールのコンセプト、プロジェクト状態、ローカルの創作方向性を視覚的に概観します。","bot_use":"プロジェクトの操作を選ぶ前に、現在の創作コンテキストを読み取ります。"},
+    {"id":"02","url":"/edit","name":"編集ラボ","purpose":"フレーム・モーション・タイポグラフィ・タイミング・キャプション・プレビューのコントロールです。","bot_use":"共有編集方式との整合性を確認・調整するために使用します。"},
+    {"id":"03","url":"/cut","name":"カットログ","purpose":"文字起こし主導のクリップレビュー、採用/削除の判断、時間ベースのカット計画です。","bot_use":"計画されたカットをレビューし、Local Studio を通じて非破壊的なカットマップを保存します。"},
+    {"id":"04","url":"/production","name":"制作","purpose":"プロジェクト、素材パス、仕上げ設定、レンダーキュー、Instagram 配信です。","bot_use":"ローカルプロジェクトを作成または選択し、設定を適用し、レンダーし、配信をキューに入れるか自動アップロードします。"},
+    {"id":"05","url":"/operations","name":"オペレーションセンター","purpose":"素材検査、品質レポート、プロジェクト記憶、タスク、バリアント、オーディオ、オーバーレイ、ブランドキット、復旧メモです。","bot_use":"レンダーの前後にここで計画とチェックを記録します。永続的な連携情報にはアーティファクトを使用します。"},
+    {"id":"06","url":"/bots","name":"ボット確認","purpose":"確認済みのボット入場、ハートビート、機能状態、最近の活動、接続フローです。","bot_use":"意味のある状態変化のたびにチェックインし、このページでボットが本当にアクティブか確認します。"},
+    {"id":"07","url":"/terminal","name":"ターミナル","purpose":"同一 PC のボット向けに、コピーしてすぐ使えるローカル CLI・API 入場手順を提供します。","bot_use":"契約から始め、Local Studio に入場し、掲載されているローカルコマンドを使用します。"},
+    {"id":"08","url":"/bot-guide","name":"ボットガイド","purpose":"機械可読なプレイブック、機能マニュアル、ワークフロー、境界、実例です。","bot_use":"作業前に GET /api/bot-guide を読み、指示が変わったら再取得します。"},
+    {"id":"09","url":"/library","name":"ライブラリ","purpose":"ローカルの創作リファレンス、再利用可能なアイデア、ソースのコンテキストです。","bot_use":"ローカルなインスピレーションとコンテキストとして使用し、ワークスペースを超えたアクセスが許可されていると想定しないでください。"},
+    {"id":"10","url":"/agent","name":"エージェントデスク","purpose":"ブラウザローカルのブリーフ、ルール、ソースの範囲、タスクキュー、引き継ぎ記録です。","bot_use":"新しい作業を提案・記録する前に、保存済みのブリーフとタスク状態を読み取ります。"},
+    {"id":"11","url":"/connect","name":"ローカルデスク","purpose":"オフラインの引き継ぎ、ローカルプロジェクトのスナップショット、手動のボット返却エリアです。","bot_use":"ブラウザのみのワークフローに持ち運び可能なブリーフが必要なとき、ローカルマニフェストを使用します。"},
+    {"id":"12","url":"/packet","name":"パケット","purpose":"パッケージ化された創作ブリーフと、配信準備が整ったコンテンツの詳細です。","bot_use":"キャプションや最終的な引き継ぎを準備するとき、その制約を確認し維持します。"},
+    {"id":"13","url":"/gates","name":"ゲートボード","purpose":"プロジェクトの準備状況と品質チェックポイントです。","bot_use":"プロジェクトが早すぎるうちに準備完了だと主張するのではなく、未完了のチェックを特定するために使用します。"},
+    {"id":"14","url":"/export","name":"エクスポート","purpose":"出力フォーマット、サイズ、キャプションパッケージ、最終配信の詳細です。","bot_use":"選択したプラットフォームの要件に合わせて、最終的なローカルレンダーと配信設定を一致させます。"},
+    {"id":"15","url":"/privacy","name":"プライバシー・設定","purpose":"端末ローカルのワークスペース識別とプライバシーの境界です。","bot_use":"現在のローカル範囲を尊重し、ブラウザストレージや設定ファイルから秘密の値を読み取らないでください。"}
+  ],
+  "terminal_cli_contract": {
+    "api_base_url": "http://127.0.0.1:7214",
+    "browser_site_base_url": "http://localhost:3000",
+    "browser_rule": "ポート 7214 は CLI のダウンロードと JSON API リクエスト専用です。ブラウザでの利用やスクリーンショットには python grok-crew.py site --page production を実行し、出力された http://localhost:3000 の URL を開いてください。ポート 7214 で /production を開かないでください。",
+    "clone_cli_path": "local_studio/grok_crew.py",
+    "clone_bootstrap": "python local_studio/grok_crew.py contract",
+    "browser_pages": { "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
+    "download": "GET /downloads/grok-crew.py",
+    "bootstrap": "python grok-crew.py contract",
+    "purpose": "同一 PC のターミナルで動作するボット向けの、依存関係のない CLI です。ブラウザ操作なしに Local Studio と Operations のエンドポイントを使用できます。",
+    "token_rule": "トークン保護が有効な場合、LOCAL_STUDIO_TOKEN はボットのターミナル環境を通じてのみ渡してください。.env・ブラウザストレージ・SQLite から読み取ってはいけません。トークンが設定されると、書き込みリクエストだけでなくすべての読み取りリクエストにも必要になります。/health、/api/terminal-contract、/api/bot-guide、/api/bot-entry(GET)、CLI ダウンロードのみがトークンなしで開放されています。",
+    "approval_rule": "接続されたボットはデフォルトで auto_local で始まり、jobs render --bot-id でレンダーできます。policy set --bot-id <id> --mode approval_required に変更すると、そのボットのレンダーには --human-approved が必要になります。jobs instagram --auto-upload を使用すると Instagram アップロードが即座に始まり、省略するとアップロードだけがキューに入ります。"
+  },
+  "execution_policy": { "on_entry": "Local Studio に入場するすべてのボットは、明示的に approval_required を選ばない限り auto_local を受け取ります。", "read": "GET /api/bots/{bot_id}/execution-policy", "write": "bot_id と mode を指定して POST /api/bots/execution-policy を呼び出します。", "modes": { "auto_local": "接続されたボットは、自分のローカル MP4 レンダーをキューに入れて開始できます。", "approval_required": "ボットはすべての計画・検査・プロジェクト・運用機能を使用できますが、レンダーリクエストには approved: true または --human-approved が必要です。" }, "external_boundary": "Instagram アップロードはローカルレンダーとは別です。ジョブの auto_upload 設定が、即座のアップロードか手動でのキュー実行かを選びます。" },
+  "approval_gates": ["Instagram アップロードには有効なローカルの Instagram 認証情報と、対応するレンダー済みファイルが必要です。", "即座にアップロードするには auto_upload=true を、ジョブをキューに残すには false のままにしてください。"],
+  "allowed_endpoints": { "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits"], "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel"], "local_render": ["接続されたボットのポリシーが auto_local である場合、または人による承認が記録されている場合の POST /api/projects/{id}/render"], "write_for_delivery": ["auto_upload=true または false を指定した POST /api/projects/{id}/instagram"] },
+  "never": ["LOCAL_STUDIO_TOKEN、INSTAGRAM_ACCESS_TOKEN、または .env の内容を読み取ったり明らかにしたりしないこと。", "local_studio/workspace の外のパスを使用しないこと。", "現在のハートビートがないのにボットがアクティブだと主張しないこと。", "所有者が新しい編集を要求しない限り、完成した出力ファイルを変更しないこと。"],
+  "heartbeat_example": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "action": "render_or_upload_ready", "detail": { "project": "my-video-project", "decision": "フィラーを除去し、3つの発話カットを残し、9:16 の中央リフレームを適用しました。", "next": "ボットポリシーに従ってローカルレンダーを実行し、必要に応じて Instagram アップロードをキューに入れるか自動アップロードします。" } }
+}

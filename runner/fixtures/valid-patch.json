@@ -1,0 +1,8 @@
+{
+  "schema": "grok-crew.timeline-patch/v1",
+  "base_revision": 1,
+  "origin": "remote_bot",
+  "operations": [
+    { "op": "set_settings", "changes": { "look": "punchy" } }
+  ]
+}

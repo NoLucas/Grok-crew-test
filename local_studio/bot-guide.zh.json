@@ -1,0 +1,105 @@
+{
+  "schema": "local-video-workspace.bot-guide/v1",
+  "title": "本地视频工作区编辑手册",
+  "scope": "本指南面向与 Local Video Studio 运行在同一台工作站上的机器人。",
+  "first_action": "进入 Local Video Studio。在任何工作开始之前,入场会记录第一次心跳。",
+  "non_negotiables": [
+    "只能使用 local_studio/workspace 下的文件。",
+    "尽可能在最初 1.5 秒内呈现第一个有用的想法或可见的变化。",
+    "在添加特效之前,先去除填充内容、长时间静音、重复内容和薄弱的开场。",
+    "对于竖屏输出,用左、中、右重新取景来保留主体,而不是拉伸视频。",
+    "不要访问凭证,也不要离开工作区范围。本地渲染遵循该机器人的执行策略,Instagram 上传遵循任务的 auto_upload 设置。"
+  ],
+  "workflow": [
+    { "step": 1, "name": "进入本地工作室", "action": "携带 bot_id、display_name、purpose、task 调用 POST /api/bot-entry。", "goal": "创建本地入场记录和首次心跳。新机器人默认获得本地渲染的 auto_local 权限,也可以改选 approval_required。" },
+    { "step": 2, "name": "检查现状", "action": "读取 GET /api/bot-guide、Cut Log、剪辑图、现有项目和排队中的任务。", "goal": "不要覆盖已批准的项目,也不要重试正在运行的任务。" },
+    { "step": 3, "name": "设置剪辑方式", "action": "用选定的钩子策略、节奏、冗余处理策略、字幕、重构图、风格、音频、速度、FPS、质量调用 POST /api/edit-method。", "goal": "只设置允许的本地编辑控制项。这是记录计划,不会启动渲染或发布。" },
+    { "step": 4, "name": "规划剪辑", "action": "创建只包含保留语音片段的、以文字稿为先的 EDL。", "goal": "使用连续的原始时间码、易读的两词字幕和清晰的钩子。" },
+    { "step": 5, "name": "准备收尾", "action": "在 render_settings 中设置重构图基准点、速度、音频、风格、字幕、质量和 FPS。", "goal": "选择能解决表达问题的最小改动,避免叠加过多特效。" },
+    { "step": 6, "name": "选择执行策略", "action": "读取 GET /api/bots/{bot_id}/execution-policy。保持 auto_local 以自动本地渲染,或在请求审核前用 mode=approval_required 调用 POST /api/bots/execution-policy。", "goal": "机器人自行选择本地渲染的门槛。这个选择记录在 SQLite 中,并显示在 Bot Check 中。" },
+    { "step": 7, "name": "渲染", "action": "在 auto_local 下,将本地渲染加入队列并执行。在 approval_required 下,记录简明的审核请求,并使用经人工批准的渲染任务。", "goal": "检查最终任务状态,并报告输出路径或确切的失败原因。" },
+    { "step": 8, "name": "发布或排队", "action": "渲染完成后将 Instagram 任务加入队列,设置 auto_upload=true 可立即上传。", "goal": "开启 auto_upload 后,本地服务立即开始上传;否则可以直接执行排队中的任务。" }
+  ],
+  "edit_heuristics": {
+    "hook": "以意外、痛点或结果开头。避免问候语和大段背景铺垫。",
+    "cutting": "优先使用以文字稿为主导的硬切。只在能起到强调作用时保留有意的停顿。",
+    "captions": "使用适合大写显示的简短短语。字幕保持在竖屏安全区域内,不要遮挡说话者的脸。",
+    "reframe": "除非主体明显偏左或偏右,否则使用居中。绝不要拉伸原始视频。",
+    "audio": "默认使用 30fps、正常音量和 80ms 的边缘淡入淡出。只有在原始音量差异较大时才做归一化。",
+    "look": "默认使用自然风格。强对比适合对比强烈的社交片段。黑白是有意的风格选择,而不是修复手段。",
+    "quality": "常规发布使用均衡质量,审核使用简洁质量,存档或视觉细节丰富的内容使用高质量。"
+  },
+  "edit_method_contract": {
+    "endpoint": "POST /api/edit-method",
+    "write_rule": "机器人在确认本地范围后可以设置剪辑方式。该方式可应用到 Finish Rack,但本身不会启动渲染或上传。",
+    "body": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "method": { "hook_strategy": "payoff_first | question_first | chronological", "pacing": "tight | balanced | deliberate", "filler_policy": "remove | review | keep", "caption_mode": "burn_in | off", "reframe_anchor": "left | center | right", "look": "natural | punchy | mono | night", "audio_policy": "preserve | normalize | mute", "speed": "0.5 到 2.0", "fps": "24 | 30 | 60", "quality": "compact | balanced | high" } }
+  },
+  "render_settings_contract": {
+    "presets_endpoint": "GET /api/presets 返回 quality_presets、caption_layout_presets 和 platform_presets。把选中预设的字段直接合并到项目的 timeline.render_settings 中。",
+    "platform": "将 render_settings.platform 设置为 platform_presets 中的某个键(默认 reels_tiktok_shorts,1080x1920)。也可以使用 feed_square(1080x1080)和 landscape_x(1920x1080)。",
+    "caption_background": "设置 render_settings.caption_bg=true 和 caption_bg_color(十六进制)可以在烧录字幕后方绘制背景面板。",
+    "word_level_captions": "在任意时间轴片段中添加可选的 word_timings 数组(每项为 {text, start, end},单位为秒,相对于该片段自身的起点,即 0 表示片段的 in 点开始的瞬间),即可渲染逐词依次显示的字幕,而不是该片段的一条固定字幕。省略它则保持原有的单条字幕行为。",
+    "background_music": "将 render_settings.music_track 设置为相对于工作区的音频文件路径,即可在原始音频下方混入背景音乐(music_volume 0-100,默认 30;music_loop 为 true 时循环播放以匹配渲染长度,为 false 时只裁剪一次)。当片段仍有自己的对白音频时,音乐会自动在其下方降低音量,而不是以一个固定的电平混合(music_ducking,默认 true;music_duck_floor 5-100,默认 35,表示相对 music_volume 降低到百分之多少)。如果想要固定的混音,请设置 music_ducking=false。",
+    "jobs_are_async": "通过 /render、/instagram 或 /api/jobs/{id}/run 启动渲染或 Instagram 任务后,会立即返回一个 queued 或 running 状态的任务。轮询 GET /api/jobs/{id} 查看实时进度(0-100),直到 status 变为 succeeded 或 failed;也可以在请求体中传入 wait: true 阻塞等待直到完成。POST /api/jobs/{id}/cancel 会在下一个片段被处理前请求取消。"
+  },
+  "operations_contract": {
+    "read": "GET /api/projects/{id}/operations 返回项目、任务、已保存的剪辑图、质量报告、机器人任务、记忆、叠加层、版本和成效记录。",
+    "write": ["POST /api/projects/{id}/inspect 用于本地素材预检。", "POST /api/projects/{id}/cut-map,携带带时间戳的文字稿片段,用于非破坏性的剪辑建议。", "POST /api/projects/{id}/quality-check,stage 为 pre_render、post_render 或 publish。", "POST /api/projects/{id}/artifacts,用于 project_memory、bot_task、audio_plan、edit_variant、overlay_slots 或 performance_note。", "POST /api/artifacts/{id}/update 用于更改已保存的任务状态或本地计划。", "POST /api/brand-kits 用于可复用的本地风格设置。"],
+    "rule": "运营产物是计划、检查和本地记忆,它们从不会启动渲染或发布。"
+  },
+  "site_features": [
+    {"id":"01","area":"制作","name":"项目设置","use_when":"开始新视频或确认其源/输出路径时。","bot_action":"创建或选择项目,然后读取其已保存的设置和任务历史。","result":"获得清晰的本地项目范围,不会覆盖其他正在进行的任务。"},
+    {"id":"02","area":"剪辑方式","name":"共享剪辑方式","use_when":"机器人需要在开始剪切前确定创作方向时。","bot_action":"通过 /api/edit-method 设置钩子、节奏、冗余处理策略、字幕、重构图、风格、音频、速度、FPS 和质量。","result":"生成可应用到 Finish Rack 的可复用计划。"},
+    {"id":"03","area":"剪辑记录","name":"文字稿剪辑图","use_when":"口播素材存在冗余、静音、重拍或开场薄弱时。","bot_action":"在更改 EDL 之前,用 /api/projects/{id}/cut-map 保存要保留的带时间戳片段。","result":"生成非破坏性、可供审核的剪辑方案地图。"},
+    {"id":"04","area":"收尾","name":"取景、字幕与声音","use_when":"视觉成品需要重构图、易读字幕、音频清理或导出设置时。","bot_action":"在 Production 中设置渲染选项;让主体保持在竖屏安全区域内,只选择必要的特效。","result":"生成可直接渲染的本地 MP4 规格。"},
+    {"id":"05","area":"运营","name":"素材预检","use_when":"素材刚到达,或其格式和状态未知时。","bot_action":"运行 /api/projects/{id}/inspect 记录方向、FPS、时长、是否有音频、黑场和静音。","result":"生成本地检查报告,在剪辑前发现素材风险。"},
+    {"id":"06","area":"运营","name":"渲染质量检查","use_when":"渲染前、渲染后或交付前。","bot_action":"以 pre_render、post_render 或 publish 阶段运行 /api/projects/{id}/quality-check。","result":"生成关于剪切边界、音频、字幕、格式和交付就绪度的已保存的通过/失败报告。"},
+    {"id":"07","area":"运营","name":"项目记忆","use_when":"未来的机器人需要了解某个剪辑决定、未解决问题或下一步操作时。","bot_action":"保存包含决定、原因和未完成工作的 project_memory 产物。","result":"为下一次剪辑会话留下持久的本地上下文。"},
+    {"id":"08","area":"运营","name":"机器人任务看板","use_when":"工作需要归属人、状态、重试或完成报告时。","bot_action":"创建或更新 bot_task 产物;使用任务状态,而不是假设工作已完成。","result":"生成可见的本地看板,展示已分配、进行中、失败和已完成的工作。"},
+    {"id":"09","area":"运营","name":"音频计划","use_when":"需要静音裁剪、音量归一化、边缘淡入淡出、静音或 BGM 平衡时。","bot_action":"保存 audio_plan 产物,并在渲染设置中应用对应的音频策略。","result":"记录可复用、可检查的音频决定。"},
+    {"id":"10","area":"运营","name":"A/B 剪辑对比","use_when":"需要比较两个钩子、时长、字幕风格或剪切节奏时。","bot_action":"将每个备选方案连同其钩子、剪切数量和备注保存为 edit_variant。","result":"生成可比较的选项,而不替换当前剪辑。"},
+    {"id":"11","area":"运营","name":"品牌套件","use_when":"多个项目需要相同的字体、安全区域、颜色、Logo、片头/片尾或风格时。","bot_action":"保存可复用的本地品牌套件,并将其值应用到项目计划中。","result":"在各本地项目间保持一致的品牌决策。"},
+    {"id":"12","area":"运营","name":"叠加层插槽","use_when":"Reel 需要 CTA、进度条、标题卡、箭头或强调图形时。","bot_action":"保存带有时间和位置的 overlay_slots;确保字幕在叠加层之上仍然可读。","result":"生成基于时间的叠加层计划,不会改动原始素材。"},
+    {"id":"13","area":"运营","name":"失败与成效记录","use_when":"任务失败,或已发布内容有可供复用的观看、收藏或评论反馈时。","bot_action":"阅读失败任务的错误信息,记录恢复笔记,并在交付后保存 performance_note 产物。","result":"为下一个钩子或剪辑留下确切的失败背景和经验。"},
+    {"id":"14","area":"渲染","name":"本地渲染队列","use_when":"剪辑和渲染设置已准备好进行 MP4 输出时。","bot_action":"按机器人的执行策略使用 jobs render;读取由此产生的任务状态和输出路径。","result":"生成本地 1080×1920 MP4,或精确的失败记录。"},
+    {"id":"15","area":"交付","name":"Instagram 交付","use_when":"已完成的本地 MP4 和字幕已准备好用于 Instagram 专业账号时。","bot_action":"使用 jobs instagram --auto-upload 立即交付,或省略该选项以留下可运行的排队任务。","result":"生成上传任务的结果;需要本地凭证和受支持的 MP4。"},
+    {"id":"16","area":"机器人检查","name":"在场状态与进度","use_when":"机器人开始、切换阶段、完成或遇到失败时。","bot_action":"发送携带 bot_id、action、project、决定和下一步的心跳;然后查看 Bot Check。","result":"生成经过验证的活动记录,以及真实的入场 → 剪辑 → 渲染/上传进度轨迹。"},
+    {"id":"17","area":"终端","name":"机器人 CLI 与页面链接","use_when":"机器人从终端而不是点击浏览器进行操作时。","bot_action":"运行 python local_studio/grok_crew.py contract,然后使用其项目、运营、任务和站点命令。","result":"无需浏览器自动化即可使用相同的本地 Studio 功能。"},
+    {"id":"18","area":"隐私","name":"仅限本地的边界","use_when":"任何需要文件、访问令牌或发布目的地的操作。","bot_action":"只使用 local_studio/workspace 中的素材和运行时提供的令牌;绝不读取 .env、浏览器存储或 SQLite 中的机密。","result":"作业保持在本地,凭证不会出现在机器人可读的项目记录中。"}
+  ],
+  "workspace_pages": [
+    {"id":"01","url":"/","name":"工作室","purpose":"以视觉方式概览 Reel 构思、项目状态和本地创作方向。","bot_use":"在选择项目操作前阅读当前的创作背景。"},
+    {"id":"02","url":"/edit","name":"编辑室","purpose":"取景、动效、排版、时间轴、字幕和预览控制。","bot_use":"用它来检查或对齐与共享剪辑方式相符的视觉剪辑决定。"},
+    {"id":"03","url":"/cut","name":"剪辑记录","purpose":"以文字稿为主导的片段审阅、保留/移除决定和基于时间的剪切规划。","bot_use":"审阅计划中的剪切,然后通过 Local Studio 保存非破坏性的剪辑图。"},
+    {"id":"04","url":"/production","name":"制作","purpose":"项目、素材路径、收尾设置、渲染队列和 Instagram 交付。","bot_use":"创建或选择本地项目,应用设置,渲染,并加入队列或自动上传交付。"},
+    {"id":"05","url":"/operations","name":"运营中心","purpose":"素材检查、质量报告、项目记忆、任务、版本、音频、叠加层、品牌套件和恢复笔记。","bot_use":"在渲染前后在此记录计划和检查;用产物保存持久的协作信息。"},
+    {"id":"06","url":"/bots","name":"机器人检查","purpose":"已验证的机器人入场、心跳、能力状态、最近活动和接入流程。","bot_use":"在每次有意义的状态变化时签到,并用这个页面确认机器人确实处于活跃状态。"},
+    {"id":"07","url":"/terminal","name":"终端","purpose":"为同一台电脑上的机器人提供可直接复制的本地 CLI 和 API 入场说明。","bot_use":"从契约开始,进入 Local Studio,然后使用列出的本地命令。"},
+    {"id":"08","url":"/bot-guide","name":"机器人指南","purpose":"机器可读的操作手册、功能说明、工作流程、边界和示例。","bot_use":"在开始工作前阅读 GET /api/bot-guide,并在说明变化时重新加载。"},
+    {"id":"09","url":"/library","name":"素材库","purpose":"本地创作参考、可复用的创意和素材背景。","bot_use":"作为本地灵感和背景使用;不要假设它授予超出工作区的访问权限。"},
+    {"id":"10","url":"/agent","name":"智能体台","purpose":"浏览器本地的简报、规则、素材范围、任务队列和交接记录。","bot_use":"在提出或记录新工作之前,先阅读已保存的简报和任务状态。"},
+    {"id":"11","url":"/connect","name":"本地工具","purpose":"离线交接、本地项目快照和手动机器人返回区域。","bot_use":"当仅限浏览器的工作流程需要可移动的简报时,使用本地清单。"},
+    {"id":"12","url":"/packet","name":"数据包","purpose":"打包好的创作简报和可供交付的内容细节。","bot_use":"在准备字幕或最终交接时,查看并保持其约束条件。"},
+    {"id":"13","url":"/gates","name":"关卡看板","purpose":"项目就绪状态和质量检查点。","bot_use":"用它来识别尚未完成的检查项,而不是提前宣称项目已就绪。"},
+    {"id":"14","url":"/export","name":"导出","purpose":"输出格式、大小、字幕包和最终交付细节。","bot_use":"根据所选平台的要求,匹配最终的本地渲染和交付设置。"},
+    {"id":"15","url":"/privacy","name":"隐私与设置","purpose":"设备本地的工作区身份和隐私边界。","bot_use":"尊重当前的本地范围;绝不从浏览器存储或配置文件中读取机密值。"}
+  ],
+  "terminal_cli_contract": {
+    "api_base_url": "http://127.0.0.1:7214",
+    "browser_site_base_url": "http://localhost:3000",
+    "browser_rule": "7214 端口仅用于 CLI 下载和 JSON API 请求。浏览器使用或截图请运行 python grok-crew.py site --page production,并打开输出的 http://localhost:3000 地址。切勿在 7214 端口打开 /production。",
+    "clone_cli_path": "local_studio/grok_crew.py",
+    "clone_bootstrap": "python local_studio/grok_crew.py contract",
+    "browser_pages": { "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
+    "download": "GET /downloads/grok-crew.py",
+    "bootstrap": "python grok-crew.py contract",
+    "purpose": "面向在同一台电脑终端上运行的机器人的零依赖 CLI。它可以在不进行浏览器操作的情况下使用 Local Studio 和 Operations 端点。",
+    "token_rule": "如果开启了令牌保护,LOCAL_STUDIO_TOKEN 只能通过机器人终端环境传递,绝不能从 .env、浏览器存储或 SQLite 中读取。一旦设置了令牌,不仅写请求需要它,每个读请求也需要它;只有 /health、/api/terminal-contract、/api/bot-guide、/api/bot-entry(GET)和 CLI 下载在没有令牌的情况下保持开放。",
+    "approval_rule": "已连接的机器人默认处于 auto_local,可以使用 jobs render --bot-id 进行渲染。使用 policy set --bot-id <id> --mode approval_required 改变后,该机器人的渲染就需要 --human-approved。使用 jobs instagram --auto-upload 可立即开始 Instagram 上传,省略则只是把上传任务加入队列。"
+  },
+  "execution_policy": { "on_entry": "进入 Local Studio 的每个机器人都会获得 auto_local,除非它明确选择 approval_required。", "read": "GET /api/bots/{bot_id}/execution-policy", "write": "携带 bot_id 和 mode 调用 POST /api/bots/execution-policy。", "modes": { "auto_local": "机器人连接后可以将自己的本地 MP4 渲染加入队列并启动。", "approval_required": "机器人可以使用所有的计划、检查、项目和运营功能,但其渲染请求需要 approved: true 或 --human-approved。" }, "external_boundary": "Instagram 上传与本地渲染是相互独立的。任务的 auto_upload 设置决定是立即上传还是保留为手动执行的排队任务。" },
+  "approval_gates": ["Instagram 上传需要有效的本地 Instagram 凭证和受支持的已渲染文件。", "使用 auto_upload=true 立即上传,或保持为 false 让任务留在队列中。"],
+  "allowed_endpoints": { "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits"], "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel"], "local_render": ["当已连接机器人的策略为 auto_local,或已记录人工批准时,可调用 POST /api/projects/{id}/render"], "write_for_delivery": ["携带 auto_upload=true 或 false 调用 POST /api/projects/{id}/instagram"] },
+  "never": ["读取或泄露 LOCAL_STUDIO_TOKEN、INSTAGRAM_ACCESS_TOKEN 或 .env 的内容。", "使用 local_studio/workspace 之外的路径。", "在没有当前心跳的情况下声称机器人处于活跃状态。", "在所有者没有要求新剪辑的情况下更改已完成的输出文件。"],
+  "heartbeat_example": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "action": "render_or_upload_ready", "detail": { "project": "my-video-project", "decision": "已去除冗余内容,保留了 3 个语音片段,并采用居中的 9:16 重构图。", "next": "按机器人执行策略运行本地渲染,然后根据需要将 Instagram 上传加入队列或自动上传。" } }
+}
