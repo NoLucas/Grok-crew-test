@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createIdentity, openEnvelope, publicIdentity, sealEnvelope } from '../runner/crypto.mjs';
 import { GitRelay } from '../desktop/git-relay.mjs';
@@ -15,7 +14,9 @@ assert.deepEqual(openEnvelope(envelope, runner, publicIdentity(desktop)), payloa
 const tampered = { ...envelope, ciphertext: `${envelope.ciphertext.slice(0, -1)}A` };
 assert.throws(() => openEnvelope(tampered, runner, publicIdentity(desktop)), /signature/);
 
-const temporary = mkdtempSync(join(tmpdir(), 'grok-crew-relay-test-'));
+const temporaryRoot = resolve('tmp');
+mkdirSync(temporaryRoot, { recursive: true });
+const temporary = mkdtempSync(join(temporaryRoot, 'grok-crew-relay-test-'));
 try {
   const runnerScript = resolve('runner/grok-crew-runner.mjs');
   const fixture = resolve('runner/fixtures/valid-patch.json');
@@ -263,7 +264,9 @@ try {
   assert.equal(rendered.status, 'publish_waiting');
   assert.deepEqual(transitions.map((item) => item.status), ['proposal_ready', 'applied', 'rendering', 'rendered', 'publish_waiting']);
 } finally {
-  rmSync(temporary, { recursive: true, force: true });
+  // Git can release pack/index handles a moment after the child process exits on Windows.
+  // Retry cleanup so a successful relay test is not reported as a product failure.
+  rmSync(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
 process.stdout.write('relay crypto, tamper rejection, structured input, signed controls, resume sequencing, and Git branches passed\n');
