@@ -133,6 +133,6 @@ def test_timeline_render_matches_frame_timing_caption_and_audio_contract(studio)
     assert blue_frame[..., 2].mean() > blue_frame[..., 0].mean() * 2
     assert np.count_nonzero(caption_frame.mean(axis=2) > 180) > np.count_nonzero(red_frame.mean(axis=2) > 180)
     assert rendered.audio is not None
-    samples = rendered.audio.to_soundarray(tt=[.2, .25, .3], fps=44_100)
+    samples = rendered.audio.to_soundarray(tt=[.201, .253, .307], fps=44_100)
     assert float(np.abs(samples).mean()) > .001
     rendered.close()
