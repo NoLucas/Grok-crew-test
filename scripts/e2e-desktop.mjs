@@ -68,16 +68,16 @@ try {
   // Render through the desktop's Export surface and wait for the local job.
   await page.locator('.desktop-titlebar nav button').nth(2).click();
   await page.locator('.desktop-render-card .desktop-primary').click();
-  await page.waitForFunction(async () => {
-    const value = await window.grokCrew?.request('/api/jobs');
-    const jobs = value?.jobs ?? [];
-    return jobs.some((job) => job.kind === 'render' && job.status === 'succeeded');
-  }, undefined, { timeout: 180_000, polling: 500 });
-  const jobs = await page.evaluate(async () => {
-    const value = await window.grokCrew?.request('/api/jobs');
-    return value?.jobs ?? [];
-  });
-  const renderJob = jobs.find((job) => job.kind === 'render');
+  let renderJob = null;
+  for (let attempt = 0; attempt < 360; attempt += 1) {
+    const jobs = await page.evaluate(async () => {
+      const value = await window.grokCrew?.request('/api/jobs');
+      return value?.jobs ?? [];
+    });
+    renderJob = jobs.find((job) => job.kind === 'render') ?? null;
+    if (renderJob && !['queued', 'running'].includes(renderJob.status)) break;
+    await page.waitForTimeout(500);
+  }
   assert.equal(renderJob?.status, 'succeeded', JSON.stringify(renderJob));
   const output = String(renderJob?.result_json?.output_path ?? '');
   assert.ok(output.startsWith(workspace), `Render escaped E2E workspace: ${output}`);
