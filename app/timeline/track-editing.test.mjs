@@ -182,16 +182,17 @@ describe('track state, snapping, and markers', () => {
   });
 
   it('snaps either edge of a moving clip and respects the off switch', () => {
-    const timeline = fixture();
+    const timeline = deepFreeze(fixture());
     const clip = timeline.tracks[0].clips[0];
     // Moving a 3s clip to 1.1 puts its end at 4.1, close enough to b's 4s start.
-    assert.deepEqual(snapMoveStart(deepFreeze(timeline), clip, 1.1, 9, ['a']), {
+    assert.deepEqual(snapMoveStart(timeline, clip, 1.1, 9, ['a']), {
       value: 1,
       snapped: true,
       target: 4,
     });
-    timeline.settings.snapping_enabled = false;
-    assert.deepEqual(snapMoveStart(deepFreeze(timeline), clip, 1.1, 9, ['a']), {
+    const snappingOff = fixture();
+    snappingOff.settings.snapping_enabled = false;
+    assert.deepEqual(snapMoveStart(deepFreeze(snappingOff), snappingOff.tracks[0].clips[0], 1.1, 9, ['a']), {
       value: 1.1,
       snapped: false,
       target: null,
