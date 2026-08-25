@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DragEvent } from 'react';
 import { LanguageSwitcher, useLanguage } from './language';
+import TimelineEditor from './timeline/TimelineEditor';
 
 declare global {
   interface Window {
@@ -25,6 +25,17 @@ declare global {
       pullGitResults: () => Promise<{ count: number }>;
       controlRunnerJob: (controlJobId: string, command: 'cancel' | 'pause' | 'resume' | 'retry', reason?: string) => Promise<{ command: string }>;
       resolveRunnerConflict: (controlJobId: string, action: 'discard' | 'retry_current') => Promise<unknown>;
+      // Added by the P1-01 direct-edit contract (desktop/main.mjs + desktop/preload.cjs).
+      // Typed loosely (unknown timeline/patch payloads) here so this ambient
+      // declaration doesn't need to import app/timeline's types; ./timeline/timelineApi.ts
+      // narrows and validates the payload it actually consumes.
+      applyTimelinePatch?: (
+        projectId: string,
+        timelinePatch: unknown,
+      ) => Promise<
+        | { ok: true; status: number; value: { version: unknown; timeline: unknown } }
+        | { ok: false; status: number; error: { code: string; message: string; details: Record<string, unknown> } }
+      >;
     };
   }
 }
@@ -96,6 +107,8 @@ export default function DesktopWorkspace() {
   const [workspace, setWorkspace] = useState<Workspace>({ projects: [], control_jobs: [], runner_events: [], runners: [], media: [] });
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [selectedClipId, setSelectedClipId] = useState('');
   const [activePanel, setActivePanel] = useState<'setup' | 'edit' | 'export'>('setup');
@@ -134,13 +147,18 @@ export default function DesktopWorkspace() {
   }, [api, t]);
 
   const refreshProject = useCallback(async (projectId: string) => {
-    if (!projectId) { setTimeline(null); setVersions([]); setAnalysis(null); return; }
+    if (!projectId) { setTimeline(null); setVersions([]); setAnalysis(null); setTimelineError(null); return; }
+    setTimelineLoading(true);
     try {
       const [timelineResponse, versionResponse, analysisResponse] = await Promise.all([api(`/api/v2/projects/${projectId}/timeline`), api(`/api/v2/projects/${projectId}/versions`), api(`/api/v2/projects/${projectId}/analysis`)]);
       setTimeline(timelineResponse.timeline as Timeline); setVersions(versionResponse.versions as Version[]);
       setAnalysis((analysisResponse.analysis as ProjectAnalysis | null) ?? null);
+      setTimelineError(null);
       setSelectedClipId((current) => current && (timelineResponse.timeline as Timeline).tracks.some((track: Track) => track.clips.some((clip) => clip.id === current)) ? current : '');
-    } catch (error) { setMessage(error instanceof Error ? error.message : t('프로젝트를 읽지 못했습니다.', 'Could not read the project.', '无法读取项目。', 'プロジェクトを読み込めませんでした。')); }
+    } catch (error) {
+      const failure = error instanceof Error ? error.message : t('프로젝트를 읽지 못했습니다.', 'Could not read the project.', '无法读取项目。', 'プロジェクトを読み込めませんでした。');
+      setMessage(failure); setTimelineError(failure);
+    } finally { setTimelineLoading(false); }
   }, [api, t]);
 
   useEffect(() => { const initial = window.setTimeout(() => void refreshWorkspace(), 0); const interval = window.setInterval(() => void refreshWorkspace(true), 5000); return () => { window.clearTimeout(initial); window.clearInterval(interval); }; }, [refreshWorkspace]);
@@ -273,14 +291,10 @@ export default function DesktopWorkspace() {
   const removeSelected = async () => { if (!selected) return; try { await patchTimeline([{ op: 'remove_clip', clip_id: selected.clip.id }]); setSelectedClipId(''); } catch (error) { setMessage(error instanceof Error ? error.message : 'Remove failed.'); } };
   const toggleTrack = async (track: Track, field: 'locked' | 'muted') => { try { await patchTimeline([{ op: 'update_track', track_id: track.id, changes: { [field]: !track[field] } }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Track update failed.'); } };
   const addTrack = async (type: TrackType) => { try { await patchTimeline([{ op: 'add_track', track: { id: `${type}-r${(timeline?.revision ?? 0) + 1}`, type, name: type === 'video' ? 'B-roll' : type[0].toUpperCase() + type.slice(1), order: (timeline?.tracks.length ?? 0) * 10, locked: false, muted: false, clips: [] } }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Track creation failed.'); } };
-  const moveDroppedClip = async (event: DragEvent<HTMLDivElement>, track: Track) => {
-    event.preventDefault();
-    const clipId = event.dataTransfer.getData('application/x-grok-crew-clip');
-    if (!clipId || track.locked) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const timelineStart = Math.max(0, Math.round(((event.clientX - bounds.left) / Math.max(1, bounds.width)) * duration * 10) / 10);
-    try { await patchTimeline([{ op: 'move_clip', clip_id: clipId, track_id: track.id, timeline_start: timelineStart }]); setSelectedClipId(clipId); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Clip move failed.'); }
+  const handleTimelinePatched = (next: Timeline) => {
+    setTimeline(next);
+    void refreshWorkspace(true);
+    if (project) void refreshProject(project.id);
   };
   const relayAction = async (action: 'pair' | 'desktop' | 'request' | 'result' | 'git-connect' | 'git-push' | 'git-pull') => {
     if (!window.grokCrew) { setMessage(t('Runner 연결은 데스크톱 앱에서 사용할 수 있습니다.', 'Runner pairing is available in the desktop app.', 'Runner 配对仅在桌面应用中可用。', 'Runner ペアリングはデスクトップアプリで利用できます。')); return; }
@@ -441,7 +455,18 @@ export default function DesktopWorkspace() {
         </aside>
       </div>
 
-      {project && timeline && <section className="desktop-timeline"><div className="desktop-timeline-tools"><div><b>{t('타임라인', 'Timeline', '时间线', 'タイムライン')}</b><span>{formatTime(duration)}</span></div><div><button onClick={() => void addTrack('video')}>＋ V</button><button onClick={() => void addTrack('audio')}>＋ A</button><button onClick={() => void addTrack('caption')}>＋ T</button><button disabled={!selected} onClick={() => void splitSelected()}>⌁ {t('분할', 'Split', '分割', '分割')}</button></div></div><div className="desktop-ruler"><span>00:00</span><span>{formatTime(duration / 4)}</span><span>{formatTime(duration / 2)}</span><span>{formatTime(duration * .75)}</span><span>{formatTime(duration)}</span></div><div className="desktop-track-scroll">{[...timeline.tracks].sort((a, b) => a.order - b.order).map((track) => <div className="desktop-track" key={track.id}><div className="desktop-track-head"><b>{track.type === 'video' ? 'V' : track.type === 'audio' ? 'A' : track.type === 'caption' ? 'T' : '◆'} {track.name}</b><button className={track.muted ? 'active' : ''} onClick={() => void toggleTrack(track, 'muted')}>M</button><button className={track.locked ? 'active' : ''} onClick={() => void toggleTrack(track, 'locked')}>⌑</button></div><div className={`desktop-track-lane ${track.muted ? 'muted' : ''}`} onDragOver={(event) => { if (!track.locked) event.preventDefault(); }} onDrop={(event) => void moveDroppedClip(event, track)}>{track.clips.map((clip) => <button key={clip.id} draggable={!clip.locked && !track.locked} onDragStart={(event) => event.dataTransfer.setData('application/x-grok-crew-clip', clip.id)} className={`desktop-timeline-clip type-${track.type} ${clip.id === selectedClipId ? 'selected' : ''}`} style={{ left: `${clip.timeline_start / duration * 100}%`, width: `${Math.max(1.5, clip.duration / duration * 100)}%` }} onClick={() => setSelectedClipId(clip.id)} title={`${clip.id} · ${formatTime(clip.timeline_start)}–${formatTime(clip.timeline_start + clip.duration)}`}><b>{clip.text || timeline.assets.find((asset) => asset.id === clip.asset_id)?.name || clip.id}</b><small>{formatTime(clip.duration)}</small></button>)}</div></div>)}</div></section>}
+      {project && <TimelineEditor
+        projectId={project.id}
+        timeline={timeline}
+        loading={timelineLoading}
+        loadError={timelineError}
+        selectedClipId={selectedClipId}
+        onSelectClip={setSelectedClipId}
+        onAddTrack={(type) => void addTrack(type)}
+        onToggleTrack={(track, field) => void toggleTrack(track as Track, field)}
+        onPatched={handleTimelinePatched}
+        onReload={() => void refreshProject(project.id)}
+      />}
 
       <footer className="desktop-command-bar"><div className="desktop-message"><span className="desktop-message-icon">i</span><p>{message}</p></div><div className="desktop-command-summary"><span>{executionPolicy === 'auto_edit_render' ? t('자동 편집·렌더', 'Auto edit & render', '自动编辑和渲染', '自動編集・レンダー') : t('검토 우선', 'Review first', '审核优先', '確認優先')}</span><span>{Object.values(publishPolicy).filter((value) => value === 'auto').length} {t('개 자동 게시', 'auto publish', '个自动发布', '件の自動公開')}</span><button className="desktop-start" disabled={busy || !project} onClick={() => void startGrok()}>{busy ? t('처리 중…', 'Working…', '处理中…', '処理中…') : t('Grok으로 제작 시작', 'Start with Grok', '使用 Grok 开始制作', 'Grokで制作開始')} <b>→</b></button></div></footer>
     </main>
