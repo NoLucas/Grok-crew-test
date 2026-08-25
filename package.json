@@ -32,7 +32,7 @@
     "desktop:pack": "npm run build && npm run sidecar:build && electron-builder --dir",
     "desktop:dist": "npm run build && npm run sidecar:build && electron-builder",
     "runner:test": "node scripts/test-relay.mjs",
-    "timeline:test": "node --test app/timeline/*.test.mjs",
+    "timeline:test": "node --test --test-concurrency=1 app/timeline/*.test.mjs",
     "sample": "node scripts/run-sample-project.mjs",
     "build": "vinext build",
     "start": "vinext start",
