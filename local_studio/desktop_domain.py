@@ -169,6 +169,19 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
         track["locked"], track["muted"], track["solo"] = (
             bool(track.get("locked")), bool(track.get("muted")), bool(track.get("solo")),
         )
+        try:
+            track["volume"] = float(track.get("volume", 1))
+            track["duck_level"] = float(track.get("duck_level", 0.35))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Track volume and duck level must be numeric.") from exc
+        if not 0 <= track["volume"] <= 4:
+            raise ValueError("track.volume must be between 0 and 4.")
+        if not 0 <= track["duck_level"] <= 1:
+            raise ValueError("track.duck_level must be between 0 and 1.")
+        track["role"] = str(track.get("role", "dialogue" if track.get("type") in {"video", "audio"} else "effects"))
+        if track["role"] not in {"dialogue", "music", "effects"}:
+            raise ValueError("track.role must be dialogue, music, or effects.")
+        track["ducking"] = bool(track.get("ducking", False))
         track["order"] = int(track.get("order", 0))
         for clip in track["clips"]:
             if not isinstance(clip, dict):
@@ -532,7 +545,7 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 changes = operation.get("changes")
                 if not isinstance(changes, dict) or not changes:
                     raise TimelinePatchError("invalid_operation", "update_track requires non-empty changes.", details={"field": "changes"})
-                for field in {"locked", "muted", "solo"} & set(changes):
+                for field in {"locked", "muted", "solo", "ducking"} & set(changes):
                     if not isinstance(changes[field], bool):
                         raise TimelinePatchError(
                             "invalid_operation", f"{field} must be a boolean.",

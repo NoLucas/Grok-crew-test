@@ -6870,6 +6870,16 @@ select {
 .desktop-elements select,
 .desktop-elements input { min-width: 0; padding: 7px; border: 1px solid var(--desktop-line); background: #fafafa; font-size: 8px; }
 .desktop-elements button { min-height: 29px; padding: 5px; border: 1px solid var(--desktop-line); border-radius: 7px; background: #fff; color: var(--desktop-ink); font-size: 8px; font-weight: 700; }
+.desktop-mixer { display: grid; gap: 8px; }
+.desktop-mixer form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; border: 1px solid var(--desktop-line-soft); border-radius: 8px; background: #fafafa; }
+.desktop-mixer form > div { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 6px; font-size: 8px; }
+.desktop-mixer form > div b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-mixer label { display: grid; gap: 4px; color: #555860; font-size: 7px; font-weight: 650; }
+.desktop-mixer input,
+.desktop-mixer select { min-width: 0; padding: 6px; border: 1px solid var(--desktop-line); background: #fff; font-size: 8px; }
+.desktop-mixer .desktop-mixer-check { grid-column: 1 / -1; display: flex; flex-direction: row; align-items: center; }
+.desktop-mixer .desktop-mixer-check input { width: auto; }
+.desktop-mixer form > button { grid-column: 1 / -1; min-height: 28px; border: 1px solid var(--desktop-blue); border-radius: 7px; background: #fff; color: var(--desktop-blue); font-size: 8px; font-weight: 700; }
 .desktop-inspector-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .desktop-inspector-head b { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .desktop-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #a1a3aa; box-shadow: 0 0 0 3px #e5e5e8; }

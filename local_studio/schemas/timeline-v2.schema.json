@@ -77,6 +77,10 @@
           "locked": { "type": "boolean" },
           "muted": { "type": "boolean" },
           "solo": { "type": "boolean", "default": false },
+          "volume": { "type": "number", "minimum": 0, "maximum": 4, "default": 1 },
+          "role": { "enum": ["dialogue", "music", "effects"], "default": "dialogue" },
+          "ducking": { "type": "boolean", "default": false },
+          "duck_level": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.35 },
           "clips": {
             "type": "array",
             "items": {

@@ -177,6 +177,8 @@ def _render_timeline_v2(
     font_path = caption_font()
     visual_layers: list[Any] = [ColorClip(size=(target_w, target_h), color=bg_rgb).with_duration(duration)]
     audio_layers: list[Any] = []
+    dialogue_audio_layers: list[Any] = []
+    ducking_audio_layers: list[tuple[Any, float]] = []
     owned_clips: list[Any] = []
     total = max(len(active_clips), 1)
 
@@ -252,8 +254,16 @@ def _render_timeline_v2(
                     continue
                 volume = max(0, min(float(audio_config.get("volume", 1)), 4))
                 layer = _apply_dynamic_volume(layer, keyframes, volume)
+                track_volume = max(0, min(float(track.get("volume", 1)), 4))
+                if track_volume != 1:
+                    layer = layer.with_effects([afx.MultiplyVolume(track_volume)])
                 layer = layer.with_start(start).with_duration(clip_duration)
-                audio_layers.append(layer)
+                if track.get("role", "dialogue") == "dialogue":
+                    dialogue_audio_layers.append(layer)
+                if track.get("role") == "music" and track.get("ducking"):
+                    ducking_audio_layers.append((layer, max(0, min(float(track.get("duck_level", .35)), 1))))
+                else:
+                    audio_layers.append(layer)
                 owned_clips.append(layer)
             elif kind in {"video", "overlay"}:
                 if not asset or asset.get("kind") not in {"video", "image", "title"}:
@@ -335,7 +345,17 @@ def _render_timeline_v2(
                     layer = layer.without_audio()
                 elif layer.audio:
                     volume = max(0, min(float(audio_config.get("volume", 1)), 4))
-                    layer = layer.with_audio(_apply_dynamic_volume(layer.audio, keyframes, volume))
+                    clip_audio = _apply_dynamic_volume(layer.audio, keyframes, volume)
+                    track_volume = max(0, min(float(track.get("volume", 1)), 4))
+                    if track_volume != 1:
+                        clip_audio = clip_audio.with_effects([afx.MultiplyVolume(track_volume)])
+                    if track.get("role", "dialogue") == "dialogue":
+                        dialogue_audio_layers.append(clip_audio)
+                    if track.get("role") == "music" and track.get("ducking"):
+                        ducking_audio_layers.append((clip_audio, max(0, min(float(track.get("duck_level", .35)), 1))))
+                        layer = layer.without_audio()
+                    else:
+                        layer = layer.with_audio(clip_audio)
                 visual_layers.append(layer)
                 owned_clips.append(layer)
 
@@ -344,6 +364,17 @@ def _render_timeline_v2(
 
         if len(visual_layers) == 1 and not audio_layers:
             raise RuntimeError("No renderable video, image, caption, or audio clips were found.")
+        if ducking_audio_layers:
+            if dialogue_audio_layers:
+                dialogue_mix = CompositeAudioClip(dialogue_audio_layers).with_duration(duration)
+                owned_clips.append(dialogue_mix)
+                for music_layer, floor in ducking_audio_layers:
+                    gain_at = _dialogue_duck_gain(dialogue_mix, duration, floor)
+                    ducked = _apply_music_ducking(music_layer, gain_at)
+                    audio_layers.append(ducked)
+                    owned_clips.append(ducked)
+            else:
+                audio_layers.extend(layer for layer, _floor in ducking_audio_layers)
         final = CompositeVideoClip(visual_layers, size=(target_w, target_h)).with_duration(duration)
         owned_clips.append(final)
         if audio_layers:

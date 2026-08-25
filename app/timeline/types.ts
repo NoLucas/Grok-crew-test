@@ -43,6 +43,10 @@ export type TimelineTrack = {
   locked: boolean;
   muted: boolean;
   solo?: boolean;
+  volume?: number;
+  role?: 'dialogue' | 'music' | 'effects';
+  ducking?: boolean;
+  duck_level?: number;
   clips: TimelineClip[];
 };
 
