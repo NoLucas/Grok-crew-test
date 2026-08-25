@@ -781,6 +781,7 @@ def apply_timeline_history_action(project_id: str, body: dict[str, Any]) -> dict
     base_revision = raw_base_revision
     created_by = str(body.get("created_by", "operator")).strip()[:80] or "operator"
     now, version_id = utc_now(), str(uuid.uuid4())
+    ensure_timeline_version(project_id)
 
     with db() as conn:
         conn.execute("BEGIN IMMEDIATE")
