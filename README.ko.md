@@ -11,6 +11,17 @@
   <img alt="내 컴퓨터에서 실행" src="https://img.shields.io/badge/runs-on%20your%20computer-f4c400?style=flat-square">
 </p>
 
+## 사용자용 데스크톱 작업 공간 — 개발 프리뷰
+
+채팅 입력창 대신 프로젝트·버전 탐색, 원본 모니터, 편집/게시 설정, 검증된 Grok·로컬 상태, 멀티트랙 타임라인, 로컬 분석·렌더, 롤백, 서명·암호화 Runner 전달을 하나의 Electron 앱에 통합했습니다.
+
+```sh
+npm install
+npm run desktop
+```
+
+`npm run desktop:pack` 또는 `npm run desktop:dist`로 PyInstaller sidecar와 Windows/macOS 패키지를 만듭니다. 실제 구현 흐름과 아직 남은 Professional NLE·GitHub/OAuth 배포 통합 범위는 [데스크톱 가이드](docs/DESKTOP.ko.md), 별도 Grok 환경 설정은 [Runner 가이드](runner/README.md)를 확인하세요. 기존 `/api/*`, CLI와 레거시 화면은 계속 호환됩니다.
+
 <h2 align="center">작동 영상</h2>
 
 <p align="center">

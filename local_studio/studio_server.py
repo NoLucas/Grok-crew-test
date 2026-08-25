@@ -39,6 +39,7 @@ from config import (
 )
 from db import db, event, init_db, row_dict
 from instagram import instagram_publish
+from publishers import publish
 from render import render_moviepy
 
 
@@ -552,9 +553,9 @@ def current_edit_method() -> dict[str, Any]:
     with db() as conn:
         row = conn.execute("SELECT * FROM edit_method WHERE id = 'current'").fetchone()
     if not row:
-        return {"method": DEFAULT_EDIT_METHOD.copy(), "updated_by": "local_default", "updated_at": None, "is_default": True}
+        return {"method": DEFAULT_EDIT_METHOD.copy(), "updated_by": "local_default", "updated_at": None, "origin": "default", "is_default": True}
     value = dict(row)
-    return {"method": json.loads(value["method_json"]), "updated_by": value["updated_by"], "updated_at": value["updated_at"], "is_default": False}
+    return {"method": json.loads(value["method_json"]), "updated_by": value["updated_by"], "updated_at": value["updated_at"], "origin": value.get("origin", "bot"), "is_default": False}
 
 
 def validated_edit_method(value: Any) -> dict[str, Any]:
@@ -589,21 +590,27 @@ def validated_edit_method(value: Any) -> dict[str, Any]:
 
 
 def set_edit_method(body: dict[str, Any]) -> dict[str, Any]:
+    origin = str(body.get("origin", "bot")).strip()
+    if origin not in {"human", "bot"}:
+        raise ValueError("origin must be human or bot.")
     bot_id = str(body.get("bot_id", "")).strip()
-    if not bot_id:
+    if origin == "bot" and not bot_id:
         raise ValueError("bot_id is required when a bot configures an edit method.")
     method = validated_edit_method(body.get("method"))
+    updated_by = str(body.get("updated_by", "operator" if origin == "human" else bot_id)).strip()[:80] or ("operator" if origin == "human" else bot_id)
     now = utc_now()
     with db() as conn:
-        conn.execute("""INSERT INTO edit_method (id, method_json, updated_by, updated_at) VALUES ('current', ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET method_json = excluded.method_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at""", (json.dumps(method), bot_id[:80], now))
-    record_bot_heartbeat({"bot_id": bot_id, "display_name": body.get("display_name", bot_id), "action": "edit_method_configured", "detail": {"method": method, "next": "await human application or review"}})
-    event(None, None, "edit_method_configured", {"bot_id": bot_id, "method": method})
+        conn.execute("""INSERT INTO edit_method (id, method_json, updated_by, updated_at, origin) VALUES ('current', ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET method_json = excluded.method_json, updated_by = excluded.updated_by,
+            updated_at = excluded.updated_at, origin = excluded.origin""", (json.dumps(method), updated_by, now, origin))
+    if origin == "bot":
+        record_bot_heartbeat({"bot_id": bot_id, "display_name": body.get("display_name", bot_id), "action": "edit_method_configured", "detail": {"method": method, "next": "await human application or review"}})
+    event(None, None, "edit_method_configured", {"origin": origin, "updated_by": updated_by, "method": method})
     return current_edit_method()
 
 
 def create_job(project_id: str, kind: str, payload: dict[str, Any], approved: bool) -> dict[str, Any]:
-    if kind not in {"render", "instagram_publish"}:
+    if kind not in {"render", "instagram_publish", "tiktok_publish", "youtube_publish"}:
         raise ValueError("Unsupported job kind.")
     if not get_project(project_id):
         raise ValueError("Project not found.")
@@ -648,7 +655,7 @@ def request_job_cancel(job_id: str) -> dict[str, Any]:
 
 
 def _validate_runnable(job: dict[str, Any]) -> dict[str, Any]:
-    if job["kind"] == "render" and not job["approved"]:
+    if job["kind"] in {"render", "instagram_publish", "tiktok_publish", "youtube_publish"} and not job["approved"]:
         raise ValueError("Job has no recorded human approval.")
     if job["status"] not in {"queued", "failed"}:
         raise ValueError("Only queued or failed jobs can run.")
@@ -668,8 +675,10 @@ def execute_job(job_id: str) -> dict[str, Any]:
     try:
         if job["kind"] == "render":
             result = render_moviepy(project, progress_cb=lambda pct: update_job_progress(job_id, pct), should_cancel=lambda: job_cancel_requested(job_id))
-        else:
+        elif job["kind"] == "instagram_publish" and not job["payload_json"].get("idempotency_key"):
             result = instagram_publish(project, job["payload_json"])
+        else:
+            result = publish(job["kind"].removesuffix("_publish"), project, job["payload_json"])
         final = update_job(job_id, status="succeeded", result=result, progress=100)
         event(project["id"], job_id, "job_succeeded", result)
         return final

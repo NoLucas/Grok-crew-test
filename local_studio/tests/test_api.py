@@ -129,3 +129,36 @@ def test_disallowed_origin_is_rejected(live_server):
     except HTTPError as exc:
         assert exc.code == 403
         assert "error" in json.loads(exc.read().decode("utf-8"))
+
+
+def test_v2_publish_requires_approval_and_idempotency_key(live_server):
+    project = create_project(live_server)
+    try:
+        post(live_server, f"/api/v2/projects/{project['id']}/publish/youtube", {"approved": False})
+        assert False, "expected publishing without approval to be rejected"
+    except HTTPError as exc:
+        assert exc.code == 400
+    try:
+        post(live_server, f"/api/v2/projects/{project['id']}/publish/youtube", {"approved": True})
+        assert False, "expected a missing idempotency key to be rejected"
+    except HTTPError as exc:
+        assert exc.code == 400
+
+
+def test_v2_control_job_pause_and_resume_are_durable(live_server):
+    project = create_project(live_server)
+    created = post(live_server, f"/api/v2/projects/{project['id']}/control-jobs", {
+        "execution_policy": "review_before_render",
+        "publish_policy": {
+            "schema": "grok-crew.publish-policy/v1",
+            "instagram": "ask", "tiktok": "ask", "youtube": "ask",
+        },
+    })["control_job"]
+    paused = post(live_server, f"/api/v2/control-jobs/{created['id']}/control", {"command": "pause"})["control_job"]
+    assert paused["status"] == "pause_requested"
+    assert paused["attempt"] == 1
+    assert paused["control_sequence"] == 1
+    resumed = post(live_server, f"/api/v2/control-jobs/{created['id']}/control", {"command": "resume"})["control_job"]
+    assert resumed["status"] == "queued"
+    assert resumed["attempt"] == 2
+    assert resumed["control_sequence"] == 2

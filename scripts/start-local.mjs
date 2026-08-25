@@ -9,20 +9,16 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const studioRoot = join(root, 'local_studio');
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npm = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm';
+const npmPrefix = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd'] : [];
 const venvPython = join(studioRoot, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: root, stdio: 'inherit', shell: needsShell(command), ...options });
+    const child = spawn(command, args, { cwd: root, stdio: 'inherit', ...options });
     child.on('error', reject);
     child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} exited with code ${code ?? 'unknown'}.`)));
   });
-}
-
-// Windows can throw EINVAL when spawning a .cmd file (like npm.cmd) without shell:true.
-function needsShell(command) {
-  return process.platform === 'win32' && command.toLowerCase().endsWith('.cmd');
 }
 
 function available(command, args) {
@@ -85,7 +81,7 @@ function provisionBundledSample() {
 }
 
 async function main() {
-  if (!existsSync(join(root, 'node_modules'))) await run(npm, ['ci']);
+  if (!existsSync(join(root, 'node_modules'))) await run(npm, [...npmPrefix, 'ci']);
   provisionBundledSample();
 
   if (!await portIsFree(3000)) {
@@ -109,7 +105,7 @@ async function main() {
 
   console.log('\nLocal Video Workspace is ready at http://localhost:3000/production');
   console.log('Bots in this cloned folder can use: python local_studio/grok_crew.py contract\n');
-  const web = spawn(npm, ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort'], { cwd: root, stdio: 'inherit', shell: needsShell(npm) });
+  const web = spawn(npm, [...npmPrefix, 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort'], { cwd: root, stdio: 'inherit' });
   const close = () => { if (studio && !studio.killed) studio.kill(); if (!web.killed) web.kill(); };
   process.on('SIGINT', close); process.on('SIGTERM', close);
   web.on('error', (error) => { console.error(`Local Video Workspace's dev server could not start: ${error.message}`); close(); process.exitCode = 1; });

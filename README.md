@@ -11,6 +11,17 @@
   <img alt="Runs on your computer" src="https://img.shields.io/badge/runs-on%20your%20computer-f4c400?style=flat-square">
 </p>
 
+## Desktop control workspace (development preview)
+
+Grok Crew now includes an Electron workspace built for people rather than a chat surface: project/version navigation, a source monitor, settings and publishing policy, verified Grok and local status, a multitrack timeline, local analysis/rendering, rollback, and signed encrypted Runner handoffs.
+
+```sh
+npm install
+npm run desktop
+```
+
+Build the PyInstaller sidecar and Windows/macOS package with `npm run desktop:pack` or `npm run desktop:dist`. See the [Korean desktop guide](docs/DESKTOP.ko.md) and [Runner guide](runner/README.md) for the implemented preview workflow and explicit current limits. Existing `/api/*`, CLI, and legacy pages remain compatible.
+
 <h2 align="center">Watch it work</h2>
 
 <p align="center">

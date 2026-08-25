@@ -1,2 +1,2 @@
-import HomeConsole from './home-console';
-export default function Page() { return <HomeConsole />; }
+import DesktopWorkspace from './desktop-workspace';
+export default function Page() { return <DesktopWorkspace />; }

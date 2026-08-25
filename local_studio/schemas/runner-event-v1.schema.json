@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-crew.runner-event/v1",
+  "type": "object",
+  "required": ["schema", "control_job_id", "runner_id", "sequence", "stage", "status", "verified_at"],
+  "properties": {
+    "schema": { "const": "grok-crew.runner-event/v1" },
+    "control_job_id": { "type": "string" },
+    "runner_id": { "type": "string" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "stage": { "enum": ["connected", "claimed", "analyzing", "planning", "needs_input", "proposal_ready", "completed", "failed", "cancelled", "paused", "resumed"] },
+    "status": { "enum": ["active", "waiting", "succeeded", "failed", "cancelled"] },
+    "detail": { "type": "object" },
+    "verified_at": { "type": "string" }
+  },
+  "additionalProperties": true
+}

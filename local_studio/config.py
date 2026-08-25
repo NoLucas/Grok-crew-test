@@ -27,7 +27,7 @@ def load_dotenv() -> None:
 load_dotenv()
 
 BUNDLED_CAPTION_FONT = BASE_DIR / "assets" / "fonts" / "NotoSansKR-Bold.ttf"
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.getenv("LOCAL_STUDIO_DATA", BASE_DIR / "data")).resolve()
 WORKSPACE_DIR = Path(os.getenv("LOCAL_STUDIO_WORKSPACE", BASE_DIR / "workspace")).resolve()
 DB_PATH = DATA_DIR / "studio.db"
 BOT_GUIDE_PATH = BASE_DIR / "bot-guide.json"

@@ -9,6 +9,221 @@ from typing import Any, Callable
 from config import PLATFORM_PRESETS, caption_font, workspace_path
 
 
+def _asset_path(value: str) -> Path:
+    """Resolve a v2 asset without allowing a renderer to silently leave workspace."""
+    candidate = Path(value)
+    return candidate if candidate.is_absolute() else workspace_path(value)
+
+
+def _render_timeline_v2(
+    project: dict[str, Any],
+    progress_cb: Callable[[int], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    """Render the immutable multi-track timeline used by the desktop editor.
+
+    The first desktop milestone intentionally implements the effects represented
+    by the public v2 data model (track ordering, trims, static transforms, audio
+    levels and captions) without flattening it back into the legacy cut list.
+    More advanced effects can therefore be added without another persistence
+    migration.
+    """
+    try:
+        from moviepy import (
+            AudioFileClip,
+            ColorClip,
+            CompositeAudioClip,
+            CompositeVideoClip,
+            ImageClip,
+            TextClip,
+            VideoFileClip,
+            afx,
+            vfx,
+        )
+    except ImportError as exc:
+        raise RuntimeError("MoviePy is not installed. Install local_studio/requirements.txt first.") from exc
+
+    timeline = project["timeline_json"]
+    settings = timeline.get("settings") if isinstance(timeline.get("settings"), dict) else {}
+    assets = {str(item.get("id")): item for item in timeline.get("assets", []) if isinstance(item, dict)}
+    tracks = sorted(
+        (item for item in timeline.get("tracks", []) if isinstance(item, dict)),
+        key=lambda item: int(item.get("order", 0)),
+    )
+
+    platform = str(settings.get("platform", "reels_tiktok_shorts"))
+    preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["reels_tiktok_shorts"])
+    target_w = max(2, int(settings.get("width", preset["width"])))
+    target_h = max(2, int(settings.get("height", preset["height"])))
+    target_w -= target_w % 2
+    target_h -= target_h % 2
+    fps = int(settings.get("fps", 30))
+    fps = fps if fps in {24, 30, 60} else 30
+    quality = str(settings.get("quality", "balanced"))
+    bitrate = {"compact": "3500k", "balanced": "6000k", "high": "9000k"}.get(quality, "6000k")
+    encoder_preset = {"compact": "veryfast", "balanced": "medium", "high": "slow"}.get(quality, "medium")
+    background = str(settings.get("background", "#000000"))
+    try:
+        bg_rgb = tuple(int(background.lstrip("#")[index:index + 2], 16) for index in (0, 2, 4))
+    except (TypeError, ValueError):
+        bg_rgb = (0, 0, 0)
+
+    active_clips = [
+        (track, clip)
+        for track in tracks
+        if not track.get("muted")
+        for clip in track.get("clips", [])
+        if isinstance(clip, dict)
+    ]
+    if not active_clips:
+        raise RuntimeError("No active clips are available to render.")
+    duration = max(float(clip.get("timeline_start", 0)) + float(clip.get("duration", 0)) for _, clip in active_clips)
+    if duration <= 0:
+        raise RuntimeError("Timeline duration must be positive.")
+
+    output = Path(project["output_path"])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    font_path = caption_font()
+    visual_layers: list[Any] = [ColorClip(size=(target_w, target_h), color=bg_rgb).with_duration(duration)]
+    audio_layers: list[Any] = []
+    owned_clips: list[Any] = []
+    total = max(len(active_clips), 1)
+
+    def close_owned() -> None:
+        for item in reversed(owned_clips):
+            try:
+                item.close()
+            except Exception:
+                pass
+
+    try:
+        for index, (track, clip_data) in enumerate(active_clips):
+            if should_cancel and should_cancel():
+                raise RuntimeError("Render cancelled.")
+            kind = str(track.get("type", "video"))
+            start = float(clip_data.get("timeline_start", 0))
+            clip_duration = float(clip_data.get("duration", 0))
+            asset = assets.get(str(clip_data.get("asset_id")))
+            layer = None
+
+            if kind == "caption":
+                text = str(clip_data.get("text", "")).strip()
+                if not text:
+                    continue
+                if not font_path:
+                    raise RuntimeError("No usable local font was found for captions. Set LOCAL_STUDIO_FONT or install a system font.")
+                style = clip_data.get("style") if isinstance(clip_data.get("style"), dict) else {}
+                size = max(18, min(int(style.get("size", settings.get("caption_size", 78))), 180))
+                color = str(style.get("color", settings.get("caption_color", "#FFFFFF")))
+                stroke = max(0, min(int(style.get("stroke", settings.get("caption_stroke", 3))), 12))
+                layer = TextClip(
+                    font=font_path,
+                    text=text,
+                    font_size=size,
+                    color=color,
+                    stroke_color="black",
+                    stroke_width=stroke,
+                    size=(max(240, int(target_w * .86)), max(size * 2, int(target_h * .08))),
+                    method="caption",
+                    vertical_align="center",
+                )
+                y_percent = max(0, min(float(style.get("position_y", settings.get("caption_y", 74))), 100))
+                y = max(0, min(int(target_h * y_percent / 100 - layer.h / 2), target_h - int(layer.h)))
+                layer = layer.with_start(start).with_duration(clip_duration).with_position(("center", y))
+                visual_layers.append(layer)
+                owned_clips.append(layer)
+            elif kind == "audio":
+                if not asset or asset.get("kind") not in {"audio", "video"}:
+                    continue
+                source_path = _asset_path(str(asset.get("path", "")))
+                if not source_path.exists():
+                    raise RuntimeError(f"Timeline asset does not exist: {source_path}")
+                source_audio = AudioFileClip(str(source_path))
+                owned_clips.append(source_audio)
+                source_in = max(0, float(clip_data.get("source_in", 0)))
+                source_out = min(float(clip_data.get("source_out", source_in + clip_duration)), float(source_audio.duration))
+                layer = source_audio.subclipped(source_in, source_out)
+                audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
+                if audio_config.get("muted"):
+                    continue
+                volume = max(0, min(float(audio_config.get("volume", 1)), 4))
+                if volume != 1:
+                    layer = layer.with_effects([afx.MultiplyVolume(volume)])
+                layer = layer.with_start(start).with_duration(clip_duration)
+                audio_layers.append(layer)
+                owned_clips.append(layer)
+            elif kind in {"video", "overlay"}:
+                if not asset or asset.get("kind") not in {"video", "image"}:
+                    continue
+                source_path = _asset_path(str(asset.get("path", "")))
+                if not source_path.exists():
+                    raise RuntimeError(f"Timeline asset does not exist: {source_path}")
+                if asset.get("kind") == "image":
+                    layer = ImageClip(str(source_path)).with_duration(clip_duration)
+                else:
+                    source_video = VideoFileClip(str(source_path))
+                    owned_clips.append(source_video)
+                    source_in = max(0, float(clip_data.get("source_in", 0)))
+                    source_out = min(float(clip_data.get("source_out", source_in + clip_duration)), float(source_video.duration))
+                    if source_out <= source_in:
+                        continue
+                    layer = source_video.subclipped(source_in, source_out)
+                    source_span = source_out - source_in
+                    if abs(source_span - clip_duration) > .001:
+                        layer = layer.with_effects([vfx.MultiplySpeed(source_span / clip_duration)])
+                transform = clip_data.get("transform") if isinstance(clip_data.get("transform"), dict) else {}
+                scale = max(.05, min(float(transform.get("scale", 1)), 8))
+                fit = min(target_w / float(layer.w), target_h / float(layer.h)) * scale
+                layer = layer.resized(fit)
+                rotation = float(transform.get("rotation", 0))
+                if rotation:
+                    layer = layer.rotated(rotation, expand=True)
+                opacity = max(0, min(float(transform.get("opacity", 1)), 1))
+                if opacity != 1:
+                    layer = layer.with_opacity(opacity)
+                x_value, y_value = transform.get("x", "center"), transform.get("y", "center")
+                position = (x_value, y_value)
+                layer = layer.with_start(start).with_duration(clip_duration).with_position(position)
+                audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
+                if layer.audio and (audio_config.get("muted") or track.get("muted")):
+                    layer = layer.without_audio()
+                elif layer.audio:
+                    volume = max(0, min(float(audio_config.get("volume", 1)), 4))
+                    if volume != 1:
+                        layer = layer.with_audio(layer.audio.with_effects([afx.MultiplyVolume(volume)]))
+                visual_layers.append(layer)
+                owned_clips.append(layer)
+
+            if progress_cb:
+                progress_cb(min(88, int(88 * (index + 1) / total)))
+
+        if len(visual_layers) == 1 and not audio_layers:
+            raise RuntimeError("No renderable video, image, caption, or audio clips were found.")
+        final = CompositeVideoClip(visual_layers, size=(target_w, target_h)).with_duration(duration)
+        owned_clips.append(final)
+        if audio_layers:
+            combined = CompositeAudioClip(([final.audio] if final.audio else []) + audio_layers)
+            owned_clips.append(combined)
+            final = final.with_audio(combined)
+        has_audio = bool(final.audio)
+        if progress_cb:
+            progress_cb(92)
+        final.write_videofile(
+            str(output), fps=fps, codec="libx264", audio_codec="aac", bitrate=bitrate,
+            threads=4, logger=None, ffmpeg_params=["-preset", encoder_preset, "-movflags", "+faststart"],
+        )
+    finally:
+        close_owned()
+    if progress_cb:
+        progress_cb(100)
+    return {
+        "output_path": str(output), "format": "mp4", "video": "H.264",
+        "audio": "AAC" if has_audio else "none", "width": target_w, "height": target_h,
+        "platform": platform, "fps": fps, "bitrate": bitrate,
+        "timeline_schema": timeline["schema"], "revision": timeline.get("revision"),
+    }
+
+
 def _smooth_gain_targets(targets: list[float], attack: float, release: float) -> list[float]:
     """Exponential envelope follower: eases the gain toward each step's target,
     using the faster `attack` rate while dropping (dialogue just started -- duck
@@ -65,6 +280,8 @@ def _apply_music_ducking(music, gain_at):
 
 
 def render_moviepy(project: dict[str, Any], progress_cb: Callable[[int], None] | None = None, should_cancel: Callable[[], bool] | None = None) -> dict[str, Any]:
+    if project.get("timeline_json", {}).get("schema") == "grok-crew.timeline/v2":
+        return _render_timeline_v2(project, progress_cb=progress_cb, should_cancel=should_cancel)
     try:
         from moviepy import AudioFileClip, ColorClip, CompositeAudioClip, CompositeVideoClip, TextClip, VideoFileClip, afx, concatenate_videoclips, vfx
     except ImportError as exc:
