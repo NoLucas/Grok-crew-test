@@ -25,6 +25,9 @@ Describe the editing problem first, then the smallest workflow that solves it. G
 ## Pull requests
 
 - Keep one clear change per pull request.
+- For Codex/Claude Code work, follow the ownership, task-packet, validation, and handoff rules in
+  [docs/AI_COLLABORATION.ko.md](docs/AI_COLLABORATION.ko.md). One implementation owner and an explicit
+  path allowlist are required for each AI-assisted pull request.
 - Update the Korean and English bot guide together when bot behavior changes.
 - Add or update documentation for user-visible behavior.
 - Run `npm run build` and Python syntax validation before requesting review.
