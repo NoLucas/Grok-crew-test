@@ -1,4 +1,4 @@
-// Pure builders for the seven P1-01 timeline edit operations.
+// Pure builders for P1-01 direct edits and P1-02 track-level operations.
 //
 // Every builder either returns a contract-shaped operation or an `EditBlock`
 // carrying the same error code the sidecar would return. The sidecar stays the
@@ -31,7 +31,12 @@ export type TimelineOperation =
       clip_id: string;
       next_clip_id: string;
       timeline_start: number;
-    };
+    }
+  | { op: 'update_track'; track_id: string; changes: Record<string, unknown> }
+  | { op: 'update_clip'; clip_id: string; changes: Record<string, unknown> }
+  | { op: 'set_settings'; changes: Record<string, unknown> }
+  | { op: 'add_marker'; marker: { id: string; at: number; label?: string } }
+  | { op: 'remove_marker'; marker_id: string };
 
 export type TimelinePatch = {
   schema: typeof TIMELINE_PATCH_SCHEMA;

@@ -37,6 +37,7 @@ RUNNER_STATUSES = {"active", "waiting", "succeeded", "failed", "cancelled"}
 EXECUTION_POLICIES = {"auto_edit_render", "review_before_render"}
 PUBLISH_MODES = {"export_only", "ask", "auto"}
 TIMELINE_EPSILON = 0.000001
+DEFAULT_SNAP_TOLERANCE_FRAMES = 6
 
 
 class TimelinePatchError(ValueError):
@@ -118,12 +119,13 @@ def _legacy_to_v2(project: dict[str, Any]) -> dict[str, Any]:
         "settings": {
             "width": width, "height": height, "fps": settings.get("fps", 30),
             "quality": settings.get("quality", "balanced"), "background": "#000000",
+            "snapping_enabled": True, "snap_tolerance_frames": DEFAULT_SNAP_TOLERANCE_FRAMES,
             **settings,
         },
         "assets": [{"id": source_asset_id, "kind": "video", "name": Path(project["source_path"]).name, "path": project["source_path"]}],
         "tracks": [
-            {"id": "video-main", "type": "video", "name": "Main video", "order": 0, "locked": False, "muted": False, "clips": video_clips},
-            {"id": "captions-main", "type": "caption", "name": "Captions", "order": 10, "locked": False, "muted": False, "clips": caption_clips},
+            {"id": "video-main", "type": "video", "name": "Main video", "order": 0, "locked": False, "muted": False, "solo": False, "clips": video_clips},
+            {"id": "captions-main", "type": "caption", "name": "Captions", "order": 10, "locked": False, "muted": False, "solo": False, "clips": caption_clips},
         ],
         "markers": [],
     }
@@ -134,6 +136,15 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
         raise ValueError(f"timeline.schema must be {TIMELINE_SCHEMA}.")
     if not isinstance(timeline.get("settings"), dict):
         raise ValueError("timeline.settings must be an object.")
+    settings = timeline["settings"]
+    snapping_enabled = settings.get("snapping_enabled", True)
+    if not isinstance(snapping_enabled, bool):
+        raise ValueError("timeline.settings.snapping_enabled must be a boolean.")
+    tolerance = settings.get("snap_tolerance_frames", DEFAULT_SNAP_TOLERANCE_FRAMES)
+    if isinstance(tolerance, bool) or not isinstance(tolerance, int) or not 1 <= tolerance <= 60:
+        raise ValueError("timeline.settings.snap_tolerance_frames must be an integer from 1 to 60.")
+    settings["snapping_enabled"] = snapping_enabled
+    settings["snap_tolerance_frames"] = tolerance
     assets, tracks = timeline.get("assets"), timeline.get("tracks")
     if not isinstance(assets, list) or not isinstance(tracks, list):
         raise ValueError("timeline.assets and timeline.tracks must be arrays.")
@@ -153,7 +164,9 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
         if track_id in track_ids:
             raise ValueError(f"Duplicate track id: {track_id}")
         track_ids.add(track_id)
-        track["locked"], track["muted"] = bool(track.get("locked")), bool(track.get("muted"))
+        track["locked"], track["muted"], track["solo"] = (
+            bool(track.get("locked")), bool(track.get("muted")), bool(track.get("solo")),
+        )
         track["order"] = int(track.get("order", 0))
         for clip in track["clips"]:
             if not isinstance(clip, dict):
@@ -172,8 +185,29 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
             if asset_id is not None and asset_id not in asset_ids:
                 raise ValueError(f"Clip {clip_id} references an unknown asset.")
             clip["locked"] = bool(clip.get("locked"))
+            group_id = clip.get("group_id")
+            if group_id is not None:
+                clip["group_id"] = _safe_identifier(group_id, "clip.group_id")
     timeline["revision"] = int(timeline.get("revision", 1))
-    timeline["markers"] = timeline.get("markers") if isinstance(timeline.get("markers"), list) else []
+    markers = timeline.get("markers")
+    if not isinstance(markers, list):
+        raise ValueError("timeline.markers must be an array.")
+    marker_ids: set[str] = set()
+    for marker in markers:
+        if not isinstance(marker, dict):
+            raise ValueError("Every marker must be an object.")
+        marker_id = _safe_identifier(marker.get("id"), "marker.id")
+        if marker_id in marker_ids:
+            raise ValueError(f"Duplicate marker id: {marker_id}")
+        marker_ids.add(marker_id)
+        try:
+            marker_at = float(marker.get("at"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("marker.at must be numeric.") from exc
+        if not math.isfinite(marker_at) or marker_at < 0:
+            raise ValueError("marker.at must be a finite non-negative number.")
+        marker["id"], marker["at"] = marker_id, marker_at
+        marker["label"] = str(marker.get("label", "")).strip()[:120]
     return timeline
 
 
@@ -243,13 +277,19 @@ def _assert_update_mutable(
     origin: str,
 ) -> None:
     target = clip if clip is not None else track
+    human_track_control = (
+        clip is None
+        and origin in {"human", "local_system"}
+        and set(changes).issubset({"locked", "muted", "solo"})
+        and all(isinstance(value, bool) for value in changes.values())
+    )
     explicit_human_unlock = (
         origin in {"human", "local_system"}
         and target.get("locked")
         and changes == {"locked": False}
         and not (clip is not None and track.get("locked"))
     )
-    if not explicit_human_unlock:
+    if not human_track_control and not explicit_human_unlock:
         _assert_mutable(track, clip)
 
 
@@ -392,6 +432,12 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 changes = operation.get("changes")
                 if not isinstance(changes, dict) or not changes:
                     raise TimelinePatchError("invalid_operation", "update_track requires non-empty changes.", details={"field": "changes"})
+                for field in {"locked", "muted", "solo"} & set(changes):
+                    if not isinstance(changes[field], bool):
+                        raise TimelinePatchError(
+                            "invalid_operation", f"{field} must be a boolean.",
+                            details={"field": field, "received": changes[field]},
+                        )
                 _assert_update_mutable(track, None, changes, origin)
                 track.update({key: value for key, value in changes.items() if key not in {"id", "clips"}})
             elif kind == "remove_track":
@@ -408,6 +454,18 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 changes = operation.get("changes")
                 if not isinstance(changes, dict) or not changes:
                     raise TimelinePatchError("invalid_operation", "update_clip requires non-empty changes.", details={"field": "changes"})
+                if "locked" in changes and not isinstance(changes["locked"], bool):
+                    raise TimelinePatchError(
+                        "invalid_operation", "locked must be a boolean.",
+                        details={"field": "locked", "received": changes["locked"]},
+                    )
+                if "group_id" in changes and changes["group_id"] is not None:
+                    try:
+                        changes = {**changes, "group_id": _safe_identifier(changes["group_id"], "group_id")}
+                    except ValueError as exc:
+                        raise TimelinePatchError(
+                            "invalid_operation", str(exc), details={"field": "group_id"},
+                        ) from exc
                 _assert_update_mutable(track, clip, changes, origin)
                 clip.update({key: value for key, value in changes.items() if key != "id"})
                 clip["timeline_start"] = _number(clip.get("timeline_start"), "timeline_start", minimum=0)
@@ -524,14 +582,45 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 changes = operation.get("changes")
                 if not isinstance(changes, dict) or not changes:
                     raise TimelinePatchError("invalid_operation", "set_settings requires non-empty changes.", details={"field": "changes"})
+                if "snapping_enabled" in changes and not isinstance(changes["snapping_enabled"], bool):
+                    raise TimelinePatchError(
+                        "invalid_operation", "snapping_enabled must be a boolean.",
+                        details={"field": "snapping_enabled", "received": changes["snapping_enabled"]},
+                    )
+                if "snap_tolerance_frames" in changes:
+                    tolerance = changes["snap_tolerance_frames"]
+                    if isinstance(tolerance, bool) or not isinstance(tolerance, int) or not 1 <= tolerance <= 60:
+                        raise TimelinePatchError(
+                            "invalid_operation", "snap_tolerance_frames must be an integer from 1 to 60.",
+                            details={"field": "snap_tolerance_frames", "received": tolerance},
+                        )
                 timeline["settings"].update(changes)
             elif kind == "add_marker":
                 marker = copy.deepcopy(operation.get("marker"))
                 if not isinstance(marker, dict):
                     raise TimelinePatchError("invalid_operation", "add_marker requires marker.", details={"field": "marker"})
+                try:
+                    marker["id"] = _safe_identifier(marker.get("id"), "marker.id")
+                except ValueError as exc:
+                    raise TimelinePatchError(
+                        "invalid_operation", str(exc), details={"field": "marker.id"},
+                    ) from exc
+                if any(item.get("id") == marker["id"] for item in timeline["markers"]):
+                    raise TimelinePatchError(
+                        "timeline_item_exists", "A marker with this id already exists.",
+                        details={"marker_id": marker["id"]},
+                    )
+                marker["at"] = _number(marker.get("at"), "marker.at", minimum=0)
+                marker["label"] = str(marker.get("label", "")).strip()[:120]
                 timeline["markers"].append(marker)
             elif kind == "remove_marker":
-                timeline["markers"] = [marker for marker in timeline["markers"] if marker.get("id") != operation.get("marker_id")]
+                marker_id = operation.get("marker_id")
+                marker = next((item for item in timeline["markers"] if item.get("id") == marker_id), None)
+                if not marker:
+                    raise TimelinePatchError(
+                        "timeline_item_not_found", "Marker not found.", details={"marker_id": marker_id},
+                    )
+                timeline["markers"].remove(marker)
             else:
                 raise TimelinePatchError(
                     "unsupported_operation", f"Unsupported timeline operation: {kind}",

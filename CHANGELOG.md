@@ -4,6 +4,15 @@ All notable changes to Grok Crew are documented here.
 
 ## Unreleased
 
+### Added
+
+- P1-02 track editing in the desktop timeline: persistent clip groups, track lock/mute/solo controls, marker add/remove, frame-based snapping, range and additive multi-selection, and atomic movement of a selected group.
+- Focused backend and UI tests for P1-02 persistence, locked-item protection, selection behavior, marker validation, snapping geometry, and multi-clip movement.
+
+### Changed
+
+- Core verification now runs every focused timeline UI test, so P1-01 and P1-02 interaction regressions are included in CI.
+
 ## 0.2.3 — 2026-08-25
 
 ### Added

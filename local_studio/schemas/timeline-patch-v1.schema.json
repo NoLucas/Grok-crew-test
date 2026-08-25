@@ -23,10 +23,22 @@
           "right_clip_id": { "type": "string", "minLength": 1 },
           "previous_clip_id": { "type": "string", "minLength": 1 },
           "next_clip_id": { "type": "string", "minLength": 1 },
+          "marker_id": { "type": "string", "minLength": 1 },
           "timeline_start": { "type": "number", "minimum": 0 },
           "at": { "type": "number", "minimum": 0 },
           "edge": { "enum": ["start", "end"] },
-          "source_in": { "type": "number", "minimum": 0 }
+          "source_in": { "type": "number", "minimum": 0 },
+          "changes": { "type": "object", "minProperties": 1 },
+          "marker": {
+            "type": "object",
+            "required": ["id", "at"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "at": { "type": "number", "minimum": 0 },
+              "label": { "type": "string", "maxLength": 120 }
+            },
+            "additionalProperties": true
+          }
         },
         "allOf": [
           {
@@ -59,6 +71,26 @@
           {
             "if": { "properties": { "op": { "const": "slide_clip" } }, "required": ["op"] },
             "then": { "required": ["clip_id", "previous_clip_id", "next_clip_id", "timeline_start"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "update_track" } }, "required": ["op"] },
+            "then": { "required": ["track_id", "changes"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "update_clip" } }, "required": ["op"] },
+            "then": { "required": ["clip_id", "changes"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "set_settings" } }, "required": ["op"] },
+            "then": { "required": ["changes"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "add_marker" } }, "required": ["op"] },
+            "then": { "required": ["marker"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "remove_marker" } }, "required": ["op"] },
+            "then": { "required": ["marker_id"] }
           }
         ],
         "additionalProperties": true

@@ -37,6 +37,11 @@ export const OPERATION_LABELS: Record<TimelineOperation['op'], LocalizedText> = 
   roll_edit: { ko: '롤 편집', en: 'Roll edit', zh: '滚动编辑', ja: 'ロール編集' },
   slip_clip: { ko: '슬립', en: 'Slip clip', zh: '滑动素材', ja: 'スリップ' },
   slide_clip: { ko: '슬라이드', en: 'Slide clip', zh: '滑移片段', ja: 'スライド' },
+  update_track: { ko: '트랙 상태 변경', en: 'Update track', zh: '更新轨道', ja: 'トラック更新' },
+  update_clip: { ko: '클립 상태 변경', en: 'Update clip', zh: '更新片段', ja: 'クリップ更新' },
+  set_settings: { ko: '타임라인 설정 변경', en: 'Update timeline settings', zh: '更新时间线设置', ja: 'タイムライン設定更新' },
+  add_marker: { ko: '마커 추가', en: 'Add marker', zh: '添加标记', ja: 'マーカー追加' },
+  remove_marker: { ko: '마커 삭제', en: 'Remove marker', zh: '删除标记', ja: 'マーカー削除' },
 };
 
 export function useTimelineEditing({
@@ -52,7 +57,7 @@ export function useTimelineEditing({
   // A ref guards the queue: React state updates are async and a fast second
   // pointer release would otherwise slip a duplicate patch through.
   const inFlight = useRef(false);
-  const lastOperation = useRef<TimelineOperation | null>(null);
+  const lastSubmission = useRef<{ operations: TimelineOperation[]; label?: LocalizedText } | null>(null);
 
   const dismissFeedback = useCallback(() => setFeedback({ status: 'idle' }), []);
 
@@ -60,19 +65,19 @@ export function useTimelineEditing({
     setFeedback({ status: 'failed', presentation: presentEditBlock(block), retryable: false });
   }, []);
 
-  const submit = useCallback(
-    async (operation: TimelineOperation): Promise<boolean> => {
-      if (inFlight.current || !timeline || !projectId) return false;
+  const submitMany = useCallback(
+    async (operations: TimelineOperation[], labelOverride?: LocalizedText): Promise<boolean> => {
+      if (inFlight.current || !timeline || !projectId || !operations.length) return false;
       inFlight.current = true;
-      lastOperation.current = operation;
-      const label = OPERATION_LABELS[operation.op];
+      lastSubmission.current = { operations, label: labelOverride };
+      const label = labelOverride ?? OPERATION_LABELS[operations[0].op];
       setPending(true);
       setFeedback({ status: 'working', label });
       try {
         const outcome = await sendTimelinePatch(
           bridge,
           projectId,
-          buildTimelinePatch(timeline.revision, createdBy, [operation]),
+          buildTimelinePatch(timeline.revision, createdBy, operations),
         );
         if (outcome.ok) {
           onApplied(outcome.value.timeline, outcome.value.version);
@@ -91,10 +96,15 @@ export function useTimelineEditing({
     [bridge, createdBy, onApplied, onReloadRequired, projectId, timeline],
   );
 
+  const submit = useCallback(
+    (operation: TimelineOperation) => submitMany([operation]),
+    [submitMany],
+  );
+
   const retryLast = useCallback(() => {
-    const operation = lastOperation.current;
-    if (operation) void submit(operation);
-  }, [submit]);
+    const submission = lastSubmission.current;
+    if (submission) void submitMany(submission.operations, submission.label);
+  }, [submitMany]);
 
   return useMemo(
     () => ({
@@ -103,11 +113,12 @@ export function useTimelineEditing({
       pending,
       feedback,
       submit,
+      submitMany,
       reportBlock,
       retryLast,
       dismissFeedback,
     }),
-    [bridge, dismissFeedback, feedback, pending, reportBlock, retryLast, submit],
+    [bridge, dismissFeedback, feedback, pending, reportBlock, retryLast, submit, submitMany],
   );
 }
 

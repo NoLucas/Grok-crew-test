@@ -7,6 +7,7 @@ import type { TimelineClip, TimelineTrack } from './types';
 
 export type DragPreview =
   | { kind: 'move'; clipId: string; fromTrackId: string; toTrackId: string; timelineStart: number }
+  | { kind: 'multi-move'; clipId: string; clipIds: string[]; timelineStart: number; delta: number }
   | { kind: 'trim'; clipId: string; edge: 'start' | 'end'; at: number }
   | { kind: 'ripple'; clipId: string; at: number }
   | { kind: 'roll'; leftClipId: string; rightClipId: string; at: number }
@@ -27,6 +28,10 @@ export function previewRect(
   switch (preview.kind) {
     case 'move':
       return preview.clipId === clip.id ? { ...base, timeline_start: preview.timelineStart } : base;
+    case 'multi-move':
+      return preview.clipIds.includes(clip.id)
+        ? { ...base, timeline_start: clip.timeline_start + preview.delta }
+        : base;
     case 'trim': {
       if (preview.clipId !== clip.id) return base;
       return preview.edge === 'start'
@@ -79,6 +84,7 @@ export function isPreviewTarget(preview: DragPreview | null, clipId: string) {
   if (!preview) return false;
   switch (preview.kind) {
     case 'move':
+    case 'multi-move':
     case 'trim':
     case 'ripple':
     case 'slip':

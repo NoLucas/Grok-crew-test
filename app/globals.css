@@ -6927,6 +6927,7 @@ select {
 .desktop-timeline-tools button { min-height: 26px; padding: 5px 8px; border: 1px solid #363840; border-radius: 6px; background: #24262c; color: #c9cad0; font-size: 8px; }
 .desktop-timeline-tools button:hover:not(:disabled) { border-color: #4a4d58; background: #2c2f36; }
 .desktop-timeline-tools button:disabled { opacity: .4; cursor: not-allowed; }
+.desktop-timeline-tools button.active { border-color: #655cf6; background: #3a3586; color: #fff; }
 .desktop-tool-group { gap: 3px; padding: 3px; border: 1px solid #2f313a; border-radius: 8px; background: #1c1e23; }
 .desktop-tool-group button { min-width: 56px; border-color: transparent; background: transparent; }
 .desktop-tool-group button.active { border-color: #5149c7; background: #3a3586; color: #fff; font-weight: 700; }
@@ -6963,13 +6964,14 @@ select {
 .desktop-track-scroll { min-height: 0; overflow: auto; }
 .desktop-timeline-empty { margin: 0; padding: 24px 14px; color: #75777f; font-size: 9px; line-height: 1.6; text-align: center; }
 .desktop-track { display: grid; grid-template-columns: 132px minmax(0, 1fr); min-height: 54px; border-bottom: 1px solid #292b31; }
-.desktop-track-head { display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px; gap: 4px; align-items: center; padding: 0 8px; border-right: 1px solid #30323a; background: #1f2025; }
+.desktop-track-head { display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px 26px; gap: 4px; align-items: center; padding: 0 8px; border-right: 1px solid #30323a; background: #1f2025; }
 .desktop-track-head b { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-track-head button { width: 26px; height: 26px; padding: 0; border: 1px solid #373942; border-radius: 6px; background: #282a30; color: #8d8f96; font-size: 8px; }
 .desktop-track-head button.active { border-color: #655cf6; background: #5149c7; color: white; }
 .desktop-track-head button:disabled { opacity: .45; cursor: not-allowed; }
 .desktop-track-lane { position: relative; min-width: 0; overflow: hidden; background-image: repeating-linear-gradient(90deg, transparent, transparent calc(10% - 1px), #24262b 10%); touch-action: none; }
 .desktop-track-lane.muted { opacity: .5; }
+.desktop-track-lane.solo { box-shadow: inset 3px 0 #655cf6; }
 .desktop-track-lane.locked { background-color: #1b1d21; }
 .desktop-track-lane.drop-target { box-shadow: inset 0 0 0 2px #655cf6; }
 .desktop-lane-empty { position: absolute; top: 50%; left: 12px; color: #5d5f67; font-size: 8px; pointer-events: none; transform: translateY(-50%); }
@@ -6990,6 +6992,7 @@ select {
 .desktop-clip-body small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-clip-body b { font-size: 8px; }
 .desktop-clip-body small { opacity: .72; font-size: 7px; font-variant-numeric: tabular-nums; }
+.desktop-clip-group { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 12px; height: 12px; border-radius: 4px; background: rgba(255, 255, 255, .16); color: inherit; font-size: 6px; font-weight: 800; pointer-events: none; }
 .desktop-clip-lock { position: absolute; top: 3px; right: 5px; font-size: 8px; opacity: .85; pointer-events: none; }
 
 /* Trim handles sit below the roll notch so the two targets never overlap. */
@@ -7011,6 +7014,10 @@ select {
 .desktop-clip-seam:disabled { cursor: progress; opacity: .5; }
 
 .desktop-clip-ghost { position: absolute; top: 5px; bottom: 5px; z-index: 2; border: 1px dashed #a79dff; border-radius: 6px; background: rgba(101, 92, 246, .18); pointer-events: none; }
+.desktop-marker-flag { position: absolute; top: 1px; z-index: 8; width: 11px; height: 14px; margin-left: -5px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.desktop-marker-flag span { display: block; width: 9px; height: 9px; background: #e3b45c; clip-path: polygon(50% 100%, 0 0, 100% 0); }
+.desktop-marker-line { position: absolute; top: 0; bottom: 0; z-index: 4; width: 1px; background: rgba(227, 180, 92, .5); pointer-events: none; }
+.desktop-snap-line { position: absolute; top: 0; bottom: 0; z-index: 7; width: 1px; margin-left: -.5px; background: #a79dff; box-shadow: 0 0 0 1px rgba(167, 157, 255, .2); pointer-events: none; }
 .desktop-playhead-line { position: absolute; top: 0; bottom: 0; z-index: 6; width: 1px; margin-left: -.5px; background: #ff5b52; pointer-events: none; }
 .desktop-timeline[aria-busy='true'] .desktop-track-lane { cursor: progress; }
 .desktop-timeline-help { margin: 0; padding: 6px 11px; border-top: 1px solid #2b2d33; color: #7c7e86; font-size: 8px; line-height: 1.5; }

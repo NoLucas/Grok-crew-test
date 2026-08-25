@@ -12,6 +12,7 @@ export type TimelineClip = {
   source_in?: number;
   source_out?: number;
   locked: boolean;
+  group_id?: string | null;
   text?: string;
   transform?: Record<string, number>;
   audio?: Record<string, number | boolean>;
@@ -24,12 +25,13 @@ export type TimelineTrack = {
   order: number;
   locked: boolean;
   muted: boolean;
+  solo?: boolean;
   clips: TimelineClip[];
 };
 
 export type TimelineAsset = { id: string; kind: string; name: string; path?: string; duration?: number };
 
-export type TimelineMarker = { id?: string; at?: number; label?: string };
+export type TimelineMarker = { id: string; at: number; label?: string };
 
 export type Timeline = {
   schema: string;

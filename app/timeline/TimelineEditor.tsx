@@ -42,6 +42,20 @@ import {
 import type { BuildResult, TimelineOperation } from './operations';
 import { isPreviewTarget, moveTargetTrackId, previewRect } from './preview';
 import type { DragPreview } from './preview';
+import {
+  buildAddMarkerOperation,
+  buildGroupOperations,
+  buildMultiMoveOperations,
+  buildRemoveMarkerOperation,
+  buildSnappingOperation,
+  buildTrackStateOperation,
+  buildUngroupOperations,
+  selectionForClip,
+  snapMoveStart,
+  snapPoint,
+  snappingEnabled,
+} from './track-editing';
+import type { SelectionMode } from './track-editing';
 import type { Timeline, TimelineClip, TimelineTrack, TrackType } from './types';
 import type { TimelineEditingController } from './use-timeline-editing';
 
@@ -57,6 +71,7 @@ type DragSession = {
   laneLeft: number;
   laneWidth: number;
   lanes: Array<{ trackId: string; top: number; bottom: number }>;
+  clipIds: string[];
   moved: boolean;
   /**
    * The authoritative draft. React may still be batching the `preview` state
@@ -70,38 +85,41 @@ const SCALE_HEADROOM = 1.08;
 
 export function TimelineEditor({
   timeline,
-  selectedClipId,
-  onSelectClip,
+  selectedClipIds,
+  onSelectClips,
   editing,
   onAddTrack,
-  onToggleTrack,
   trackBusy,
 }: {
   timeline: Timeline;
-  selectedClipId: string;
-  onSelectClip: (clipId: string) => void;
+  selectedClipIds: string[];
+  onSelectClips: (clipIds: string[]) => void;
   editing: TimelineEditingController;
   onAddTrack: (type: TrackType) => void;
-  onToggleTrack: (track: TimelineTrack, field: 'locked' | 'muted') => void;
   trackBusy: boolean;
 }) {
   const { t } = useLanguage();
   const [tool, setTool] = useState<EditTool>('select');
   const [playhead, setPlayhead] = useState(0);
   const [preview, setPreview] = useState<DragPreview | null>(null);
+  const [snapTarget, setSnapTarget] = useState<number | null>(null);
   const session = useRef<DragSession | null>(null);
   const laneRefs = useRef(new Map<string, HTMLDivElement>());
 
   const scale = useMemo(() => Math.max(10, timelineDuration(timeline) * SCALE_HEADROOM), [timeline]);
   const tracks = useMemo(() => orderedTracks(timeline), [timeline]);
+  const selectedClipId = selectedClipIds[selectedClipIds.length - 1] ?? '';
+  const selectedSet = useMemo(() => new Set(selectedClipIds), [selectedClipIds]);
+  const anySolo = useMemo(() => tracks.some((track) => Boolean(track.solo)), [tracks]);
   const selected = useMemo(() => findClip(timeline, selectedClipId), [timeline, selectedClipId]);
   const locked = editing.pending || !editing.available;
 
   // Selecting a clip pulls the playhead into it when it sits elsewhere, so the
   // split and trim shortcuts always start from a point inside the clip.
   const selectClip = useCallback(
-    (clipId: string) => {
-      onSelectClip(clipId);
+    (clipId: string, mode: SelectionMode = 'replace') => {
+      const next = selectionForClip(timeline, selectedClipIds, clipId, mode);
+      onSelectClips(next);
       const location = findClip(timeline, clipId);
       if (!location) return;
       const { clip } = location;
@@ -111,7 +129,7 @@ export function TimelineEditor({
           : roundTime(clip.timeline_start + clip.duration / 2),
       );
     },
-    [onSelectClip, timeline],
+    [onSelectClips, selectedClipIds, timeline],
   );
 
   const run = useCallback(
@@ -121,6 +139,17 @@ export function TimelineEditor({
         return;
       }
       await editing.submit(result.value);
+    },
+    [editing],
+  );
+
+  const runMany = useCallback(
+    async (result: BuildResult<TimelineOperation[]>, label?: Parameters<typeof editing.submitMany>[1]) => {
+      if (!result.ok) {
+        editing.reportBlock(result.block);
+        return;
+      }
+      await editing.submitMany(result.value, label);
     },
     [editing],
   );
@@ -139,6 +168,11 @@ export function TimelineEditor({
       const lane = laneRefs.current.get(track.id);
       if (!lane) return;
       const bounds = lane.getBoundingClientRect();
+      const clipIds = kind === 'move'
+        ? (selectedSet.has(clip.id)
+            ? selectedClipIds
+            : selectionForClip(timeline, [], clip.id, 'replace'))
+        : [clip.id];
       session.current = {
         pointerId: event.pointerId,
         kind,
@@ -152,13 +186,14 @@ export function TimelineEditor({
           const rect = element.getBoundingClientRect();
           return { trackId, top: rect.top, bottom: rect.bottom };
         }),
+        clipIds,
         moved: false,
         draft: null,
       };
       event.currentTarget.setPointerCapture(event.pointerId);
       event.stopPropagation();
     },
-    [locked],
+    [locked, selectedClipIds, selectedSet, timeline],
   );
 
   const updateDrag = useCallback(
@@ -178,6 +213,19 @@ export function TimelineEditor({
       if (!track || !clip) return;
 
       if (active.kind === 'move') {
+        const rawStart = roundTime(clampTime(clip.timeline_start + delta, 0));
+        const snapped = snapMoveStart(timeline, clip, rawStart, playhead, active.clipIds);
+        setSnapTarget(snapped.target);
+        if (active.clipIds.length > 1) {
+          stage({
+            kind: 'multi-move',
+            clipId: clip.id,
+            clipIds: active.clipIds,
+            timelineStart: snapped.value,
+            delta: snapped.value - clip.timeline_start,
+          });
+          return;
+        }
         const lane = active.lanes.find((item) => event.clientY >= item.top && event.clientY <= item.bottom);
         const candidate = lane ? timeline.tracks.find((item) => item.id === lane.trackId) : undefined;
         const target = candidate && canDropOnTrack(track, candidate) ? candidate : track;
@@ -186,14 +234,16 @@ export function TimelineEditor({
           clipId: clip.id,
           fromTrackId: track.id,
           toTrackId: target.id,
-          timelineStart: roundTime(clampTime(clip.timeline_start + delta, 0)),
+          timelineStart: snapped.value,
         });
         return;
       }
       if (active.kind === 'trim-start' || active.kind === 'trim-end') {
         const edge = active.kind === 'trim-start' ? 'start' : 'end';
         const raw = edge === 'start' ? clip.timeline_start + delta : clipEnd(clip) + delta;
-        const at = clampTrimEdge(clip, edge, raw);
+        const snapped = snapPoint(timeline, raw, playhead, [clip.id]);
+        const at = clampTrimEdge(clip, edge, snapped.value);
+        setSnapTarget(snapped.target);
         stage(
           tool === 'ripple' && edge === 'end'
             ? { kind: 'ripple', clipId: clip.id, at }
@@ -204,15 +254,18 @@ export function TimelineEditor({
       if (active.kind === 'roll') {
         const right = track.clips.find((item) => item.id === active.secondaryClipId);
         if (!right) return;
+        const snapped = snapPoint(timeline, clipEnd(clip) + delta, playhead, [clip.id, right.id]);
+        setSnapTarget(snapped.target);
         stage({
           kind: 'roll',
           leftClipId: clip.id,
           rightClipId: right.id,
-          at: clampRollBoundary(clip, right, clipEnd(clip) + delta),
+          at: clampRollBoundary(clip, right, snapped.value),
         });
         return;
       }
       if (active.kind === 'slip') {
+        setSnapTarget(null);
         const sourceIn = clampSlipSourceIn(timeline, clip, (clip.source_in ?? 0) - delta);
         stage({ kind: 'slip', clipId: clip.id, sourceIn, delta: sourceIn - (clip.source_in ?? 0) });
         return;
@@ -222,19 +275,23 @@ export function TimelineEditor({
         stage(null);
         return;
       }
+      const snapped = snapMoveStart(timeline, clip, clip.timeline_start + delta, playhead, [
+        previous.id, clip.id, next.id,
+      ]);
+      setSnapTarget(snapped.target);
       stage({
         kind: 'slide',
         clipId: clip.id,
         previousClipId: previous.id,
         nextClipId: next.id,
-        timelineStart: clampSlideStart(previous, clip, next, clip.timeline_start + delta),
+        timelineStart: clampSlideStart(previous, clip, next, snapped.value),
       });
     },
-    [scale, timeline, tool],
+    [playhead, scale, timeline, tool],
   );
 
   const buildFromPreview = useCallback(
-    (draft: DragPreview): BuildResult<TimelineOperation> | null => {
+    (draft: DragPreview): BuildResult<TimelineOperation> | BuildResult<TimelineOperation[]> | null => {
       const anchorId = draft.kind === 'roll' ? draft.leftClipId : draft.clipId;
       const location = findClip(timeline, anchorId);
       if (!location) return { ok: false, block: { code: 'timeline_item_not_found', details: { clip_id: anchorId } } };
@@ -247,6 +304,10 @@ export function TimelineEditor({
             draft.toTrackId === track.id && Math.abs(draft.timelineStart - clip.timeline_start) < 1e-4;
           return unchanged ? null : buildMoveOperation(track, clip, draft.timelineStart, target);
         }
+        case 'multi-move':
+          return Math.abs(draft.delta) < 1e-4
+            ? null
+            : buildMultiMoveOperations(timeline, draft.clipIds, draft.clipId, draft.timelineStart);
         case 'trim': {
           const current = draft.edge === 'start' ? clip.timeline_start : clipEnd(clip);
           return Math.abs(draft.at - current) < 1e-4
@@ -290,6 +351,7 @@ export function TimelineEditor({
       const draft = active.draft;
       if (!active.moved || !draft) {
         setPreview(null);
+        setSnapTarget(null);
         // A slide needs a clip touching on both sides; say so instead of doing nothing.
         if (active.moved && active.kind === 'slide') {
           editing.reportBlock({ code: 'clips_not_adjacent', details: { clip_id: active.clipId } });
@@ -301,12 +363,24 @@ export function TimelineEditor({
         // The preview stays on screen while the single patch is in flight. It is
         // never written into `timeline`, so a failure simply reveals the
         // committed revision again.
-        if (result) await run(result);
+        if (result) {
+          if (draft.kind === 'multi-move') {
+            await runMany(result as BuildResult<TimelineOperation[]>, {
+              ko: '선택 클립 이동',
+              en: 'Move selected clips',
+              zh: '移动所选片段',
+              ja: '選択クリップを移動',
+            });
+          } else {
+            await run(result as BuildResult<TimelineOperation>);
+          }
+        }
       } finally {
         setPreview(null);
+        setSnapTarget(null);
       }
     },
-    [buildFromPreview, editing, run],
+    [buildFromPreview, editing, run, runMany],
   );
 
   // Releasing the pointer outside the window must not leave a stale preview.
@@ -315,6 +389,7 @@ export function TimelineEditor({
       if (!session.current) return;
       session.current = null;
       setPreview(null);
+      setSnapTarget(null);
     };
     window.addEventListener('pointercancel', cancel);
     window.addEventListener('blur', cancel);
@@ -348,9 +423,26 @@ export function TimelineEditor({
         );
         return;
       }
-      void run(buildMoveOperation(track, clip, Math.max(0, roundTime(clip.timeline_start + seconds))));
+      const movingIds = selectedSet.has(clip.id) ? selectedClipIds : [clip.id];
+      const snapped = snapMoveStart(
+        timeline,
+        clip,
+        Math.max(0, roundTime(clip.timeline_start + seconds)),
+        playhead,
+        movingIds,
+      );
+      if (movingIds.length > 1) {
+        void runMany(buildMultiMoveOperations(timeline, movingIds, clip.id, snapped.value), {
+          ko: '선택 클립 이동',
+          en: 'Move selected clips',
+          zh: '移动所选片段',
+          ja: '選択クリップを移動',
+        });
+        return;
+      }
+      void run(buildMoveOperation(track, clip, snapped.value));
     },
-    [run, timeline, tool],
+    [playhead, run, runMany, selectedClipIds, selectedSet, timeline, tool],
   );
 
   const moveToNeighbourTrack = useCallback(
@@ -454,10 +546,26 @@ export function TimelineEditor({
     },
   ];
   const activeHint = toolOptions.find((option) => option.id === tool)?.hint ?? '';
+  const selectedHasGroup = selectedClipIds.some((clipId) => Boolean(findClip(timeline, clipId)?.clip.group_id));
+  const markerAtPlayhead = timeline.markers.find((marker) => Math.abs(marker.at - playhead) < 0.0005);
+
+  const groupSelection = () => void runMany(buildGroupOperations(timeline, selectedClipIds), {
+    ko: '클립 그룹 만들기',
+    en: 'Group clips',
+    zh: '组合片段',
+    ja: 'クリップをグループ化',
+  });
+  const ungroupSelection = () => void runMany(buildUngroupOperations(timeline, selectedClipIds), {
+    ko: '클립 그룹 해제',
+    en: 'Ungroup clips',
+    zh: '取消片段组合',
+    ja: 'クリップのグループ解除',
+  });
 
   const renderClip = (track: TimelineTrack, clip: TimelineClip) => {
     const rect = previewRect(preview, track, clip);
-    const isSelected = clip.id === selectedClipId;
+    const isSelected = selectedSet.has(clip.id);
+    const isPrimary = clip.id === selectedClipId;
     const editable = isEditable(track, clip);
     const hiddenForMove = moveTargetTrackId(preview) !== null && preview?.kind === 'move' && preview.clipId === clip.id;
     const label = clipLabel(timeline, clip);
@@ -492,12 +600,21 @@ export function TimelineEditor({
             `${label}、${track.name} トラック、${formatTimecode(clip.timeline_start)} から ${formatTimecode(clipEnd(clip))}${editable ? '' : '、ロック中'}`,
           )}
           title={`${label} · ${formatTimecode(clip.timeline_start)}–${formatTimecode(clipEnd(clip))}`}
-          onClick={() => selectClip(clip.id)}
-          onFocus={() => selectClip(clip.id)}
+          onClick={(event) => {
+            if (event.detail === 0) selectClip(clip.id);
+          }}
+          onFocus={() => {
+            if (!selectedSet.has(clip.id)) selectClip(clip.id);
+          }}
           onKeyDown={(event) => onClipKeyDown(event, track, clip)}
           onPointerDown={(event) => {
-            selectClip(clip.id);
-            if (editable) beginDrag(event, dragKind, track, clip);
+            const mode: SelectionMode = event.shiftKey
+              ? 'range'
+              : event.metaKey || event.ctrlKey
+                ? 'toggle'
+                : 'replace';
+            selectClip(clip.id, mode);
+            if (mode === 'replace' && editable) beginDrag(event, dragKind, track, clip);
           }}
           onPointerMove={updateDrag}
           onPointerUp={(event) => void endDrag(event)}
@@ -507,9 +624,10 @@ export function TimelineEditor({
             {formatTimecode(rect.duration)}
             {slipping ? ` · ${preview.delta >= 0 ? '+' : ''}${preview.delta.toFixed(2)}s` : ''}
           </small>
+          {clip.group_id ? <span className="desktop-clip-group" aria-hidden="true">G</span> : null}
           {!editable ? <span className="desktop-clip-lock" aria-hidden="true">L</span> : null}
         </button>
-        {isSelected && editable && editing.available ? (
+        {isPrimary && editable && editing.available ? (
           <>
             <button
               type="button"
@@ -623,6 +741,42 @@ export function TimelineEditor({
           ))}
         </div>
         <div>
+          <span>{selectedClipIds.length} {t('개 선택', 'selected', '个已选', '件選択')}</span>
+          <button type="button" disabled={trackBusy || selectedClipIds.length < 2} onClick={groupSelection}>
+            {t('그룹', 'Group', '组合', 'グループ')}
+          </button>
+          <button type="button" disabled={trackBusy || !selectedHasGroup} onClick={ungroupSelection}>
+            {t('그룹 해제', 'Ungroup', '取消组合', '解除')}
+          </button>
+          <button
+            type="button"
+            className={snappingEnabled(timeline) ? 'active' : ''}
+            aria-pressed={snappingEnabled(timeline)}
+            disabled={trackBusy || !editing.available}
+            onClick={() => void editing.submit(buildSnappingOperation(!snappingEnabled(timeline)))}
+          >
+            {t('스냅', 'Snap', '吸附', 'スナップ')}
+          </button>
+          <button
+            type="button"
+            disabled={trackBusy || !editing.available}
+            onClick={() => void editing.submit(buildAddMarkerOperation(
+              timeline,
+              playhead,
+              `Marker ${timeline.markers.length + 1}`,
+            ))}
+          >
+            ＋ {t('마커', 'Marker', '标记', 'マーカー')}
+          </button>
+          {markerAtPlayhead ? (
+            <button
+              type="button"
+              disabled={trackBusy || !editing.available}
+              onClick={() => void editing.submit(buildRemoveMarkerOperation(markerAtPlayhead.id))}
+            >
+              − {t('현재 마커', 'Current marker', '当前标记', '現在のマーカー')}
+            </button>
+          ) : null}
           <button type="button" disabled={trackBusy} onClick={() => onAddTrack('video')} title={t('영상 트랙 추가', 'Add video track', '添加视频轨道', '映像トラックを追加')}>＋ V</button>
           <button type="button" disabled={trackBusy} onClick={() => onAddTrack('audio')} title={t('오디오 트랙 추가', 'Add audio track', '添加音频轨道', '音声トラックを追加')}>＋ A</button>
           <button type="button" disabled={trackBusy} onClick={() => onAddTrack('caption')} title={t('자막 트랙 추가', 'Add caption track', '添加字幕轨道', '字幕トラックを追加')}>＋ T</button>
@@ -658,6 +812,24 @@ export function TimelineEditor({
                 aria-label={t('재생 위치', 'Playhead position', '播放位置', '再生位置')}
                 aria-valuetext={formatTimecode(playhead)}
               />
+              {timeline.markers.map((marker) => (
+                <button
+                  type="button"
+                  key={marker.id}
+                  className="desktop-marker-flag"
+                  style={{ left: `${secondsToPercent(marker.at, scale)}%` }}
+                  title={`${marker.label || marker.id} · ${formatTimecode(marker.at)}`}
+                  aria-label={t(
+                    `${marker.label || '마커'}, ${formatTimecode(marker.at)}로 이동`,
+                    `Go to ${marker.label || 'marker'} at ${formatTimecode(marker.at)}`,
+                    `跳转到 ${formatTimecode(marker.at)} 的${marker.label || '标记'}`,
+                    `${formatTimecode(marker.at)} の${marker.label || 'マーカー'}へ移動`,
+                  )}
+                  onClick={() => setPlayhead(marker.at)}
+                >
+                  <span aria-hidden="true" />
+                </button>
+              ))}
             </div>
           </div>
 
@@ -675,11 +847,21 @@ export function TimelineEditor({
                   </b>
                   <button
                     type="button"
+                    className={track.solo ? 'active' : ''}
+                    aria-pressed={Boolean(track.solo)}
+                    disabled={trackBusy || !editing.available}
+                    aria-label={t(`${track.name} 솔로`, `Solo ${track.name}`, `独奏 ${track.name}`, `${track.name} をソロ`)}
+                    onClick={() => void editing.submit(buildTrackStateOperation(track, 'solo'))}
+                  >
+                    S
+                  </button>
+                  <button
+                    type="button"
                     className={track.muted ? 'active' : ''}
                     aria-pressed={track.muted}
-                    disabled={trackBusy}
+                    disabled={trackBusy || !editing.available}
                     aria-label={t(`${track.name} 음소거`, `Mute ${track.name}`, `静音 ${track.name}`, `${track.name} をミュート`)}
-                    onClick={() => onToggleTrack(track, 'muted')}
+                    onClick={() => void editing.submit(buildTrackStateOperation(track, 'muted'))}
                   >
                     M
                   </button>
@@ -687,9 +869,9 @@ export function TimelineEditor({
                     type="button"
                     className={track.locked ? 'active' : ''}
                     aria-pressed={track.locked}
-                    disabled={trackBusy}
+                    disabled={trackBusy || !editing.available}
                     aria-label={t(`${track.name} 잠금`, `Lock ${track.name}`, `锁定 ${track.name}`, `${track.name} をロック`)}
-                    onClick={() => onToggleTrack(track, 'locked')}
+                    onClick={() => void editing.submit(buildTrackStateOperation(track, 'locked'))}
                   >
                     L
                   </button>
@@ -697,7 +879,8 @@ export function TimelineEditor({
                 <div
                   className={[
                     'desktop-track-lane',
-                    track.muted ? 'muted' : '',
+                    track.muted || (anySolo && !track.solo) ? 'muted' : '',
+                    track.solo ? 'solo' : '',
                     track.locked ? 'locked' : '',
                     moveTargetTrackId(preview) === track.id ? 'drop-target' : '',
                   ].filter(Boolean).join(' ')}
@@ -713,6 +896,21 @@ export function TimelineEditor({
                   ) : null}
                   {track.clips.map((clip) => renderClip(track, clip))}
                   {seamsFor(track).map(([left, right]) => renderSeam(track, left, right))}
+                  {timeline.markers.map((marker) => (
+                    <span
+                      key={`marker-line-${track.id}-${marker.id}`}
+                      className="desktop-marker-line"
+                      aria-hidden="true"
+                      style={{ left: `${secondsToPercent(marker.at, scale)}%` }}
+                    />
+                  ))}
+                  {snapTarget !== null ? (
+                    <span
+                      className="desktop-snap-line"
+                      aria-hidden="true"
+                      style={{ left: `${secondsToPercent(snapTarget, scale)}%` }}
+                    />
+                  ) : null}
                   {moveTargetTrackId(preview) === track.id && preview?.kind === 'move' ? (
                     <span
                       className="desktop-clip-ghost"
@@ -735,10 +933,10 @@ export function TimelineEditor({
           <p id="desktop-timeline-help" className="desktop-timeline-help">
             {activeHint}{' '}
             {t(
-              '키보드: ← → 이동, ↑ ↓ 트랙 이동, [ 와 ] 재생 위치로 자르기, Shift + ] 리플, S 분할. 자르기는 길이를 줄이기만 하며, 늘리려면 롤 편집이나 오른쪽 클립 속성의 길이를 쓰세요.',
-              'Keyboard: ← → move, ↑ ↓ change track, [ and ] trim to the playhead, Shift + ] ripple, S split. Trimming only shortens a clip — to lengthen one use a roll edit or the duration field in the clip inspector.',
-              '键盘：← → 移动，↑ ↓ 换轨道，[ 和 ] 裁剪到播放位置，Shift + ] 波纹，S 分割。裁剪只能缩短片段，若要加长请使用滚动编辑或右侧片段属性中的时长。',
-              'キーボード: ← → 移動、↑ ↓ トラック変更、[ と ] 再生位置でトリム、Shift + ] リップル、S 分割。トリムは短くするだけです。長くするにはロール編集かクリップ属性の長さを使ってください。',
+              'Ctrl/⌘ 클릭은 다중 선택, Shift 클릭은 범위 선택입니다. ← → 이동, ↑ ↓ 트랙 이동, [ 와 ] 자르기, Shift + ] 리플, S 분할.',
+              'Ctrl/⌘ click adds to selection; Shift click selects a range. ← → moves, ↑ ↓ changes track, [ and ] trim, Shift + ] ripples, S splits.',
+              'Ctrl/⌘ 点击可多选，Shift 点击可范围选择。← → 移动，↑ ↓ 换轨道，[ 和 ] 裁剪，Shift + ] 波纹，S 分割。',
+              'Ctrl/⌘ クリックで複数選択、Shift クリックで範囲選択。← → 移動、↑ ↓ トラック変更、[ と ] トリム、Shift + ] リップル、S 分割。',
             )}
           </p>
         </div>
