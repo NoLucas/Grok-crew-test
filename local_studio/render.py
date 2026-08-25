@@ -15,6 +15,11 @@ def _asset_path(value: str) -> Path:
     return candidate if candidate.is_absolute() else workspace_path(value)
 
 
+def original_asset_path(asset: dict[str, Any]) -> Path:
+    """Final output always resolves the immutable original, never its proxy."""
+    return _asset_path(str(asset.get("path", "")))
+
+
 def _render_timeline_v2(
     project: dict[str, Any],
     progress_cb: Callable[[int], None] | None = None,
@@ -68,10 +73,11 @@ def _render_timeline_v2(
     except (TypeError, ValueError):
         bg_rgb = (0, 0, 0)
 
+    any_solo = any(bool(track.get("solo")) for track in tracks)
     active_clips = [
         (track, clip)
         for track in tracks
-        if not track.get("muted")
+        if not track.get("muted") and (not any_solo or track.get("solo"))
         for clip in track.get("clips", [])
         if isinstance(clip, dict)
     ]
@@ -135,7 +141,7 @@ def _render_timeline_v2(
             elif kind == "audio":
                 if not asset or asset.get("kind") not in {"audio", "video"}:
                     continue
-                source_path = _asset_path(str(asset.get("path", "")))
+                source_path = original_asset_path(asset)
                 if not source_path.exists():
                     raise RuntimeError(f"Timeline asset does not exist: {source_path}")
                 source_audio = AudioFileClip(str(source_path))
@@ -155,7 +161,7 @@ def _render_timeline_v2(
             elif kind in {"video", "overlay"}:
                 if not asset or asset.get("kind") not in {"video", "image"}:
                     continue
-                source_path = _asset_path(str(asset.get("path", "")))
+                source_path = original_asset_path(asset)
                 if not source_path.exists():
                     raise RuntimeError(f"Timeline asset does not exist: {source_path}")
                 if asset.get("kind") == "image":

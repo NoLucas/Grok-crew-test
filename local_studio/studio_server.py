@@ -40,6 +40,14 @@ from config import (
 from db import db, event, init_db, row_dict
 from instagram import instagram_publish
 from publishers import publish
+from proxy import (
+    generate_proxy,
+    get_proxy,
+    list_proxies,
+    proxy_is_current,
+    source_asset,
+    update_proxy,
+)
 from render import render_moviepy
 
 
@@ -610,7 +618,7 @@ def set_edit_method(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_job(project_id: str, kind: str, payload: dict[str, Any], approved: bool) -> dict[str, Any]:
-    if kind not in {"render", "instagram_publish", "tiktok_publish", "youtube_publish"}:
+    if kind not in {"proxy", "render", "instagram_publish", "tiktok_publish", "youtube_publish"}:
         raise ValueError("Unsupported job kind.")
     if not get_project(project_id):
         raise ValueError("Project not found.")
@@ -621,6 +629,50 @@ def create_job(project_id: str, kind: str, payload: dict[str, Any], approved: bo
         row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     event(project_id, job_id, "job_queued", {"kind": kind, "approved": approved})
     return row_dict(row) or {}
+
+
+def project_proxies(project_id: str) -> list[dict[str, Any]]:
+    if not get_project(project_id):
+        raise ValueError("Project not found.")
+    return list_proxies(project_id)
+
+
+def request_proxy(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    from desktop_domain import ensure_timeline_version
+
+    ensure_timeline_version(project_id)
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("Project not found.")
+    asset_id = str(body.get("asset_id", "")).strip()
+    _asset, source = source_asset(project, asset_id)
+    existing = get_proxy(project_id, asset_id)
+    if proxy_is_current(existing, source) and not body.get("force"):
+        return {"proxy": existing, "job": None, "reused": True}
+    if existing and existing.get("status") in {"queued", "running"} and existing.get("job_id"):
+        return {
+            "proxy": existing,
+            "job": get_job(str(existing["job_id"])),
+            "reused": True,
+        }
+    job = create_job(
+        project_id,
+        "proxy",
+        {"asset_id": asset_id, "force": bool(body.get("force"))},
+        True,
+    )
+    proxy = update_proxy(
+        project_id,
+        asset_id,
+        source,
+        status="queued",
+        job_id=job["id"],
+        progress=0,
+        error=None,
+    )
+    if body.get("run_immediately", True):
+        job = start_job(job["id"], wait=bool(body.get("wait", False)))
+    return {"proxy": proxy, "job": job, "reused": False}
 
 
 def update_job(job_id: str, *, status: str, result: dict[str, Any] | None = None, error: str | None = None, progress: int | None = None) -> dict[str, Any]:
@@ -672,8 +724,36 @@ def execute_job(job_id: str) -> dict[str, Any]:
     project = _validate_runnable(job)
     update_job(job_id, status="running", progress=0)
     event(project["id"], job_id, "job_started", {"kind": job["kind"]})
+    proxy_source: Path | None = None
+    proxy_asset_id = str(job["payload_json"].get("asset_id", ""))
     try:
-        if job["kind"] == "render":
+        if job["kind"] == "proxy":
+            _asset, proxy_source = source_asset(project, proxy_asset_id)
+            update_proxy(
+                project["id"], proxy_asset_id, proxy_source,
+                status="running", job_id=job_id, progress=0, error=None,
+            )
+
+            def proxy_progress(progress: int) -> None:
+                update_job_progress(job_id, progress)
+                if proxy_source is not None:
+                    update_proxy(
+                        project["id"], proxy_asset_id, proxy_source,
+                        status="running", job_id=job_id, progress=progress, error=None,
+                    )
+
+            result = generate_proxy(
+                project,
+                job["payload_json"],
+                progress_cb=proxy_progress,
+                should_cancel=lambda: job_cancel_requested(job_id),
+            )
+            update_proxy(
+                project["id"], proxy_asset_id, proxy_source,
+                status="ready", job_id=job_id, proxy_path=result["proxy_path"],
+                progress=100, width=result.get("width"), height=result.get("height"), error=None,
+            )
+        elif job["kind"] == "render":
             result = render_moviepy(project, progress_cb=lambda pct: update_job_progress(job_id, pct), should_cancel=lambda: job_cancel_requested(job_id))
         elif job["kind"] == "instagram_publish" and not job["payload_json"].get("idempotency_key"):
             result = instagram_publish(project, job["payload_json"])
@@ -683,6 +763,12 @@ def execute_job(job_id: str) -> dict[str, Any]:
         event(project["id"], job_id, "job_succeeded", result)
         return final
     except Exception as exc:  # noqa: BLE001
+        if job["kind"] == "proxy" and proxy_source is not None:
+            update_proxy(
+                project["id"], proxy_asset_id, proxy_source,
+                status="cancelled" if "cancelled" in str(exc).lower() else "failed",
+                job_id=job_id, error=str(exc),
+            )
         final = update_job(job_id, status="failed", error=str(exc))
         event(project["id"], job_id, "job_failed", {"error": str(exc)})
         return final

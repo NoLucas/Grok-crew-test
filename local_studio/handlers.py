@@ -48,9 +48,11 @@ from studio_server import (
     list_projects,
     new_project,
     project_operations,
+    project_proxies,
     quality_report,
     record_bot_heartbeat,
     request_job_cancel,
+    request_proxy,
     save_artifact,
     set_edit_method,
     set_execution_policy,
@@ -239,6 +241,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, {"versions": list_timeline_versions(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/history"):
                 self._json(200, {"history": get_timeline_history(path.split("/")[4])})
+            elif path.startswith("/api/v2/projects/") and path.endswith("/proxies"):
+                self._json(200, {"proxies": project_proxies(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/analysis"):
                 value = get_analysis(path.split("/")[4]); self._json(200, {"analysis": value})
             elif path.startswith("/api/v2/projects/") and path.endswith("/timeline"):
@@ -305,6 +309,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, apply_timeline_patch(path.split("/")[4], body))
             elif path.startswith("/api/v2/projects/") and path.endswith("/timeline/history"):
                 self._json(201, apply_timeline_history_action(path.split("/")[4], body))
+            elif path.startswith("/api/v2/projects/") and path.endswith("/proxies"):
+                self._json(201, request_proxy(path.split("/")[4], body))
             elif path.startswith("/api/v2/projects/") and path.endswith("/timeline/restore"):
                 self._json(201, restore_timeline_version(path.split("/")[4], int(body.get("revision", 0)), str(body.get("created_by", "operator"))))
             elif path.startswith("/api/v2/projects/") and path.endswith("/control-jobs"):

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-crew.media-proxy/v1",
+  "title": "Grok Crew Media Proxy v1",
+  "type": "object",
+  "required": ["project_id", "asset_id", "source_path", "status", "progress"],
+  "properties": {
+    "project_id": { "type": "string", "minLength": 1 },
+    "asset_id": { "type": "string", "minLength": 1 },
+    "source_path": { "type": "string", "minLength": 1 },
+    "proxy_path": { "type": ["string", "null"] },
+    "status": { "enum": ["queued", "running", "ready", "failed", "cancelled"] },
+    "job_id": { "type": ["string", "null"] },
+    "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "width": { "type": ["integer", "null"], "minimum": 0 },
+    "height": { "type": ["integer", "null"], "minimum": 0 },
+    "error_text": { "type": ["string", "null"] },
+    "source_size": { "type": ["integer", "null"], "minimum": 0 },
+    "source_mtime_ns": { "type": ["integer", "null"], "minimum": 0 },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" }
+  },
+  "additionalProperties": false
+}

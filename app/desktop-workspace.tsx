@@ -68,6 +68,26 @@ type ProjectAnalysis = {
   thumbnails_json: AnalysisScene[];
   updated_at: string;
 };
+type MediaProxy = {
+  project_id: string;
+  asset_id: string;
+  source_path: string;
+  proxy_path?: string | null;
+  status: 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
+  job_id?: string | null;
+  progress: number;
+  width?: number | null;
+  height?: number | null;
+  error_text?: string | null;
+  updated_at: string;
+};
+type LocalJob = {
+  id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  progress: number;
+  error_text?: string | null;
+  result_json?: Record<string, unknown> | null;
+};
 
 const defaultMethod = {
   content_type: 'talking_head', target_length: 30, aspect_ratio: '9:16', broll_policy: 'auto',
@@ -135,6 +155,10 @@ export default function DesktopWorkspace() {
   const [busy, setBusy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<ProjectAnalysis | null>(null);
+  const [proxies, setProxies] = useState<MediaProxy[]>([]);
+  const [proxyJob, setProxyJob] = useState<LocalJob | null>(null);
+  const [proxyBusy, setProxyBusy] = useState(false);
+  const [useProxy, setUseProxy] = useState(true);
   const [newProject, setNewProject] = useState({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
   const [createOpen, setCreateOpen] = useState(false);
   const [previewOutput, setPreviewOutput] = useState(false);
@@ -164,16 +188,18 @@ export default function DesktopWorkspace() {
   }, [api, t]);
 
   const refreshProject = useCallback(async (projectId: string) => {
-    if (!projectId) { setTimeline(null); setVersions([]); setHistory(emptyTimelineHistory()); setAnalysis(null); return; }
+    if (!projectId) { setTimeline(null); setVersions([]); setHistory(emptyTimelineHistory()); setAnalysis(null); setProxies([]); return; }
     try {
-      const [timelineResponse, versionResponse, historyResponse, analysisResponse] = await Promise.all([
+      const [timelineResponse, versionResponse, historyResponse, proxyResponse, analysisResponse] = await Promise.all([
         api(`/api/v2/projects/${projectId}/timeline`),
         api(`/api/v2/projects/${projectId}/versions`),
         api(`/api/v2/projects/${projectId}/history`),
+        api(`/api/v2/projects/${projectId}/proxies`),
         api(`/api/v2/projects/${projectId}/analysis`),
       ]);
       setTimeline(timelineResponse.timeline as Timeline); setVersions(versionResponse.versions as Version[]);
       setHistory(historyResponse.history as TimelineHistoryState);
+      setProxies(proxyResponse.proxies as MediaProxy[]);
       setAnalysis((analysisResponse.analysis as ProjectAnalysis | null) ?? null);
       setSelectedClipIds((current) => {
         const valid = new Set((timelineResponse.timeline as Timeline).tracks.flatMap((track) => track.clips.map((clip) => clip.id)));
@@ -209,7 +235,15 @@ export default function DesktopWorkspace() {
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const duration = timelineDuration(timeline);
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
-  const previewPath = project ? (previewOutput && outputReady ? project.output_path : project.source_path) : '';
+  const primaryVideoAsset = timeline?.assets.find((asset) => asset.kind === 'video');
+  const activeProxy = primaryVideoAsset
+    ? proxies.find((proxy) => proxy.asset_id === primaryVideoAsset.id)
+    : undefined;
+  const proxyReady = activeProxy?.status === 'ready' && Boolean(activeProxy.proxy_path);
+  const previewSourcePath = project
+    ? (useProxy && proxyReady ? String(activeProxy?.proxy_path) : project.source_path)
+    : '';
+  const previewPath = project ? (previewOutput && outputReady ? project.output_path : previewSourcePath) : '';
   const analysisVideo = analysis?.media_json.streams?.find((stream) => stream.codec_type === 'video');
   const analysisWords = analysis?.transcript_json.words ?? [];
 
@@ -358,6 +392,65 @@ export default function DesktopWorkspace() {
     if (!project) return; setBusy(true);
     try { const result = await api(`/api/projects/${project.id}/render`, { method: 'POST', body: JSON.stringify({ approved: true, requested_by: 'desktop_operator' }) }) as { job: { id: string } }; await api(`/api/jobs/${result.job.id}/run`, { method: 'POST', body: JSON.stringify({}) }); setMessage(t('로컬 렌더를 시작했습니다.', 'Local render started.', '本地渲染已开始。', 'ローカルレンダーを開始しました。')); await refreshWorkspace(true); }
     catch (error) { setMessage(error instanceof Error ? error.message : t('렌더를 시작하지 못했습니다.', 'Could not start render.', '无法开始渲染。', 'レンダーを開始できませんでした。')); } finally { setBusy(false); }
+  };
+  const generateProxy = async (force = false) => {
+    if (!project || !primaryVideoAsset || proxyBusy) return;
+    setProxyBusy(true);
+    setMessage(t('저해상도 프록시를 만들고 있습니다.', 'Generating a low-resolution proxy.', '正在生成低分辨率代理文件。', '低解像度プロキシを生成しています。'));
+    try {
+      const response = await api(`/api/v2/projects/${project.id}/proxies`, {
+        method: 'POST',
+        body: JSON.stringify({
+          asset_id: primaryVideoAsset.id,
+          force,
+          run_immediately: true,
+        }),
+      }) as { proxy: MediaProxy; job: LocalJob | null; reused: boolean };
+      setProxies((current) => [
+        response.proxy,
+        ...current.filter((proxy) => proxy.asset_id !== response.proxy.asset_id),
+      ]);
+      setProxyJob(response.job);
+      if (!response.job) {
+        setUseProxy(true);
+        setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
+        return;
+      }
+      let job = response.job;
+      for (let attempt = 0; attempt < 600 && ['queued', 'running'].includes(job.status); attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        const polled = await api(`/api/jobs/${job.id}`) as { job: LocalJob };
+        job = polled.job;
+        setProxyJob(job);
+        setProxies((current) => current.map((proxy) =>
+          proxy.asset_id === primaryVideoAsset.id
+            ? { ...proxy, status: job.status === 'succeeded' ? 'ready' : job.status, progress: job.progress, error_text: job.error_text }
+            : proxy,
+        ));
+      }
+      await refreshProject(project.id);
+      if (job.status === 'succeeded') {
+        setUseProxy(true);
+        setMessage(t(
+          '프록시가 준비되었습니다. 미리보기만 가벼운 파일을 사용하고 최종 렌더는 원본을 사용합니다.',
+          'Proxy ready. Preview uses the lighter file; final render still uses the original.',
+          '代理文件已就绪。预览使用轻量文件，最终渲染仍使用原片。',
+          'プロキシの準備ができました。プレビューのみ軽量ファイルを使い、最終レンダーは元素材を使います。',
+        ));
+      } else {
+        setMessage(job.error_text || t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
+      if (project) await refreshProject(project.id);
+    } finally {
+      setProxyBusy(false);
+    }
+  };
+  const cancelProxy = async () => {
+    if (!proxyJob || !['queued', 'running'].includes(proxyJob.status)) return;
+    await api(`/api/jobs/${proxyJob.id}/cancel`, { method: 'POST', body: '{}' });
+    setMessage(t('프록시 생성을 취소하도록 요청했습니다.', 'Requested proxy cancellation.', '已请求取消代理文件生成。', 'プロキシ生成のキャンセルを要求しました。'));
   };
   const analyzeLocal = async () => {
     if (!project) return;
@@ -551,7 +644,48 @@ export default function DesktopWorkspace() {
               <section className="desktop-card desktop-policy-card"><div className="desktop-card-title"><span>03</span><div><b>{t('자동화 범위', 'Automation', '自动化范围', '自動化範囲')}</b><small>{t('렌더와 게시 권한을 각각 정합니다.', 'Choose render and publishing authority.', '分别设置渲染和发布权限。', 'レンダーと公開を個別に設定。')}</small></div></div><label className="desktop-radio"><input type="radio" checked={executionPolicy === 'auto_edit_render'} onChange={() => setExecutionPolicy('auto_edit_render')} /><span><b>{t('자동 편집 + 렌더', 'Auto edit + render', '自动编辑和渲染', '自動編集＋レンダー')}</b><small>{t('새 버전을 만들고 바로 렌더합니다.', 'Create a new version and render it.', '创建新版本并渲染。', '新しいバージョンを作成してレンダー。')}</small></span></label><label className="desktop-radio"><input type="radio" checked={executionPolicy === 'review_before_render'} onChange={() => setExecutionPolicy('review_before_render')} /><span><b>{t('편집안 먼저 검토', 'Review before render', '渲染前审核', 'レンダー前に確認')}</b><small>{t('타임라인 변경을 확인할 때 멈춥니다.', 'Pause when the proposal is ready.', '编辑方案完成后暂停。', '提案の準備後に一時停止。')}</small></span></label></section>
             </div>}
 
-            {activePanel === 'edit' && <div className="desktop-editor"><section className="desktop-monitor"><div className="desktop-monitor-head"><span>{previewOutput ? t('렌더 결과', 'RENDERED OUTPUT', '渲染结果', 'レンダー結果') : t('프로그램 모니터', 'PROGRAM MONITOR', '节目监视器', 'プログラムモニター')}</span>{outputReady && <button onClick={() => setPreviewOutput((value) => !value)}>{previewOutput ? t('원본 보기', 'View source', '查看原片', '素材を見る') : t('결과 보기', 'View output', '查看结果', '出力を見る')}</button>}</div><video controls preload="metadata" src={mediaUrl(previewPath)} /><div className="desktop-monitor-foot"><span>{formatTime(duration)}</span><span>{timeline.settings.width}×{timeline.settings.height} · {timeline.settings.fps}fps</span></div></section></div>}
+            {activePanel === 'edit' && <div className="desktop-editor"><section className="desktop-monitor">
+              <div className="desktop-monitor-head">
+                <span>{previewOutput ? t('렌더 결과', 'RENDERED OUTPUT', '渲染结果', 'レンダー結果') : t('프로그램 모니터', 'PROGRAM MONITOR', '节目监视器', 'プログラムモニター')}</span>
+                <div className="desktop-monitor-actions">
+                  {primaryVideoAsset && !proxyReady && !proxyBusy ? (
+                    <button onClick={() => void generateProxy(activeProxy?.status === 'failed')}>
+                      {activeProxy?.status === 'failed'
+                        ? t('프록시 다시 만들기', 'Retry proxy', '重试代理文件', 'プロキシ再試行')
+                        : t('프록시 만들기', 'Generate proxy', '生成代理文件', 'プロキシ作成')}
+                    </button>
+                  ) : null}
+                  {proxyBusy ? (
+                    <>
+                      <span>{t('프록시 생성', 'Proxy', '代理文件', 'プロキシ')} {proxyJob?.progress ?? activeProxy?.progress ?? 0}%</span>
+                      <button onClick={() => void cancelProxy()}>{t('취소', 'Cancel', '取消', 'キャンセル')}</button>
+                    </>
+                  ) : null}
+                  {proxyReady && !previewOutput ? (
+                    <button
+                      className={useProxy ? 'active' : ''}
+                      aria-pressed={useProxy}
+                      onClick={() => setUseProxy((value) => !value)}
+                    >
+                      {useProxy
+                        ? t('프록시 사용 중', 'Using proxy', '正在使用代理', 'プロキシ使用中')
+                        : t('원본 미리보기', 'Original preview', '原片预览', '元素材プレビュー')}
+                    </button>
+                  ) : null}
+                  {outputReady && <button onClick={() => setPreviewOutput((value) => !value)}>{previewOutput ? t('원본 보기', 'View source', '查看原片', '素材を見る') : t('결과 보기', 'View output', '查看结果', '出力を見る')}</button>}
+                </div>
+              </div>
+              <video key={previewPath} controls preload="metadata" src={mediaUrl(previewPath)} />
+              <div className="desktop-monitor-foot">
+                <span>{formatTime(duration)}</span>
+                <span>
+                  {useProxy && proxyReady && !previewOutput
+                    ? `${activeProxy?.width ?? '—'}×${activeProxy?.height ?? '—'} · ${t('프록시 미리보기', 'proxy preview', '代理预览', 'プロキシプレビュー')}`
+                    : `${timeline.settings.width}×${timeline.settings.height} · ${timeline.settings.fps}fps`}
+                </span>
+                <span>{t('최종 렌더: 원본', 'Final render: original', '最终渲染：原片', '最終レンダー: 元素材')}</span>
+              </div>
+            </section></div>}
 
             {activePanel === 'export' && <div className="desktop-export-grid"><section className="desktop-card"><div className="desktop-card-title"><span>01</span><div><b>{t('플랫폼 게시 정책', 'Publishing policy', '发布策略', '公開ポリシー')}</b><small>{t('기본은 확인 후 게시입니다.', 'Default: ask before publishing.', '默认发布前确认。', '初期値は公開前に確認。')}</small></div></div>{(['instagram', 'tiktok', 'youtube'] as const).map((platform) => <div className="desktop-publish-row" key={platform}><b>{platform === 'youtube' ? 'YouTube Shorts' : platform[0].toUpperCase() + platform.slice(1)}</b><select aria-label={`${platform} publish policy`} value={publishPolicy[platform]} onChange={(e) => setPublishPolicy({ ...publishPolicy, [platform]: e.target.value as PublishMode })}><option value="export_only">{t('파일만 내보내기', 'Export only', '仅导出', '書き出しのみ')}</option><option value="ask">{t('게시 전 확인', 'Ask before posting', '发布前确认', '公開前に確認')}</option><option value="auto">{t('자동 게시', 'Auto publish', '自动发布', '自動公開')}</option></select><button disabled={busy || !outputReady || publishPolicy[platform] === 'export_only'} onClick={() => void publishNow(platform)}>{t('게시', 'Publish', '发布', '公開')}</button></div>)}</section><section className="desktop-card desktop-render-card"><div className="desktop-card-title"><span>02</span><div><b>{t('최종 파일', 'Final render', '最终文件', '最終ファイル')}</b><small>{relativeWorkspacePath(project.output_path)}</small></div></div><div className={`desktop-render-state ${outputReady ? 'ready' : ''}`}><span>{outputReady ? '✓' : '○'}</span><div><b>{outputReady ? t('렌더 파일 준비됨', 'Render ready', '渲染文件已就绪', 'レンダー準備完了') : t('아직 렌더되지 않음', 'Not rendered yet', '尚未渲染', '未レンダー')}</b><small>{timeline.settings.quality} · {timeline.settings.fps}fps</small></div></div><button className="desktop-primary" disabled={busy} onClick={() => void runLocalRender()}>{t('지금 로컬 렌더', 'Render locally now', '立即本地渲染', '今すぐローカルレンダー')}</button></section></div>}
           </>}

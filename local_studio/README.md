@@ -6,6 +6,7 @@ This companion service is a private, local production node for Local Video Works
 
 - Stores projects, render jobs, approval records, and event history in local SQLite.
 - Uses MoviePy locally to render EDLs into 1080×1920 H.264/AAC MP4 files.
+- Generates optional low-resolution H.264 proxies under `workspace/proxies/` for lighter desktop preview; proxy jobs expose progress and retry state, while final renders always resolve each Timeline v2 asset's original `path`.
 - Lets each local agent choose automatic local rendering or a human-approval gate for rendering; Instagram delivery is queued or auto-uploaded per job.
 - Can use Meta's resumable upload workflow to upload a rendered file to Instagram when local credentials are available.
 - Runs renders and uploads on a background worker: starting a job returns immediately with a `queued`/`running` status, `GET /api/jobs/{id}` reports live `progress` (0–100), and `POST /api/jobs/{id}/cancel` requests cancellation before the next clip is processed. Pass `wait: true` in the request body (or `--wait` on the CLI) to block until the job finishes instead. A job still `running` when Local Studio stops unexpectedly is marked `failed` on the next startup.

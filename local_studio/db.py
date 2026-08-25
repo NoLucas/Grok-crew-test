@@ -87,6 +87,14 @@ def init_db() -> None:
             undo_json TEXT NOT NULL, redo_json TEXT NOT NULL, updated_at TEXT NOT NULL,
             FOREIGN KEY(project_id) REFERENCES projects(id)
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS media_proxies (
+            project_id TEXT NOT NULL, asset_id TEXT NOT NULL, source_path TEXT NOT NULL,
+            proxy_path TEXT, status TEXT NOT NULL, job_id TEXT, progress INTEGER NOT NULL DEFAULT 0,
+            width INTEGER, height INTEGER, error_text TEXT, source_size INTEGER,
+            source_mtime_ns INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY(project_id, asset_id),
+            FOREIGN KEY(project_id) REFERENCES projects(id)
+        )""")
         conn.execute("""CREATE TABLE IF NOT EXISTS control_jobs (
             id TEXT PRIMARY KEY, project_id TEXT NOT NULL, base_revision INTEGER NOT NULL,
             status TEXT NOT NULL, settings_json TEXT NOT NULL, execution_policy TEXT NOT NULL,
@@ -134,6 +142,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_project_artifacts_project_type_updated ON project_artifacts(project_id, type, updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_project_artifacts_type_updated ON project_artifacts(type, updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_timeline_versions_project_revision ON timeline_versions(project_id, revision DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_media_proxies_status ON media_proxies(status, updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_control_jobs_project_updated ON control_jobs(project_id, updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runner_events_job_sequence ON runner_events(control_job_id, sequence DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_publish_receipts_project ON publish_receipts(project_id, updated_at DESC)")
