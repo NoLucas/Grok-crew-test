@@ -79,8 +79,11 @@ async function startStudio() {
   studioPort = await freePort();
   studioToken = randomBytes(32).toString('base64url');
   const apiBase = `http://127.0.0.1:${studioPort}`;
-  const dataRoot = join(app.getPath('userData'), 'studio-data');
-  const workspace = join(app.getPath('videos'), 'Grok Crew');
+  const e2eRoot = development && process.env.GROK_CREW_E2E_ROOT
+    ? resolve(process.env.GROK_CREW_E2E_ROOT)
+    : null;
+  const dataRoot = e2eRoot ? join(e2eRoot, 'studio-data') : join(app.getPath('userData'), 'studio-data');
+  const workspace = e2eRoot ? join(e2eRoot, 'workspace') : join(app.getPath('videos'), 'Grok Crew');
   const environment = {
     ...process.env,
     LOCAL_STUDIO_TOKEN: studioToken,

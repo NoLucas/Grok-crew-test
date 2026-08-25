@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from config import PLATFORM_PRESETS, caption_font, workspace_path
 from keyframes import has_keyframes, keyframe_value, speed_time_mapper
+from render_contract import timeline_render_contract
 
 
 def _asset_path(value: str) -> Path:
@@ -140,6 +141,7 @@ def _render_timeline_v2(
         (item for item in timeline.get("tracks", []) if isinstance(item, dict)),
         key=lambda item: int(item.get("order", 0)),
     )
+    contract = timeline_render_contract(timeline)
 
     platform = str(settings.get("platform", "reels_tiktok_shorts"))
     preset = PLATFORM_PRESETS.get(platform, PLATFORM_PRESETS["reels_tiktok_shorts"])
@@ -147,8 +149,7 @@ def _render_timeline_v2(
     target_h = max(2, int(settings.get("height", preset["height"])))
     target_w -= target_w % 2
     target_h -= target_h % 2
-    fps = int(settings.get("fps", 30))
-    fps = fps if fps in {24, 30, 60} else 30
+    fps = int(contract["fps"])
     quality = str(settings.get("quality", "balanced"))
     bitrate = {"compact": "3500k", "balanced": "6000k", "high": "9000k"}.get(quality, "6000k")
     encoder_preset = {"compact": "veryfast", "balanced": "medium", "high": "slow"}.get(quality, "medium")
@@ -158,17 +159,17 @@ def _render_timeline_v2(
     except (TypeError, ValueError):
         bg_rgb = (0, 0, 0)
 
-    any_solo = any(bool(track.get("solo")) for track in tracks)
+    active_track_ids = set(contract["active_track_ids"])
     active_clips = [
         (track, clip)
         for track in tracks
-        if not track.get("muted") and (not any_solo or track.get("solo"))
+        if track.get("id") in active_track_ids
         for clip in track.get("clips", [])
         if isinstance(clip, dict)
     ]
     if not active_clips:
         raise RuntimeError("No active clips are available to render.")
-    duration = max(float(clip.get("timeline_start", 0)) + float(clip.get("duration", 0)) for _, clip in active_clips)
+    duration = float(contract["duration"])
     if duration <= 0:
         raise RuntimeError("Timeline duration must be positive.")
 
@@ -397,6 +398,8 @@ def _render_timeline_v2(
         "audio": "AAC" if has_audio else "none", "width": target_w, "height": target_h,
         "platform": platform, "fps": fps, "bitrate": bitrate,
         "timeline_schema": timeline["schema"], "revision": timeline.get("revision"),
+        "duration": duration, "frame_count": contract["frame_count"],
+        "render_contract": contract,
     }
 
 

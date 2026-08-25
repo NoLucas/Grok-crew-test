@@ -12,6 +12,8 @@ All notable changes to Grok Crew are documented here.
 - P1-05 clip keyframes for position, scale, rotation, crop, opacity, volume, and speed, with linear/hold interpolation, immutable timeline updates, precision-panel controls, and MoviePy render evaluation.
 - P1-06 edit elements: add B-roll video, editable caption clips, and rendered title overlays from the desktop inspector, plus per-clip fade, crossfade, and dip-to-black transition controls.
 - P1-07 audio mixer with clip keyframe volume, persistent track volume/role, mute/solo-aware output, and optional music ducking under dialogue with a configurable floor.
+- P1-08 render contract and golden output coverage for frame order, duration/frame count, captions, audio, active tracks, and original-asset final rendering.
+- P1-09 terminal-free Playwright Electron E2E covering project creation, direct editing, markers, undo/redo, proxy preview, and local render; CI runs the flow under Xvfb.
 - Focused backend and UI tests for P1-02 persistence, locked-item protection, selection behavior, marker validation, snapping geometry, and multi-clip movement.
 
 ### Changed
