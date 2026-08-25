@@ -178,7 +178,7 @@ export function TimelinePrecisionPanel({
       <div className="desktop-precision-body">
         <TimelineKeyframePanel
           timeline={timeline}
-          selected={selected}
+          selected={{ clip, track }}
           playhead={playhead}
           onPlayheadChange={onPlayheadChange}
           disabled={busy}
