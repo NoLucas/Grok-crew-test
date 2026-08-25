@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RelayService } from './relay-service.mjs';
+import { createDesktopTray, installCloseToTray } from './tray-controller.mjs';
 
 const desktopDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(desktopDir, '..');
@@ -14,6 +15,31 @@ let studioProcess = null;
 let rendererServer = null;
 let studioPort = 0;
 let studioToken = '';
+let mainWindow = null;
+let tray = null;
+let quitting = false;
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function hideMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+}
+
+function quitApplication() {
+  quitting = true;
+  app.quit();
+}
+
+function createTray() {
+  if (tray) return tray;
+  tray = createDesktopTray({ show: showMainWindow, hide: hideMainWindow, quit: quitApplication });
+  return tray;
+}
 
 function freePort() {
   return new Promise((resolvePort, reject) => {
@@ -148,7 +174,7 @@ async function createWindow(apiBase, rendererUrl) {
     width: 1500, height: 980, minWidth: 1060, minHeight: 720, backgroundColor: '#f4f4f2',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      preload: join(desktopDir, 'preload.mjs'), sandbox: true, contextIsolation: true,
+      preload: join(desktopDir, 'preload.cjs'), sandbox: true, contextIsolation: true,
       nodeIntegration: false, webSecurity: true, additionalArguments: [`--grok-crew-runtime=${runtime}`],
     },
   });
@@ -159,23 +185,38 @@ async function createWindow(apiBase, rendererUrl) {
   window.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(rendererUrl)) event.preventDefault();
   });
+  mainWindow = window;
+  window.on('query-session-end', () => { quitting = true; });
+  installCloseToTray(window, () => quitting);
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
+  });
   await window.loadURL(rendererUrl);
+  return window;
 }
 
-app.whenReady().then(async () => {
-  try {
-    const rendererUrl = await startRenderer();
-    process.env.GROK_CREW_RENDERER_URL = rendererUrl;
-    const apiBase = await startStudio();
-    registerIpc(apiBase);
-    await createWindow(apiBase, rendererUrl);
-  } catch (error) {
-    dialog.showErrorBox('Grok Crew could not start', error instanceof Error ? error.message : String(error));
-    app.quit();
-  }
-});
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', showMainWindow);
+  app.whenReady().then(async () => {
+    try {
+      const rendererUrl = await startRenderer();
+      process.env.GROK_CREW_RENDERER_URL = rendererUrl;
+      const apiBase = await startStudio();
+      registerIpc(apiBase);
+      await createWindow(apiBase, rendererUrl);
+      createTray();
+    } catch (error) {
+      dialog.showErrorBox('Grok Crew could not start', error instanceof Error ? error.message : String(error));
+      quitApplication();
+    }
+  });
+}
+app.on('activate', showMainWindow);
 app.on('before-quit', () => {
+  quitting = true;
   app.isQuitting = true;
   if (studioProcess && !studioProcess.killed) studioProcess.kill();
   if (rendererServer) rendererServer.close();

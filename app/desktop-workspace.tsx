@@ -47,6 +47,15 @@ type MediaItem = { name: string; path: string; kind: string; size_bytes: number;
 type Version = { id: string; revision: number; origin: string; created_by: string; created_at: string };
 type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[] };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
+type JsonObject = Record<string, unknown>;
+type AnalysisScene = { id: string; at: number; size_bytes: number };
+type ProjectAnalysis = {
+  status: string;
+  media_json: { status?: string; duration?: number; streams?: Array<{ codec_type?: string; width?: number; height?: number; codec_name?: string }> };
+  transcript_json: { status?: string; engine?: string; words?: Array<{ start?: number; end?: number; text?: string }>; text?: string; reason?: string };
+  thumbnails_json: AnalysisScene[];
+  updated_at: string;
+};
 
 const defaultMethod = {
   content_type: 'talking_head', target_length: 30, aspect_ratio: '9:16', broll_policy: 'auto',
@@ -64,6 +73,10 @@ function relativeWorkspacePath(value: string) {
 
 function mediaUrl(path: string) {
   return `${studioBase()}/media/${relativeWorkspacePath(path).split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function analysisSceneUrl(projectId: string, sceneId: string, updatedAt: string) {
+  return `${studioBase()}/analysis-media/${encodeURIComponent(projectId)}/${encodeURIComponent(sceneId)}?v=${encodeURIComponent(updatedAt)}`;
 }
 
 function formatTime(value: number) {
@@ -91,6 +104,8 @@ export default function DesktopWorkspace() {
   const [executionPolicy, setExecutionPolicy] = useState<'auto_edit_render' | 'review_before_render'>('auto_edit_render');
   const [message, setMessage] = useState(t('Local Studio에 연결하는 중입니다.', 'Connecting to Local Studio.', '正在连接本地工作室。', 'Local Studio に接続しています。'));
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<ProjectAnalysis | null>(null);
   const [newProject, setNewProject] = useState({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
   const [createOpen, setCreateOpen] = useState(false);
   const [previewOutput, setPreviewOutput] = useState(false);
@@ -99,10 +114,10 @@ export default function DesktopWorkspace() {
   const syncingRelay = useRef(false);
 
   const token = typeof window === 'undefined' ? '' : window.localStorage.getItem('localStudioToken') ?? '';
-  const api = useCallback(async (path: string, init?: RequestInit) => {
-    if (window.grokCrew) return await window.grokCrew.request(path, { method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : null });
+  const api = useCallback(async (path: string, init?: RequestInit): Promise<JsonObject> => {
+    if (window.grokCrew) return await window.grokCrew.request(path, { method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : null }) as JsonObject;
     const response = await fetch(`${studioBase()}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) } });
-    const data = await response.json();
+    const data = await response.json() as JsonObject;
     if (!response.ok) throw new Error(String(data.error ?? `Local Studio ${response.status}`));
     return data;
   }, [token]);
@@ -119,10 +134,11 @@ export default function DesktopWorkspace() {
   }, [api, t]);
 
   const refreshProject = useCallback(async (projectId: string) => {
-    if (!projectId) { setTimeline(null); setVersions([]); return; }
+    if (!projectId) { setTimeline(null); setVersions([]); setAnalysis(null); return; }
     try {
-      const [timelineResponse, versionResponse] = await Promise.all([api(`/api/v2/projects/${projectId}/timeline`), api(`/api/v2/projects/${projectId}/versions`)]);
+      const [timelineResponse, versionResponse, analysisResponse] = await Promise.all([api(`/api/v2/projects/${projectId}/timeline`), api(`/api/v2/projects/${projectId}/versions`), api(`/api/v2/projects/${projectId}/analysis`)]);
       setTimeline(timelineResponse.timeline as Timeline); setVersions(versionResponse.versions as Version[]);
+      setAnalysis((analysisResponse.analysis as ProjectAnalysis | null) ?? null);
       setSelectedClipId((current) => current && (timelineResponse.timeline as Timeline).tracks.some((track: Track) => track.clips.some((clip) => clip.id === current)) ? current : '');
     } catch (error) { setMessage(error instanceof Error ? error.message : t('프로젝트를 읽지 못했습니다.', 'Could not read the project.', '无法读取项目。', 'プロジェクトを読み込めませんでした。')); }
   }, [api, t]);
@@ -159,6 +175,8 @@ export default function DesktopWorkspace() {
   const duration = Math.max(10, ...(timeline?.tracks.flatMap((track) => track.clips.map((clip) => clip.timeline_start + clip.duration)) ?? [10]));
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
   const previewPath = project ? (previewOutput && outputReady ? project.output_path : project.source_path) : '';
+  const analysisVideo = analysis?.media_json.streams?.find((stream) => stream.codec_type === 'video');
+  const analysisWords = analysis?.transcript_json.words ?? [];
 
   const createProject = async () => {
     if (!newProject.title.trim() || !newProject.source_path) { setMessage(t('프로젝트 이름과 원본을 선택하세요.', 'Choose a project name and source.', '请选择项目名称和素材。', 'プロジェクト名と素材を選択してください。')); return; }
@@ -167,7 +185,7 @@ export default function DesktopWorkspace() {
       const result = await api('/api/v2/projects', { method: 'POST', body: JSON.stringify({
         title: newProject.title, source_path: newProject.source_path, output_path: newProject.output_path,
         timeline: { clips: [{ in: 0, out: 10, keep: true, caption: '' }], render_settings: { fps: 30, quality: 'balanced', platform: 'reels_tiktok_shorts', captions_enabled: true } }, caption: '',
-      }) });
+      }) }) as { project: Project };
       setSelectedProjectId(result.project.id); setCreateOpen(false); setNewProject({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
       await refreshWorkspace(true); setMessage(t('프로젝트를 만들었습니다. 설정을 선택해 주세요.', 'Project created. Choose its settings.', '项目已创建，请选择设置。', 'プロジェクトを作成しました。設定を選んでください。'));
     } catch (error) { setMessage(error instanceof Error ? error.message : t('프로젝트 생성에 실패했습니다.', 'Project creation failed.', '项目创建失败。', 'プロジェクト作成に失敗しました。')); } finally { setBusy(false); }
@@ -187,9 +205,9 @@ export default function DesktopWorkspace() {
 
   const patchTimeline = async (operations: Array<Record<string, unknown>>, success?: string) => {
     if (!project || !timeline) return null;
-    const result = await api(`/api/v2/projects/${project.id}/timeline/patch`, { method: 'POST', body: JSON.stringify({ schema: 'grok-crew.timeline-patch/v1', base_revision: timeline.revision, origin: 'human', created_by: 'operator', operations }) });
-    setTimeline(result.timeline as Timeline); await refreshWorkspace(true); await refreshProject(project.id);
-    if (success) setMessage(success); return result.timeline as Timeline;
+    const result = await api(`/api/v2/projects/${project.id}/timeline/patch`, { method: 'POST', body: JSON.stringify({ schema: 'grok-crew.timeline-patch/v1', base_revision: timeline.revision, origin: 'human', created_by: 'operator', operations }) }) as { timeline: Timeline };
+    setTimeline(result.timeline); await refreshWorkspace(true); await refreshProject(project.id);
+    if (success) setMessage(success); return result.timeline;
   };
 
   const saveSettings = async () => {
@@ -228,14 +246,16 @@ export default function DesktopWorkspace() {
 
   const runLocalRender = async () => {
     if (!project) return; setBusy(true);
-    try { const result = await api(`/api/projects/${project.id}/render`, { method: 'POST', body: JSON.stringify({ approved: true, requested_by: 'desktop_operator' }) }); await api(`/api/jobs/${result.job.id}/run`, { method: 'POST', body: JSON.stringify({}) }); setMessage(t('로컬 렌더를 시작했습니다.', 'Local render started.', '本地渲染已开始。', 'ローカルレンダーを開始しました。')); await refreshWorkspace(true); }
+    try { const result = await api(`/api/projects/${project.id}/render`, { method: 'POST', body: JSON.stringify({ approved: true, requested_by: 'desktop_operator' }) }) as { job: { id: string } }; await api(`/api/jobs/${result.job.id}/run`, { method: 'POST', body: JSON.stringify({}) }); setMessage(t('로컬 렌더를 시작했습니다.', 'Local render started.', '本地渲染已开始。', 'ローカルレンダーを開始しました。')); await refreshWorkspace(true); }
     catch (error) { setMessage(error instanceof Error ? error.message : t('렌더를 시작하지 못했습니다.', 'Could not start render.', '无法开始渲染。', 'レンダーを開始できませんでした。')); } finally { setBusy(false); }
   };
   const analyzeLocal = async () => {
     if (!project) return;
-    setBusy(true);
+    setAnalyzing(true);
+    setMessage(t('원본을 이 PC에서 분석하고 있습니다.', 'Analyzing the source on this PC.', '正在此电脑上分析原片。', 'このPCで素材を解析しています。'));
     try {
-      const result = await api(`/api/v2/projects/${project.id}/analysis`, { method: 'POST', body: '{}' }) as { analysis: { transcript_json?: { status?: string; words?: unknown[] }; thumbnails_json?: unknown[] } };
+      const result = await api(`/api/v2/projects/${project.id}/analysis`, { method: 'POST', body: '{}' }) as { analysis: ProjectAnalysis };
+      setAnalysis(result.analysis);
       const transcriptReady = result.analysis.transcript_json?.status === 'ready';
       setMessage(t(
         `로컬 분석 완료: 장면 ${result.analysis.thumbnails_json?.length ?? 0}개${transcriptReady ? ', 대본 준비됨' : '. whisper.cpp 설정 시 대본도 생성됩니다.'}`,
@@ -243,7 +263,7 @@ export default function DesktopWorkspace() {
         `本地分析完成：${result.analysis.thumbnails_json?.length ?? 0} 个场景。`,
         `ローカル解析完了：${result.analysis.thumbnails_json?.length ?? 0} シーン。`,
       ));
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Local analysis failed.'); } finally { setBusy(false); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Local analysis failed.'); } finally { setAnalyzing(false); }
   };
 
   const updateSelectedClip = async (changes: Record<string, unknown>) => {
@@ -357,7 +377,27 @@ export default function DesktopWorkspace() {
           {!project || !timeline ? <div className="desktop-empty"><span>✦</span><h1>{t('첫 영상 프로젝트를 만드세요', 'Create your first video project', '创建第一个视频项目', '最初の動画プロジェクトを作成')}</h1><p>{t('왼쪽의 + 버튼을 눌러 workspace/inputs의 영상을 선택하세요.', 'Use + to select a video from workspace/inputs.', '点击左侧 + 选择素材。', '左の＋から素材を選択してください。')}</p></div> : <>
             <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips"><span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
-              <section className="desktop-card desktop-source-card"><div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div><video controls preload="metadata" src={mediaUrl(project.source_path)} /><div className="desktop-source-meta"><span>{t('원본은 이 PC에 유지됩니다', 'Original stays on this PC', '原片保留在此电脑', '原本はこのPCに保持')}</span><span>{relativeWorkspacePath(project.output_path)}</span></div><button className="desktop-secondary" disabled={busy} onClick={() => void analyzeLocal()}>{t('로컬 대본·장면 분석', 'Analyze transcript & scenes locally', '本地分析字幕和场景', 'ローカルで字幕・シーン解析')}</button></section>
+              <section className="desktop-card desktop-source-card">
+                <div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div>
+                <video controls preload="metadata" src={mediaUrl(project.source_path)} />
+                <div className="desktop-source-meta"><span>{t('원본은 이 PC에 유지됩니다', 'Original stays on this PC', '原片保留在此电脑', '原本はこのPCに保持')}</span><span>{relativeWorkspacePath(project.output_path)}</span></div>
+                <button className="desktop-secondary" disabled={busy || analyzing} onClick={() => void analyzeLocal()}>{analyzing ? t('분석 중…', 'Analyzing…', '分析中…', '解析中…') : t('로컬 대본·장면 분석', 'Analyze transcript & scenes locally', '本地分析字幕和场景', 'ローカルで字幕・シーン解析')}</button>
+                {analysis && <div className="desktop-analysis" aria-live="polite">
+                  <div className="desktop-analysis-head"><div><b>{t('로컬 분석 결과', 'Local analysis results', '本地分析结果', 'ローカル解析結果')}</b><small>{new Date(analysis.updated_at).toLocaleString()}</small></div><span>✓ {analysis.thumbnails_json.length} {t('개 장면', 'scenes', '个场景', 'シーン')}</span></div>
+                  <div className="desktop-analysis-facts">
+                    <span><b>{t('길이', 'Duration', '时长', '長さ')}</b>{formatTime(Number(analysis.media_json.duration ?? 0))}</span>
+                    <span><b>{t('화면', 'Frame', '画面', '画面')}</b>{analysisVideo?.width && analysisVideo?.height ? `${analysisVideo.width}×${analysisVideo.height}` : '—'}</span>
+                    <span><b>{t('대본', 'Transcript', '字幕稿', '文字起こし')}</b>{analysis.transcript_json.status === 'ready' ? `${analysisWords.length} ${t('개 구간', 'segments', '个片段', '区間')}` : t('미설정', 'Not configured', '未配置', '未設定')}</span>
+                  </div>
+                  {!!analysis.thumbnails_json.length && <div className="desktop-scene-grid">{analysis.thumbnails_json.map((scene, index) => <figure key={scene.id}>
+                    {/* Generated analysis thumbnails are served only by the loopback sidecar. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={analysisSceneUrl(project.id, scene.id, analysis.updated_at)} alt={t(`장면 ${index + 1}`, `Scene ${index + 1}`, `场景 ${index + 1}`, `シーン ${index + 1}`)} />
+                    <figcaption><span>{String(index + 1).padStart(2, '0')}</span><time>{formatTime(scene.at)}</time></figcaption>
+                  </figure>)}</div>}
+                  <div className={`desktop-transcript-state ${analysis.transcript_json.status === 'ready' ? 'ready' : ''}`}><span>{analysis.transcript_json.status === 'ready' ? '✓' : 'i'}</span><div><b>{analysis.transcript_json.status === 'ready' ? t('대본 준비됨', 'Transcript ready', '字幕稿已就绪', '文字起こし準備完了') : t('장면 분석만 완료됨', 'Scene analysis complete', '场景分析已完成', 'シーン解析のみ完了')}</b><p>{analysis.transcript_json.status === 'ready' ? (analysis.transcript_json.text || analysisWords.map((word) => word.text).join(' ')) : t('whisper.cpp를 설정하면 음성을 대본으로 변환합니다.', 'Configure whisper.cpp to transcribe speech.', '配置 whisper.cpp 后可将语音转成文字。', 'whisper.cpp を設定すると音声を文字起こしできます。')}</p></div></div>
+                </div>}
+              </section>
               <section className="desktop-card desktop-settings-card"><div className="desktop-card-title"><span>02</span><div><b>{t('Grok 편집 설정', 'Grok edit controls', 'Grok 编辑设置', 'Grok 編集設定')}</b><small>{t('채팅 없이 명확한 선택으로 전달합니다.', 'Clear controls, no prompt writing.', '无需编写提示词。', 'プロンプト入力は不要です。')}</small></div></div><div className="desktop-form-grid">
                 <label>{t('콘텐츠 유형', 'Content type', '内容类型', 'コンテンツ種別')}<select value={method.content_type} onChange={(e) => setMethod({ ...method, content_type: e.target.value })}><option value="talking_head">{t('토킹헤드', 'Talking head', '口播', 'トーキングヘッド')}</option><option value="vlog">Vlog</option><option value="product">{t('제품·서비스', 'Product / service', '产品服务', '製品・サービス')}</option><option value="tutorial">{t('튜토리얼', 'Tutorial', '教程', 'チュートリアル')}</option></select></label>
                 <label>{t('목표 길이', 'Target length', '目标时长', '目標尺')}<select value={method.target_length} onChange={(e) => setMethod({ ...method, target_length: Number(e.target.value) })}><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option></select></label>

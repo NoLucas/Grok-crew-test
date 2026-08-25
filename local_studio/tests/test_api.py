@@ -3,6 +3,9 @@ import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import config
+from db import db
+
 
 def post(base_url, path, body):
     request = Request(
@@ -30,6 +33,30 @@ def get_status(base_url, path):
             return response.status, json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         return exc.code, json.loads(exc.read().decode("utf-8"))
+
+
+def test_analysis_thumbnail_is_available_to_the_desktop_preview(live_server):
+    project = create_project(live_server)
+    thumbnail = config.DATA_DIR / "analysis" / project["id"] / "thumbnails" / "scene-01.jpg"
+    thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    thumbnail.write_bytes(b"preview-jpeg")
+    now = "2026-08-25T00:00:00+00:00"
+    with db() as connection:
+        connection.execute(
+            """INSERT INTO project_analysis
+            (project_id, status, media_json, transcript_json, thumbnails_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                project["id"], "ready", json.dumps({"status": "ready", "duration": 4}),
+                json.dumps({"status": "unavailable", "words": []}),
+                json.dumps([{"id": "scene-01", "at": 2, "path": str(thumbnail), "size_bytes": 12}]),
+                now, now,
+            ),
+        )
+    with urlopen(Request(f"{live_server}/analysis-media/{project['id']}/scene-01"), timeout=10) as response:
+        assert response.status == 200
+        assert response.headers["Content-Type"] == "image/jpeg"
+        assert response.read() == b"preview-jpeg"
 
 
 # -- regression coverage for plan item 0.3: Instagram auto_upload gate -------

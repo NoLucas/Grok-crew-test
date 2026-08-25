@@ -139,6 +139,31 @@ class StudioHandler(BaseHTTPRequestHandler):
                 if not chunk: break
                 self.wfile.write(chunk); remaining -= len(chunk)
 
+    def _analysis_media(self, project_id: str, scene_id: str) -> None:
+        analysis = get_analysis(unquote(project_id))
+        if not analysis:
+            self._json(404, {"error": "Analysis not found"}); return
+        scene = next((item for item in analysis.get("thumbnails_json", []) if item.get("id") == unquote(scene_id)), None)
+        if not scene:
+            self._json(404, {"error": "Analysis scene not found"}); return
+        root = (config.DATA_DIR / "analysis" / unquote(project_id) / "thumbnails").resolve()
+        path = Path(str(scene.get("path", ""))).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Analysis thumbnail leaves its project directory.") from exc
+        if not path.is_file():
+            self._json(404, {"error": "Analysis thumbnail not found"}); return
+        raw = path.read_bytes()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "image/jpeg")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "private, max-age=300")
+        origin = self.headers.get("Origin")
+        if origin in ALLOWED_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin); self.send_header("Vary", "Origin")
+        self.end_headers(); self.wfile.write(raw)
+
     def _redirect_to_browser_page(self, path: str) -> None:
         self.send_response(HTTPStatus.FOUND)
         self.send_header("Location", f"{SITE_BASE_URL}{path}")
@@ -180,12 +205,18 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(403, {"error": "Cross-origin requests are not allowed."}); return
         try:
             path = urlparse(self.path).path.rstrip("/") or "/"
-            if path not in PUBLIC_GET_PATHS and path not in BROWSER_PAGE_PATHS and not path.startswith("/media/") and not self._token_ok():
+            if path not in PUBLIC_GET_PATHS and path not in BROWSER_PAGE_PATHS and not path.startswith(("/media/", "/analysis-media/")) and not self._token_ok():
                 self._json(401, {"error": "Invalid local studio token."}); return
             if path in BROWSER_PAGE_PATHS:
                 self._redirect_to_browser_page(path)
             elif path.startswith("/media/"):
                 self._media(path.removeprefix("/media/"))
+            elif path.startswith("/analysis-media/"):
+                parts = path.split("/")
+                if len(parts) != 4 or not parts[2] or not parts[3]:
+                    self._json(404, {"error": "Analysis thumbnail not found"})
+                else:
+                    self._analysis_media(parts[2], parts[3])
             elif path == "/health":
                 instagram_ready = bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID") and os.getenv("INSTAGRAM_API_VERSION"))
                 self._json(200, {"service": "Local Video Studio", "status": "ready", "bind": "127.0.0.1", "workspace": str(config.WORKSPACE_DIR), "database": str(config.DB_PATH), "moviepy_installed": self._moviepy_ready(), "instagram_publish_enabled": instagram_ready, "credentials_configured": instagram_ready, "bots": list_bots()["summary"]})

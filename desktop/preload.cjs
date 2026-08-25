@@ -1,7 +1,15 @@
-import { contextBridge, ipcRenderer } from 'electron';
+'use strict';
+
+// Electron's sandbox loader requires CommonJS for preload scripts.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { contextBridge, ipcRenderer } = require('electron');
 
 const runtimeArgument = process.argv.find((value) => value.startsWith('--grok-crew-runtime='));
-const runtime = runtimeArgument ? JSON.parse(Buffer.from(runtimeArgument.split('=', 2)[1], 'base64url').toString('utf8')) : { apiBase: 'http://127.0.0.1:7214' };
+const encodedRuntime = runtimeArgument ? runtimeArgument.split('=', 2)[1] : '';
+const base64Runtime = encodedRuntime.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encodedRuntime.length / 4) * 4, '=');
+const runtime = runtimeArgument
+  ? JSON.parse(Buffer.from(base64Runtime, 'base64').toString('utf8'))
+  : { apiBase: 'http://127.0.0.1:7214' };
 
 contextBridge.exposeInMainWorld('grokCrew', Object.freeze({
   apiBase: runtime.apiBase,

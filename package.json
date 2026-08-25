@@ -1,6 +1,6 @@
 {
   "name": "grok-crew",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "license": "BUSL-1.1",
   "author": "Grok Crew contributors",
   "description": "Local-first video editing workspace for people and same-PC bots.",
@@ -23,6 +23,8 @@
     "dev": "vinext dev",
     "local": "node scripts/start-local.mjs",
     "desktop": "node scripts/start-desktop.mjs",
+    "desktop:smoke": "electron scripts/smoke-preload.mjs",
+    "desktop:tray-smoke": "electron scripts/smoke-tray.mjs",
     "sidecar:build": "python -m pip install -r local_studio/requirements-build.txt && python -m PyInstaller --clean --distpath build/sidecar --workpath build/pyinstaller local_studio/grok_crew_sidecar.spec",
     "desktop:pack": "npm run build && npm run sidecar:build && electron-builder --dir",
     "desktop:dist": "npm run build && npm run sidecar:build && electron-builder",

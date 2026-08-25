@@ -4,6 +4,21 @@ All notable changes to Grok Crew are documented here.
 
 ## Unreleased
 
+## 0.2.3 — 2026-08-25
+
+### Added
+
+- Closing the desktop window now keeps Grok Crew running in the Windows notification area/menu bar. The tray menu provides `Grok Crew 열기`, `숨기기`, and `종료`, and clicking the tray icon restores the workspace.
+- The desktop app now enforces a single running instance; launching it again while hidden restores the existing window instead of starting a second sidecar and tray icon.
+
+## 0.2.2 — 2026-08-25
+
+### Fixed
+
+- Local transcript and scene analysis results are now shown inside the source card with scene thumbnails, timecodes, media facts, and an explicit transcript status instead of being reduced to a footer message.
+- Local analysis has its own progress state, so completing an analysis reliably restores its button and no longer leaves the global `Start with Grok` action looking busy.
+- Analysis thumbnails are served through a project-scoped, path-validated loopback endpoint so the sandboxed desktop renderer can preview them without exposing arbitrary local files.
+
 ## 0.2.1 — 2026-08-25
 
 ### Added
@@ -22,6 +37,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Fixed
 
+- The sandboxed Electron preload now uses CommonJS, as required by Electron's sandbox loader. Desktop-only IPC features such as media import, Runner pairing, relay controls, and output reveal are available again, with a hidden-window smoke test guarding the bridge.
 - `config.py` and `handoff_watcher.py` loaded `.env` too late: `LOCAL_STUDIO_WORKSPACE`, `LOCAL_STUDIO_RENDER_WORKERS`, `HANDOFF_MAX_MEDIA_BYTES`, and `HANDOFF_MAX_BUNDLE_BYTES` were read from the environment at import time, before `.env` was applied, so setting them in `local_studio/.env` silently had no effect (only a real process environment variable worked). `.env` now loads before any setting that depends on it.
 - Rendering a project with `render_settings.music_track` set closed the music file's reader before `write_videofile()` was done reading from it, so any render with background music crashed. The music file now stays open for the whole render.
 
