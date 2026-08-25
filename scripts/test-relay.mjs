@@ -11,7 +11,8 @@ const runner = createIdentity('runner-test');
 const payload = { schema: 'grok-crew.runner-request/v1', secret: 'transcript text', control_job: { id: 'job-1', base_revision: 4 } };
 const envelope = sealEnvelope(payload, desktop, publicIdentity(runner));
 assert.deepEqual(openEnvelope(envelope, runner, publicIdentity(desktop)), payload);
-const tampered = { ...envelope, ciphertext: `${envelope.ciphertext.slice(0, -1)}A` };
+const replacement = envelope.ciphertext.endsWith('A') ? 'B' : 'A';
+const tampered = { ...envelope, ciphertext: `${envelope.ciphertext.slice(0, -1)}${replacement}` };
 assert.throws(() => openEnvelope(tampered, runner, publicIdentity(desktop)), /signature/);
 
 const temporaryRoot = resolve('tmp');
