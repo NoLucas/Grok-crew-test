@@ -424,15 +424,11 @@ export function TimelineEditor({
         return;
       }
       const movingIds = selectedSet.has(clip.id) ? selectedClipIds : [clip.id];
-      const snapped = snapMoveStart(
-        timeline,
-        clip,
-        Math.max(0, roundTime(clip.timeline_start + seconds)),
-        playhead,
-        movingIds,
-      );
+      // Keyboard nudges are explicit frame/time adjustments. Pointer drags snap,
+      // but a 0.1s nudge must never snap back and create an unchanged revision.
+      const nextStart = Math.max(0, roundTime(clip.timeline_start + seconds));
       if (movingIds.length > 1) {
-        void runMany(buildMultiMoveOperations(timeline, movingIds, clip.id, snapped.value), {
+        void runMany(buildMultiMoveOperations(timeline, movingIds, clip.id, nextStart), {
           ko: '선택 클립 이동',
           en: 'Move selected clips',
           zh: '移动所选片段',
@@ -440,9 +436,9 @@ export function TimelineEditor({
         });
         return;
       }
-      void run(buildMoveOperation(track, clip, snapped.value));
+      void run(buildMoveOperation(track, clip, nextStart));
     },
-    [playhead, run, runMany, selectedClipIds, selectedSet, timeline, tool],
+    [run, runMany, selectedClipIds, selectedSet, timeline, tool],
   );
 
   const moveToNeighbourTrack = useCallback(
