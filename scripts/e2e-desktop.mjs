@@ -9,12 +9,12 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const e2eRoot = await mkdtemp(join(tmpdir(), 'grok-crew-e2e-'));
 const workspace = join(e2eRoot, 'workspace');
 const input = join(workspace, 'inputs', 'e2e-source.mp4');
-const output = join(workspace, 'outputs', 'final-video.mp4');
 await mkdir(dirname(input), { recursive: true });
 await copyFile(join(root, 'public', 'demo', 'bot-edit-result-source.mp4'), input);
 
 let desktop;
 let page;
+let passed = false;
 try {
   desktop = await electron.launch({
     args: ['desktop/main.mjs'],
@@ -73,8 +73,17 @@ try {
     const jobs = value?.jobs ?? [];
     return jobs.some((job) => job.kind === 'render' && job.status === 'succeeded');
   }, undefined, { timeout: 180_000, polling: 500 });
+  const jobs = await page.evaluate(async () => {
+    const value = await window.grokCrew?.request('/api/jobs');
+    return value?.jobs ?? [];
+  });
+  const renderJob = jobs.find((job) => job.kind === 'render');
+  assert.equal(renderJob?.status, 'succeeded', JSON.stringify(renderJob));
+  const output = String(renderJob?.result_json?.output_path ?? '');
+  assert.ok(output.startsWith(workspace), `Render escaped E2E workspace: ${output}`);
   assert.ok((await stat(output)).size > 0);
 
+  passed = true;
   console.log(JSON.stringify({
     status: 'passed',
     project: 'Desktop E2E',
@@ -91,5 +100,5 @@ try {
   throw error;
 } finally {
   await desktop?.close().catch(() => undefined);
-  if (!process.env.GROK_CREW_KEEP_E2E) await rm(e2eRoot, { recursive: true, force: true });
+  if (passed && !process.env.GROK_CREW_KEEP_E2E) await rm(e2eRoot, { recursive: true, force: true });
 }
