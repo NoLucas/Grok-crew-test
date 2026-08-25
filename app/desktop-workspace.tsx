@@ -416,18 +416,22 @@ export default function DesktopWorkspace() {
         setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
         return;
       }
-      let job = response.job;
-      for (let attempt = 0; attempt < 600 && ['queued', 'running'].includes(job.status); attempt += 1) {
+      const pollProxyJob = async (jobId: string, attempt = 0): Promise<LocalJob> => {
         await new Promise((resolve) => window.setTimeout(resolve, 500));
-        const polled = await api(`/api/jobs/${job.id}`) as { job: LocalJob };
-        job = polled.job;
+        const polled = await api(`/api/jobs/${jobId}`) as { job: LocalJob };
+        const job = polled.job;
         setProxyJob(job);
         setProxies((current) => current.map((proxy) =>
           proxy.asset_id === primaryVideoAsset.id
             ? { ...proxy, status: job.status === 'succeeded' ? 'ready' : job.status, progress: job.progress, error_text: job.error_text }
             : proxy,
         ));
-      }
+        if (attempt < 600 && ['queued', 'running'].includes(job.status)) {
+          return pollProxyJob(jobId, attempt + 1);
+        }
+        return job;
+      };
+      const job = await pollProxyJob(response.job.id);
       await refreshProject(project.id);
       if (job.status === 'succeeded') {
         setUseProxy(true);

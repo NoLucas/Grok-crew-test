@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
-from analysis import probe_media
+from analysis import _probe as probe_media
 from config import utc_now, workspace_path
 from db import db, row_dict
 
