@@ -1,14 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DragEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { LanguageSwitcher, useLanguage } from './language';
+import { TimelineEditor } from './timeline/TimelineEditor';
+import { useTimelineEditing } from './timeline/use-timeline-editing';
+import { findClip, timelineDuration } from './timeline/geometry';
+import { buildSplitOperation } from './timeline/operations';
+import type { TimelinePatch } from './timeline/operations';
+import type { Timeline, TimelineTrack, TrackType } from './timeline/types';
 
 declare global {
   interface Window {
     grokCrew?: {
       apiBase: string;
       request: (path: string, request?: { method?: string; body?: string | null }) => Promise<unknown>;
+      applyTimelinePatch: (projectId: string, patch: TimelinePatch) => Promise<unknown>;
       selectMedia: () => Promise<string | null>;
       showOutput: (path: string) => Promise<void>;
       appInfo: () => Promise<{ version: string; platform: string; packaged: boolean }>;
@@ -33,10 +39,9 @@ function studioBase() {
   return typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214';
 }
 type PublishMode = 'export_only' | 'ask' | 'auto';
-type TrackType = 'video' | 'audio' | 'caption' | 'overlay' | 'adjustment';
-type Clip = { id: string; asset_id?: string | null; timeline_start: number; duration: number; source_in?: number; source_out?: number; locked: boolean; text?: string; transform?: Record<string, number>; audio?: Record<string, number | boolean> };
-type Track = { id: string; type: TrackType; name: string; order: number; locked: boolean; muted: boolean; clips: Clip[] };
-type Timeline = { schema: string; revision: number; settings: Record<string, string | number | boolean>; assets: Array<{ id: string; kind: string; name: string; path?: string }>; tracks: Track[]; markers: Array<{ id?: string; at?: number; label?: string }> };
+// Timeline v2 shapes live in app/timeline/types.ts so the editing UI and this
+// workspace never drift apart.
+type Track = TimelineTrack;
 type Project = { id: string; title: string; source_path: string; output_path: string; updated_at: string; current_revision: number };
 type TimelineConflict = { schema: string; reason: string; expected_revision: number; current_revision: number; timeline_patch?: { operations?: unknown[] } };
 type ControlJob = { id: string; project_id: string; status: string; execution_policy: string; updated_at: string; error_text?: string; result_revision?: number; attempt?: number; control_sequence?: number; runner_id?: string; render_job_id?: string; conflict_json?: TimelineConflict };
@@ -82,6 +87,22 @@ function analysisSceneUrl(projectId: string, sceneId: string, updatedAt: string)
 function formatTime(value: number) {
   const safe = Math.max(0, value); const minutes = Math.floor(safe / 60); const seconds = safe - minutes * 60;
   return `${String(minutes).padStart(2, '0')}:${seconds.toFixed(1).padStart(4, '0')}`;
+}
+
+/** The desktop bridge is installed once by preload, so it never re-emits. */
+function subscribeNever() {
+  return () => undefined;
+}
+
+function hasTimelineBridge() {
+  return typeof window !== 'undefined' && typeof window.grokCrew?.applyTimelinePatch === 'function';
+}
+
+/** Module scope keeps the bridge identity stable across renders. */
+async function desktopTimelinePatchBridge(projectId: string, patch: TimelinePatch) {
+  const bridge = typeof window === 'undefined' ? undefined : window.grokCrew;
+  if (!bridge) throw new Error('The desktop editing bridge is unavailable.');
+  return await bridge.applyTimelinePatch(projectId, patch);
 }
 
 function statusTone(status: string) {
@@ -167,16 +188,44 @@ export default function DesktopWorkspace() {
   const latestEvent = latestJob ? workspace.runner_events.find((item) => item.control_job_id === latestJob.id) : undefined;
   const inputRequest = latestJob?.status === 'needs_input' && latestEvent?.stage === 'needs_input' ? latestEvent.detail_json as unknown as NeedsInput : undefined;
   const runner = latestEvent ? workspace.runners.find((item) => item.runner_id === latestEvent.runner_id) : workspace.runners[0];
-  const selected = (() => {
-    if (!timeline || !selectedClipId) return null;
-    for (const track of timeline.tracks) { const clip = track.clips.find((item) => item.id === selectedClipId); if (clip) return { track, clip }; }
-    return null;
-  })();
-  const duration = Math.max(10, ...(timeline?.tracks.flatMap((track) => track.clips.map((clip) => clip.timeline_start + clip.duration)) ?? [10]));
+  const selected = timeline ? findClip(timeline, selectedClipId) : null;
+  const duration = timelineDuration(timeline);
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
   const previewPath = project ? (previewOutput && outputReady ? project.output_path : project.source_path) : '';
   const analysisVideo = analysis?.media_json.streams?.find((stream) => stream.codec_type === 'video');
   const analysisWords = analysis?.transcript_json.words ?? [];
+
+  // Direct timeline editing goes through the frozen preload bridge only.
+  // useSyncExternalStore keeps the server snapshot (`false`) and the desktop
+  // snapshot apart without a hydration mismatch.
+  const timelineBridgeReady = useSyncExternalStore(subscribeNever, hasTimelineBridge, () => false);
+
+  const onTimelineApplied = (next: Timeline) => {
+    setTimeline(next);
+    setSelectedClipId((current) => {
+      if (!current) return current;
+      const clips = next.tracks.flatMap((track) => track.clips);
+      if (clips.some((clip) => clip.id === current)) return current;
+      // A split replaces the clip with two halves named after it; follow the left one.
+      return clips.find((clip) => clip.id.startsWith(`${current}-`))?.id ?? '';
+    });
+    void refreshWorkspace(true);
+    if (selectedProjectId) void refreshProject(selectedProjectId);
+  };
+
+  const onTimelineReloadRequired = async () => {
+    await refreshWorkspace(true);
+    if (selectedProjectId) await refreshProject(selectedProjectId);
+  };
+
+  const timelineEditing = useTimelineEditing({
+    projectId: selectedProjectId,
+    timeline,
+    createdBy: 'operator',
+    bridge: timelineBridgeReady ? desktopTimelinePatchBridge : undefined,
+    onApplied: onTimelineApplied,
+    onReloadRequired: onTimelineReloadRequired,
+  });
 
   const createProject = async () => {
     if (!newProject.title.trim() || !newProject.source_path) { setMessage(t('프로젝트 이름과 원본을 선택하세요.', 'Choose a project name and source.', '请选择项目名称和素材。', 'プロジェクト名と素材を選択してください。')); return; }
@@ -269,19 +318,17 @@ export default function DesktopWorkspace() {
   const updateSelectedClip = async (changes: Record<string, unknown>) => {
     if (!selected) return; try { await patchTimeline([{ op: 'update_clip', clip_id: selected.clip.id, changes }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Clip update failed.'); }
   };
-  const splitSelected = async () => { if (!selected || !timeline) return; try { const suffix = `r${timeline.revision + 1}`; await patchTimeline([{ op: 'split_clip', clip_id: selected.clip.id, at: selected.clip.timeline_start + selected.clip.duration / 2, left_id: `${selected.clip.id}-${suffix}a`, right_id: `${selected.clip.id}-${suffix}b` }]); setSelectedClipId(''); } catch (error) { setMessage(error instanceof Error ? error.message : 'Split failed.'); } };
+  // Split from the inspector uses the same operation builder and request queue
+  // as the timeline itself, so both paths report identical states.
+  const splitSelected = () => {
+    if (!selected || !timeline) return;
+    const result = buildSplitOperation(timeline, selected.track, selected.clip, selected.clip.timeline_start + selected.clip.duration / 2);
+    if (!result.ok) { timelineEditing.reportBlock(result.block); return; }
+    void timelineEditing.submit(result.value);
+  };
   const removeSelected = async () => { if (!selected) return; try { await patchTimeline([{ op: 'remove_clip', clip_id: selected.clip.id }]); setSelectedClipId(''); } catch (error) { setMessage(error instanceof Error ? error.message : 'Remove failed.'); } };
   const toggleTrack = async (track: Track, field: 'locked' | 'muted') => { try { await patchTimeline([{ op: 'update_track', track_id: track.id, changes: { [field]: !track[field] } }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Track update failed.'); } };
   const addTrack = async (type: TrackType) => { try { await patchTimeline([{ op: 'add_track', track: { id: `${type}-r${(timeline?.revision ?? 0) + 1}`, type, name: type === 'video' ? 'B-roll' : type[0].toUpperCase() + type.slice(1), order: (timeline?.tracks.length ?? 0) * 10, locked: false, muted: false, clips: [] } }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Track creation failed.'); } };
-  const moveDroppedClip = async (event: DragEvent<HTMLDivElement>, track: Track) => {
-    event.preventDefault();
-    const clipId = event.dataTransfer.getData('application/x-grok-crew-clip');
-    if (!clipId || track.locked) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const timelineStart = Math.max(0, Math.round(((event.clientX - bounds.left) / Math.max(1, bounds.width)) * duration * 10) / 10);
-    try { await patchTimeline([{ op: 'move_clip', clip_id: clipId, track_id: track.id, timeline_start: timelineStart }]); setSelectedClipId(clipId); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Clip move failed.'); }
-  };
   const relayAction = async (action: 'pair' | 'desktop' | 'request' | 'result' | 'git-connect' | 'git-push' | 'git-pull') => {
     if (!window.grokCrew) { setMessage(t('Runner 연결은 데스크톱 앱에서 사용할 수 있습니다.', 'Runner pairing is available in the desktop app.', 'Runner 配对仅在桌面应用中可用。', 'Runner ペアリングはデスクトップアプリで利用できます。')); return; }
     try {
@@ -441,7 +488,17 @@ export default function DesktopWorkspace() {
         </aside>
       </div>
 
-      {project && timeline && <section className="desktop-timeline"><div className="desktop-timeline-tools"><div><b>{t('타임라인', 'Timeline', '时间线', 'タイムライン')}</b><span>{formatTime(duration)}</span></div><div><button onClick={() => void addTrack('video')}>＋ V</button><button onClick={() => void addTrack('audio')}>＋ A</button><button onClick={() => void addTrack('caption')}>＋ T</button><button disabled={!selected} onClick={() => void splitSelected()}>⌁ {t('분할', 'Split', '分割', '分割')}</button></div></div><div className="desktop-ruler"><span>00:00</span><span>{formatTime(duration / 4)}</span><span>{formatTime(duration / 2)}</span><span>{formatTime(duration * .75)}</span><span>{formatTime(duration)}</span></div><div className="desktop-track-scroll">{[...timeline.tracks].sort((a, b) => a.order - b.order).map((track) => <div className="desktop-track" key={track.id}><div className="desktop-track-head"><b>{track.type === 'video' ? 'V' : track.type === 'audio' ? 'A' : track.type === 'caption' ? 'T' : '◆'} {track.name}</b><button className={track.muted ? 'active' : ''} onClick={() => void toggleTrack(track, 'muted')}>M</button><button className={track.locked ? 'active' : ''} onClick={() => void toggleTrack(track, 'locked')}>⌑</button></div><div className={`desktop-track-lane ${track.muted ? 'muted' : ''}`} onDragOver={(event) => { if (!track.locked) event.preventDefault(); }} onDrop={(event) => void moveDroppedClip(event, track)}>{track.clips.map((clip) => <button key={clip.id} draggable={!clip.locked && !track.locked} onDragStart={(event) => event.dataTransfer.setData('application/x-grok-crew-clip', clip.id)} className={`desktop-timeline-clip type-${track.type} ${clip.id === selectedClipId ? 'selected' : ''}`} style={{ left: `${clip.timeline_start / duration * 100}%`, width: `${Math.max(1.5, clip.duration / duration * 100)}%` }} onClick={() => setSelectedClipId(clip.id)} title={`${clip.id} · ${formatTime(clip.timeline_start)}–${formatTime(clip.timeline_start + clip.duration)}`}><b>{clip.text || timeline.assets.find((asset) => asset.id === clip.asset_id)?.name || clip.id}</b><small>{formatTime(clip.duration)}</small></button>)}</div></div>)}</div></section>}
+      {project && timeline && (
+        <TimelineEditor
+          timeline={timeline}
+          selectedClipId={selectedClipId}
+          onSelectClip={setSelectedClipId}
+          editing={timelineEditing}
+          onAddTrack={(type) => void addTrack(type)}
+          onToggleTrack={(track, field) => void toggleTrack(track, field)}
+          trackBusy={busy || timelineEditing.pending}
+        />
+      )}
 
       <footer className="desktop-command-bar"><div className="desktop-message"><span className="desktop-message-icon">i</span><p>{message}</p></div><div className="desktop-command-summary"><span>{executionPolicy === 'auto_edit_render' ? t('자동 편집·렌더', 'Auto edit & render', '自动编辑和渲染', '自動編集・レンダー') : t('검토 우선', 'Review first', '审核优先', '確認優先')}</span><span>{Object.values(publishPolicy).filter((value) => value === 'auto').length} {t('개 자동 게시', 'auto publish', '个自动发布', '件の自動公開')}</span><button className="desktop-start" disabled={busy || !project} onClick={() => void startGrok()}>{busy ? t('처리 중…', 'Working…', '处理中…', '処理中…') : t('Grok으로 제작 시작', 'Start with Grok', '使用 Grok 开始制作', 'Grokで制作開始')} <b>→</b></button></div></footer>
     </main>
