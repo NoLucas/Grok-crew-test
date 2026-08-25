@@ -10,6 +10,7 @@ All notable changes to Grok Crew are documented here.
 - P1-03 persistent undo/redo history: every action creates a new immutable revision, redo survives restart, a divergent edit clears the redo branch, and the desktop exposes buttons plus standard keyboard shortcuts.
 - P1-04 local proxy editing: generate and retry a lightweight H.264 proxy, monitor progress, switch preview between proxy and original, and keep final MoviePy renders pinned to the original asset.
 - P1-05 clip keyframes for position, scale, rotation, crop, opacity, volume, and speed, with linear/hold interpolation, immutable timeline updates, precision-panel controls, and MoviePy render evaluation.
+- P1-06 edit elements: add B-roll video, editable caption clips, and rendered title overlays from the desktop inspector, plus per-clip fade, crossfade, and dip-to-black transition controls.
 - Focused backend and UI tests for P1-02 persistence, locked-item protection, selection behavior, marker validation, snapping geometry, and multi-clip movement.
 
 ### Changed

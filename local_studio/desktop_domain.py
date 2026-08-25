@@ -188,6 +188,19 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
                 raise ValueError(f"Clip {clip_id} references an unknown asset.")
             clip["locked"] = bool(clip.get("locked"))
             clip["keyframes"] = normalize_keyframes(clip.get("keyframes", {}), clip["duration"])
+            for transition_field in ("transition_in", "transition_out"):
+                transition = clip.get(transition_field)
+                if transition is None:
+                    continue
+                if not isinstance(transition, dict) or transition.get("type") not in {"fade", "crossfade", "dip_black"}:
+                    raise ValueError(f"clip.{transition_field} must use fade, crossfade, or dip_black.")
+                try:
+                    transition_duration = float(transition.get("duration", 0))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"clip.{transition_field}.duration must be numeric.") from exc
+                if not math.isfinite(transition_duration) or transition_duration <= 0 or transition_duration > min(5, clip["duration"]):
+                    raise ValueError(f"clip.{transition_field}.duration must be positive and no longer than the clip.")
+                clip[transition_field] = {"type": transition["type"], "duration": round(transition_duration, 3)}
             group_id = clip.get("group_id")
             if group_id is not None:
                 clip["group_id"] = _safe_identifier(group_id, "clip.group_id")
@@ -494,6 +507,26 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 if not isinstance(track, dict):
                     raise TimelinePatchError("invalid_operation", "add_track requires track.", details={"field": "track"})
                 timeline["tracks"].append(track)
+            elif kind == "add_asset":
+                asset = copy.deepcopy(operation.get("asset"))
+                if not isinstance(asset, dict):
+                    raise TimelinePatchError("invalid_operation", "add_asset requires asset.", details={"field": "asset"})
+                timeline["assets"].append(asset)
+            elif kind == "remove_asset":
+                asset_id = operation.get("asset_id")
+                asset = next((item for item in timeline["assets"] if item.get("id") == asset_id), None)
+                if not asset:
+                    raise TimelinePatchError("timeline_item_not_found", "Asset not found.", details={"asset_id": asset_id})
+                if any(
+                    clip.get("asset_id") == asset_id
+                    for track in timeline["tracks"]
+                    for clip in track.get("clips", [])
+                ):
+                    raise TimelinePatchError(
+                        "asset_in_use", "An asset referenced by a clip cannot be removed.",
+                        details={"asset_id": asset_id},
+                    )
+                timeline["assets"].remove(asset)
             elif kind == "update_track":
                 track = _find_track(timeline, operation.get("track_id"))
                 changes = operation.get("changes")
@@ -535,6 +568,9 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                         ) from exc
                 _assert_update_mutable(track, clip, changes, origin)
                 clip.update({key: value for key, value in changes.items() if key != "id"})
+                for optional_field in ("transition_in", "transition_out"):
+                    if clip.get(optional_field) is None:
+                        clip.pop(optional_field, None)
                 clip["timeline_start"] = _number(clip.get("timeline_start"), "timeline_start", minimum=0)
                 clip["duration"] = _number(clip.get("duration"), "duration")
                 if clip["duration"] <= TIMELINE_EPSILON:

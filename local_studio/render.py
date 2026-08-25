@@ -88,6 +88,23 @@ def _apply_dynamic_volume(audio: Any, keyframes: dict[str, list[dict[str, Any]]]
     return audio.transform(multiply, keep_duration=True)
 
 
+def _apply_transitions(layer: Any, clip_data: dict[str, Any], vfx: Any) -> Any:
+    effects: list[Any] = []
+    for field, fade_effect, crossfade_effect in (
+        ("transition_in", vfx.FadeIn, vfx.CrossFadeIn),
+        ("transition_out", vfx.FadeOut, vfx.CrossFadeOut),
+    ):
+        transition = clip_data.get(field)
+        if not isinstance(transition, dict):
+            continue
+        duration = float(transition.get("duration", 0))
+        if duration <= 0:
+            continue
+        effect = crossfade_effect if transition.get("type") == "crossfade" else fade_effect
+        effects.append(effect(duration))
+    return layer.with_effects(effects) if effects else layer
+
+
 def _render_timeline_v2(
     project: dict[str, Any],
     progress_cb: Callable[[int], None] | None = None,
@@ -205,6 +222,7 @@ def _render_timeline_v2(
                 y_percent = max(0, min(float(style.get("position_y", settings.get("caption_y", 74))), 100))
                 y = max(0, min(int(target_h * y_percent / 100 - layer.h / 2), target_h - int(layer.h)))
                 layer = layer.with_start(start).with_duration(clip_duration).with_position(("center", y))
+                layer = _apply_transitions(layer, clip_data, vfx)
                 visual_layers.append(layer)
                 owned_clips.append(layer)
             elif kind == "audio":
@@ -238,14 +256,32 @@ def _render_timeline_v2(
                 audio_layers.append(layer)
                 owned_clips.append(layer)
             elif kind in {"video", "overlay"}:
-                if not asset or asset.get("kind") not in {"video", "image"}:
+                if not asset or asset.get("kind") not in {"video", "image", "title"}:
                     continue
-                source_path = original_asset_path(asset)
-                if not source_path.exists():
-                    raise RuntimeError(f"Timeline asset does not exist: {source_path}")
+                if asset.get("kind") == "title":
+                    text = str(clip_data.get("text") or asset.get("text") or asset.get("name") or "").strip()
+                    if not text or not font_path:
+                        continue
+                    style = clip_data.get("style") if isinstance(clip_data.get("style"), dict) else {}
+                    layer = TextClip(
+                        font=font_path,
+                        text=text,
+                        font_size=max(18, min(int(style.get("size", 92)), 220)),
+                        color=str(style.get("color", "#FFFFFF")),
+                        stroke_color=str(style.get("stroke_color", "#000000")),
+                        stroke_width=max(0, min(int(style.get("stroke", 2)), 12)),
+                        size=(max(240, int(target_w * .88)), max(120, int(target_h * .24))),
+                        method="caption",
+                        text_align="center",
+                        vertical_align="center",
+                    ).with_duration(clip_duration)
+                else:
+                    source_path = original_asset_path(asset)
+                    if not source_path.exists():
+                        raise RuntimeError(f"Timeline asset does not exist: {source_path}")
                 if asset.get("kind") == "image":
                     layer = ImageClip(str(source_path)).with_duration(clip_duration)
-                else:
+                elif asset.get("kind") == "video":
                     source_video = VideoFileClip(str(source_path))
                     owned_clips.append(source_video)
                     source_in = max(0, float(clip_data.get("source_in", 0)))
@@ -293,6 +329,7 @@ def _render_timeline_v2(
                 else:
                     position = (x_value, y_value)
                 layer = layer.with_start(start).with_duration(clip_duration).with_position(position)
+                layer = _apply_transitions(layer, clip_data, vfx)
                 audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
                 if layer.audio and (audio_config.get("muted") or track.get("muted")):
                     layer = layer.without_audio()

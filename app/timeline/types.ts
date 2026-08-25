@@ -13,6 +13,10 @@ export type TimelineKeyframe = {
   value: number;
   interpolation: 'linear' | 'hold';
 };
+export type TimelineTransition = {
+  type: 'fade' | 'crossfade' | 'dip_black';
+  duration: number;
+};
 
 export type TimelineClip = {
   id: string;
@@ -23,6 +27,8 @@ export type TimelineClip = {
   source_out?: number;
   locked: boolean;
   group_id?: string | null;
+  transition_in?: TimelineTransition;
+  transition_out?: TimelineTransition;
   text?: string;
   transform?: Record<string, number>;
   audio?: Record<string, number | boolean>;

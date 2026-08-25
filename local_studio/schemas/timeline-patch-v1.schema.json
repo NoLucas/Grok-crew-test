@@ -16,7 +16,8 @@
         "type": "object",
         "required": ["op"],
         "properties": {
-          "op": { "enum": ["add_track", "update_track", "remove_track", "add_clip", "update_clip", "move_clip", "trim_clip", "remove_clip", "split_clip", "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "set_settings", "add_marker", "remove_marker"] },
+          "op": { "enum": ["add_asset", "remove_asset", "add_track", "update_track", "remove_track", "add_clip", "update_clip", "move_clip", "trim_clip", "remove_clip", "split_clip", "ripple_trim", "roll_edit", "slip_clip", "slide_clip", "set_settings", "add_marker", "remove_marker"] },
+          "asset_id": { "type": "string", "minLength": 1 },
           "track_id": { "type": "string", "minLength": 1 },
           "clip_id": { "type": "string", "minLength": 1 },
           "left_clip_id": { "type": "string", "minLength": 1 },
@@ -29,6 +30,9 @@
           "edge": { "enum": ["start", "end"] },
           "source_in": { "type": "number", "minimum": 0 },
           "changes": { "type": "object", "minProperties": 1 },
+          "asset": { "type": "object" },
+          "track": { "type": "object" },
+          "clip": { "type": "object" },
           "marker": {
             "type": "object",
             "required": ["id", "at"],
@@ -41,6 +45,22 @@
           }
         },
         "allOf": [
+          {
+            "if": { "properties": { "op": { "const": "add_asset" } }, "required": ["op"] },
+            "then": { "required": ["asset"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "remove_asset" } }, "required": ["op"] },
+            "then": { "required": ["asset_id"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "add_track" } }, "required": ["op"] },
+            "then": { "required": ["track"] }
+          },
+          {
+            "if": { "properties": { "op": { "const": "add_clip" } }, "required": ["op"] },
+            "then": { "required": ["track_id", "clip"] }
+          },
           {
             "if": { "properties": { "op": { "const": "move_clip" } }, "required": ["op"] },
             "then": { "required": ["clip_id", "timeline_start"] }

@@ -160,6 +160,7 @@ export default function DesktopWorkspace() {
   const [proxyBusy, setProxyBusy] = useState(false);
   const [useProxy, setUseProxy] = useState(true);
   const [newProject, setNewProject] = useState({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
+  const [newElement, setNewElement] = useState({ brollPath: '', title: '', caption: '' });
   const [createOpen, setCreateOpen] = useState(false);
   const [previewOutput, setPreviewOutput] = useState(false);
   const [github, setGithub] = useState<GitHubStatus>({ authenticated: false, relay_connected: false });
@@ -486,6 +487,58 @@ export default function DesktopWorkspace() {
   };
   const removeSelected = async () => { if (!selected) return; try { await patchTimeline([{ op: 'remove_clip', clip_id: selected.clip.id }]); setSelectedClipIds((current) => current.filter((clipId) => clipId !== selected.clip.id)); } catch (error) { setMessage(error instanceof Error ? error.message : 'Remove failed.'); } };
   const addTrack = async (type: TrackType) => { try { await patchTimeline([{ op: 'add_track', track: { id: `${type}-r${(timeline?.revision ?? 0) + 1}`, type, name: type === 'video' ? 'B-roll' : type[0].toUpperCase() + type.slice(1), order: (timeline?.tracks.length ?? 0) * 10, locked: false, muted: false, solo: false, clips: [] } }]); } catch (error) { setMessage(error instanceof Error ? error.message : 'Track creation failed.'); } };
+  const addTimelineElement = async (kind: 'broll' | 'title' | 'caption') => {
+    if (!timeline) return;
+    const revision = timeline.revision + 1;
+    const start = selected?.clip.timeline_start ?? 0;
+    const duration = Math.max(0.5, Math.min(selected?.clip.duration ?? 3, 5));
+    const operations: Array<Record<string, unknown>> = [];
+    if (kind === 'broll') {
+      const media = workspace.media.find((item) => item.path === newElement.brollPath);
+      if (!media) {
+        setMessage(t('B-roll 영상을 선택하세요.', 'Choose a B-roll video.', '请选择 B-roll 视频。', 'B-roll 動画を選択してください。'));
+        return;
+      }
+      const assetId = `broll-asset-r${revision}`;
+      const existingTrack = timeline.tracks.find((track) => track.type === 'video' && track.id !== 'video-main');
+      const trackId = existingTrack?.id ?? `video-broll-r${revision}`;
+      operations.push({ op: 'add_asset', asset: { id: assetId, kind: 'video', name: media.name, path: media.path } });
+      if (!existingTrack) operations.push({ op: 'add_track', track: { id: trackId, type: 'video', name: 'B-roll', order: timeline.tracks.length * 10, locked: false, muted: false, solo: false, clips: [] } });
+      operations.push({ op: 'add_clip', track_id: trackId, clip: {
+        id: `broll-clip-r${revision}`, asset_id: assetId, timeline_start: start, duration,
+        source_in: 0, source_out: duration, locked: false, transform: {}, audio: { volume: 1, muted: false }, effects: [], keyframes: {},
+      } });
+    } else if (kind === 'title') {
+      const text = newElement.title.trim();
+      if (!text) return;
+      const assetId = `title-asset-r${revision}`;
+      const existingTrack = timeline.tracks.find((track) => track.type === 'overlay');
+      const trackId = existingTrack?.id ?? `overlay-title-r${revision}`;
+      operations.push({ op: 'add_asset', asset: { id: assetId, kind: 'title', name: text.slice(0, 60), text } });
+      if (!existingTrack) operations.push({ op: 'add_track', track: { id: trackId, type: 'overlay', name: 'Titles', order: timeline.tracks.length * 10, locked: false, muted: false, solo: false, clips: [] } });
+      operations.push({ op: 'add_clip', track_id: trackId, clip: {
+        id: `title-clip-r${revision}`, asset_id: assetId, timeline_start: start, duration,
+        locked: false, text, transform: { scale: 1, opacity: 1 }, style: { size: 92, color: '#FFFFFF' }, effects: [], keyframes: {},
+      } });
+    } else {
+      const text = newElement.caption.trim();
+      if (!text) return;
+      const existingTrack = timeline.tracks.find((track) => track.type === 'caption');
+      const trackId = existingTrack?.id ?? `caption-r${revision}`;
+      if (!existingTrack) operations.push({ op: 'add_track', track: { id: trackId, type: 'caption', name: 'Captions', order: timeline.tracks.length * 10, locked: false, muted: false, solo: false, clips: [] } });
+      operations.push({ op: 'add_clip', track_id: trackId, clip: {
+        id: `caption-clip-r${revision}`, asset_id: null, timeline_start: start, duration,
+        locked: false, text, style: { position_y: 78, size: 72 }, effects: [], keyframes: {},
+      } });
+    }
+    try {
+      await patchTimeline(operations);
+      setNewElement((current) => ({ ...current, ...(kind === 'broll' ? { brollPath: '' } : kind === 'title' ? { title: '' } : { caption: '' }) }));
+      setMessage(t('편집 요소를 새 타임라인 버전에 추가했습니다.', 'Added the element in a new timeline version.', '已在新的时间线版本中添加编辑元素。', '編集要素を新しいタイムラインバージョンに追加しました。'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not add timeline element.');
+    }
+  };
   const relayAction = async (action: 'pair' | 'desktop' | 'request' | 'result' | 'git-connect' | 'git-push' | 'git-pull') => {
     if (!window.grokCrew) { setMessage(t('Runner 연결은 데스크톱 앱에서 사용할 수 있습니다.', 'Runner pairing is available in the desktop app.', 'Runner 配对仅在桌面应用中可用。', 'Runner ペアリングはデスクトップアプリで利用できます。')); return; }
     try {
@@ -709,7 +762,25 @@ export default function DesktopWorkspace() {
             {latestJob && ['paused', 'pause_requested'].includes(latestJob.status) && <div className="desktop-control-actions"><button disabled={busy} onClick={() => void controlRunnerJob('resume')}>{t('같은 세션 재개', 'Resume session', '恢复会话', 'セッション再開')}</button><button className="desktop-danger" disabled={busy} onClick={() => void controlRunnerJob('cancel')}>{t('작업 취소', 'Cancel job', '取消任务', 'ジョブをキャンセル')}</button></div>}
             {latestJob && ['failed', 'cancelled'].includes(latestJob.status) && <button className="desktop-secondary" disabled={busy} onClick={() => void controlRunnerJob('retry')}>{t('안전하게 재시도', 'Safe retry', '安全重试', '安全に再試行')}</button>}
           </section>
-          <section className="desktop-inspector-section"><div className="desktop-inspector-head"><b>{t('클립 속성', 'Clip inspector', '片段属性', 'クリップ属性')}</b>{selectedClipIds.length > 1 ? <span>{selectedClipIds.length} {t('개 선택', 'selected', '个已选', '件選択')}</span> : null}</div>{selected ? <div className="desktop-clip-form"><label>ID<input value={selected.clip.id} disabled /></label><label>{t('시작', 'Start', '开始', '開始')}<input type="number" min="0" step=".1" value={selected.clip.timeline_start} onChange={(e) => void updateSelectedClip({ timeline_start: Number(e.target.value) })} /></label><label>{t('길이', 'Duration', '时长', '長さ')}<input type="number" min=".1" step=".1" value={selected.clip.duration} onChange={(e) => void updateSelectedClip({ duration: Number(e.target.value) })} /></label>{['video', 'overlay'].includes(selected.track.type) && <><label>{t('크기', 'Scale', '缩放', 'スケール')}<input type="number" min=".05" max="8" step=".05" value={selected.clip.transform?.scale ?? 1} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), scale: Number(e.target.value) } })} /></label><label>{t('회전', 'Rotation', '旋转', '回転')}<input type="number" min="-360" max="360" step="1" value={selected.clip.transform?.rotation ?? 0} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), rotation: Number(e.target.value) } })} /></label><label>{t('불투명도', 'Opacity', '不透明度', '不透明度')}<input type="number" min="0" max="1" step=".05" value={selected.clip.transform?.opacity ?? 1} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), opacity: Number(e.target.value) } })} /></label></>}{['video', 'audio'].includes(selected.track.type) && <label>{t('볼륨', 'Volume', '音量', '音量')}<input type="number" min="0" max="4" step=".05" value={Number(selected.clip.audio?.volume ?? 1)} onChange={(e) => void updateSelectedClip({ audio: { ...(selected.clip.audio ?? {}), volume: Number(e.target.value) } })} /></label>}{selected.track.type === 'caption' && <label>{t('자막 문구', 'Caption text', '字幕文本', '字幕テキスト')}<textarea value={selected.clip.text ?? ''} onChange={(e) => void updateSelectedClip({ text: e.target.value })} /></label>}<label className="desktop-check"><input type="checkbox" checked={selected.clip.locked} onChange={(e) => void updateSelectedClip({ locked: e.target.checked })} />{t('클립 잠금', 'Lock clip', '锁定片段', 'クリップをロック')}</label><div className="desktop-clip-actions"><button onClick={() => void splitSelected()}>{t('중간 분할', 'Split', '分割', '分割')}</button><button className="danger" onClick={() => void removeSelected()}>{t('삭제', 'Delete', '删除', '削除')}</button></div></div> : <p className="desktop-muted">{t('타임라인에서 클립을 선택하세요.', 'Select a clip in the timeline.', '在时间线上选择片段。', 'タイムラインでクリップを選択してください。')}</p>}</section>
+          <section className="desktop-inspector-section desktop-elements">
+            <div className="desktop-inspector-head"><b>{t('편집 요소', 'Edit elements', '编辑元素', '編集要素')}</b></div>
+            <label><span>B-roll</span>
+              <select value={newElement.brollPath} onChange={(event) => setNewElement({ ...newElement, brollPath: event.target.value })}>
+                <option value="">{t('영상 선택', 'Choose video', '选择视频', '動画を選択')}</option>
+                {workspace.media.filter((item) => item.kind === 'video' && item.area === 'inputs').map((item) => <option key={item.path} value={item.path}>{item.name}</option>)}
+              </select>
+              <button disabled={!newElement.brollPath} onClick={() => void addTimelineElement('broll')}>{t('추가', 'Add', '添加', '追加')}</button>
+            </label>
+            <label><span>{t('타이틀', 'Title', '标题', 'タイトル')}</span>
+              <input value={newElement.title} onChange={(event) => setNewElement({ ...newElement, title: event.target.value })} />
+              <button disabled={!newElement.title.trim()} onClick={() => void addTimelineElement('title')}>{t('추가', 'Add', '添加', '追加')}</button>
+            </label>
+            <label><span>{t('자막', 'Caption', '字幕', '字幕')}</span>
+              <input value={newElement.caption} onChange={(event) => setNewElement({ ...newElement, caption: event.target.value })} />
+              <button disabled={!newElement.caption.trim()} onClick={() => void addTimelineElement('caption')}>{t('추가', 'Add', '添加', '追加')}</button>
+            </label>
+          </section>
+          <section className="desktop-inspector-section"><div className="desktop-inspector-head"><b>{t('클립 속성', 'Clip inspector', '片段属性', 'クリップ属性')}</b>{selectedClipIds.length > 1 ? <span>{selectedClipIds.length} {t('개 선택', 'selected', '个已选', '件選択')}</span> : null}</div>{selected ? <div className="desktop-clip-form"><label>ID<input value={selected.clip.id} disabled /></label><label>{t('시작', 'Start', '开始', '開始')}<input type="number" min="0" step=".1" value={selected.clip.timeline_start} onChange={(e) => void updateSelectedClip({ timeline_start: Number(e.target.value) })} /></label><label>{t('길이', 'Duration', '时长', '長さ')}<input type="number" min=".1" step=".1" value={selected.clip.duration} onChange={(e) => void updateSelectedClip({ duration: Number(e.target.value) })} /></label>{['video', 'overlay'].includes(selected.track.type) && <><label>{t('크기', 'Scale', '缩放', 'スケール')}<input type="number" min=".05" max="8" step=".05" value={selected.clip.transform?.scale ?? 1} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), scale: Number(e.target.value) } })} /></label><label>{t('회전', 'Rotation', '旋转', '回転')}<input type="number" min="-360" max="360" step="1" value={selected.clip.transform?.rotation ?? 0} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), rotation: Number(e.target.value) } })} /></label><label>{t('불투명도', 'Opacity', '不透明度', '不透明度')}<input type="number" min="0" max="1" step=".05" value={selected.clip.transform?.opacity ?? 1} onChange={(e) => void updateSelectedClip({ transform: { ...(selected.clip.transform ?? {}), opacity: Number(e.target.value) } })} /></label></>}{['video', 'audio'].includes(selected.track.type) && <label>{t('볼륨', 'Volume', '音量', '音量')}<input type="number" min="0" max="4" step=".05" value={Number(selected.clip.audio?.volume ?? 1)} onChange={(e) => void updateSelectedClip({ audio: { ...(selected.clip.audio ?? {}), volume: Number(e.target.value) } })} /></label>}{selected.track.type === 'caption' && <label>{t('자막 문구', 'Caption text', '字幕文本', '字幕テキスト')}<textarea value={selected.clip.text ?? ''} onChange={(e) => void updateSelectedClip({ text: e.target.value })} /></label>}{['video', 'overlay', 'caption'].includes(selected.track.type) && <><label>{t('시작 전환', 'Transition in', '入场转场', '開始トランジション')}<select value={selected.clip.transition_in?.type ?? ''} onChange={(e) => void updateSelectedClip({ transition_in: e.target.value ? { type: e.target.value, duration: selected.clip.transition_in?.duration ?? 0.35 } : null })}><option value="">{t('없음', 'None', '无', 'なし')}</option><option value="fade">Fade</option><option value="crossfade">Crossfade</option><option value="dip_black">Dip black</option></select></label><label>{t('끝 전환', 'Transition out', '出场转场', '終了トランジション')}<select value={selected.clip.transition_out?.type ?? ''} onChange={(e) => void updateSelectedClip({ transition_out: e.target.value ? { type: e.target.value, duration: selected.clip.transition_out?.duration ?? 0.35 } : null })}><option value="">{t('없음', 'None', '无', 'なし')}</option><option value="fade">Fade</option><option value="crossfade">Crossfade</option><option value="dip_black">Dip black</option></select></label><label>{t('전환 길이', 'Transition duration', '转场时长', 'トランジション時間')}<input type="number" min=".05" max={Math.min(5, selected.clip.duration)} step=".05" value={selected.clip.transition_in?.duration ?? selected.clip.transition_out?.duration ?? .35} onChange={(e) => { const duration = Number(e.target.value); void updateSelectedClip({ ...(selected.clip.transition_in ? { transition_in: { ...selected.clip.transition_in, duration } } : {}), ...(selected.clip.transition_out ? { transition_out: { ...selected.clip.transition_out, duration } } : {}) }); }} /></label></>}{<label className="desktop-check"><input type="checkbox" checked={selected.clip.locked} onChange={(e) => void updateSelectedClip({ locked: e.target.checked })} />{t('클립 잠금', 'Lock clip', '锁定片段', 'クリップをロック')}</label>}<div className="desktop-clip-actions"><button onClick={() => void splitSelected()}>{t('중간 분할', 'Split', '分割', '分割')}</button><button className="danger" onClick={() => void removeSelected()}>{t('삭제', 'Delete', '删除', '削除')}</button></div></div> : <p className="desktop-muted">{t('타임라인에서 클립을 선택하세요.', 'Select a clip in the timeline.', '在时间线上选择片段。', 'タイムラインでクリップを選択してください。')}</p>}</section>
         </aside>
       </div>
 

@@ -18,6 +18,15 @@
       "type": "array",
       "maxItems": 250,
       "items": { "$ref": "#/$defs/keyframe" }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["type", "duration"],
+      "properties": {
+        "type": { "enum": ["fade", "crossfade", "dip_black"] },
+        "duration": { "type": "number", "exclusiveMinimum": 0, "maximum": 5 }
+      },
+      "additionalProperties": false
     }
   },
   "type": "object",
@@ -48,6 +57,7 @@
           "id": { "type": "string", "minLength": 1 },
           "kind": { "enum": ["video", "image", "audio", "title", "generator"] },
           "name": { "type": "string" },
+          "text": { "type": "string" },
           "path": { "type": "string" },
           "duration": { "type": "number", "minimum": 0 }
         },
@@ -81,6 +91,8 @@
                 "source_out": { "type": "number", "minimum": 0 },
                 "locked": { "type": "boolean" },
                 "group_id": { "type": ["string", "null"], "minLength": 1 },
+                "transition_in": { "$ref": "#/$defs/transition" },
+                "transition_out": { "$ref": "#/$defs/transition" },
                 "text": { "type": "string" },
                 "transform": { "type": "object" },
                 "audio": { "type": "object" },

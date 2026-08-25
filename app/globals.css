@@ -6825,6 +6825,7 @@ select {
 .desktop-form-grid select,
 .desktop-form-grid input,
 .desktop-clip-form input,
+.desktop-clip-form select,
 .desktop-clip-form textarea { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--desktop-line); background: #fafafa; font-size: 9px; font-weight: 500; }
 .desktop-form-grid .desktop-wide { grid-column: 1 / -1; }
 .desktop-range { display: grid; grid-template-columns: 1fr 48px; gap: 10px; align-items: center; }
@@ -6862,6 +6863,13 @@ select {
 .desktop-render-state b { font-size: 10px; }
 .desktop-render-state small { color: var(--desktop-muted); font-size: 8px; }
 .desktop-inspector-section { padding: 14px; border-bottom: 1px solid var(--desktop-line); }
+.desktop-elements { display: grid; gap: 8px; }
+.desktop-elements .desktop-inspector-head { margin-bottom: 2px; }
+.desktop-elements label { display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 5px; align-items: center; color: #555860; font-size: 8px; font-weight: 650; }
+.desktop-elements label > :first-child { grid-column: 1 / -1; }
+.desktop-elements select,
+.desktop-elements input { min-width: 0; padding: 7px; border: 1px solid var(--desktop-line); background: #fafafa; font-size: 8px; }
+.desktop-elements button { min-height: 29px; padding: 5px; border: 1px solid var(--desktop-line); border-radius: 7px; background: #fff; color: var(--desktop-ink); font-size: 8px; font-weight: 700; }
 .desktop-inspector-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .desktop-inspector-head b { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .desktop-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #a1a3aa; box-shadow: 0 0 0 3px #e5e5e8; }
