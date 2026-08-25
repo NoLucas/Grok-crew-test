@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from config import PLATFORM_PRESETS, caption_font, workspace_path
+from keyframes import has_keyframes, keyframe_value, speed_time_mapper
 
 
 def _asset_path(value: str) -> Path:
@@ -18,6 +19,73 @@ def _asset_path(value: str) -> Path:
 def original_asset_path(asset: dict[str, Any]) -> Path:
     """Final output always resolves the immutable original, never its proxy."""
     return _asset_path(str(asset.get("path", "")))
+
+
+def _apply_dynamic_crop(layer: Any, keyframes: dict[str, list[dict[str, Any]]], transform: dict[str, Any]) -> Any:
+    if not has_keyframes(keyframes, "crop_left", "crop_right", "crop_top", "crop_bottom"):
+        return layer
+    import numpy as np
+    from PIL import Image
+
+    width, height = int(layer.w), int(layer.h)
+
+    def crop_frame(get_frame: Callable[[float], Any], at: float) -> Any:
+        frame = get_frame(at)
+        left = keyframe_value(keyframes, "crop_left", at, float(transform.get("crop_left", 0)))
+        right = keyframe_value(keyframes, "crop_right", at, float(transform.get("crop_right", 0)))
+        top = keyframe_value(keyframes, "crop_top", at, float(transform.get("crop_top", 0)))
+        bottom = keyframe_value(keyframes, "crop_bottom", at, float(transform.get("crop_bottom", 0)))
+        x1, x2 = int(width * left), max(int(width * left) + 1, int(width * (1 - right)))
+        y1, y2 = int(height * top), max(int(height * top) + 1, int(height * (1 - bottom)))
+        cropped = frame[y1:y2, x1:x2]
+        is_mask = cropped.dtype.kind == "f"
+        image = Image.fromarray(
+            np.clip(cropped * 255 if is_mask else cropped, 0, 255).astype("uint8"),
+        ).resize((width, height), Image.Resampling.BICUBIC)
+        value = np.asarray(image)
+        return value / 255.0 if is_mask else value
+
+    return layer.transform(crop_frame, apply_to=["mask"], keep_duration=True)
+
+
+def _apply_dynamic_opacity(layer: Any, keyframes: dict[str, list[dict[str, Any]]], default: float) -> Any:
+    if not has_keyframes(keyframes, "opacity"):
+        return layer.with_opacity(default) if default != 1 else layer
+    from moviepy import ColorClip
+
+    mask = layer.mask
+    if mask is None:
+        mask = ColorClip(size=layer.size, color=1, is_mask=True).with_duration(layer.duration)
+    mask = mask.transform(
+        lambda get_frame, at: get_frame(at) * keyframe_value(keyframes, "opacity", at, default),
+        keep_duration=True,
+    )
+    return layer.with_mask(mask)
+
+
+def _apply_dynamic_volume(audio: Any, keyframes: dict[str, list[dict[str, Any]]], default: float) -> Any:
+    if audio is None:
+        return None
+    if not has_keyframes(keyframes, "volume"):
+        if default == 1:
+            return audio
+        from moviepy import afx
+        return audio.with_effects([afx.MultiplyVolume(default)])
+
+    def multiply(get_frame: Callable[[Any], Any], at: Any) -> Any:
+        import numpy as np
+
+        frame = get_frame(at)
+        if isinstance(at, (int, float)):
+            return frame * keyframe_value(keyframes, "volume", float(at), default)
+        times = np.asarray(at)
+        gains = np.array([
+            keyframe_value(keyframes, "volume", float(value), default)
+            for value in times.flat
+        ]).reshape(times.shape)
+        return frame * gains if getattr(frame, "ndim", 1) == 1 else frame * gains[:, None]
+
+    return audio.transform(multiply, keep_duration=True)
 
 
 def _render_timeline_v2(
@@ -109,6 +177,7 @@ def _render_timeline_v2(
             kind = str(track.get("type", "video"))
             start = float(clip_data.get("timeline_start", 0))
             clip_duration = float(clip_data.get("duration", 0))
+            keyframes = clip_data.get("keyframes") if isinstance(clip_data.get("keyframes"), dict) else {}
             asset = assets.get(str(clip_data.get("asset_id")))
             layer = None
 
@@ -149,12 +218,22 @@ def _render_timeline_v2(
                 source_in = max(0, float(clip_data.get("source_in", 0)))
                 source_out = min(float(clip_data.get("source_out", source_in + clip_duration)), float(source_audio.duration))
                 layer = source_audio.subclipped(source_in, source_out)
+                source_span = max(0.001, source_out - source_in)
+                if has_keyframes(keyframes, "speed"):
+                    layer = layer.time_transform(
+                        speed_time_mapper(clip_duration, source_span, keyframes),
+                        keep_duration=True,
+                    ).with_duration(clip_duration)
+                elif abs(source_span - clip_duration) > .001:
+                    layer = layer.time_transform(
+                        lambda at, ratio=source_span / clip_duration: at * ratio,
+                        keep_duration=True,
+                    ).with_duration(clip_duration)
                 audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
                 if audio_config.get("muted"):
                     continue
                 volume = max(0, min(float(audio_config.get("volume", 1)), 4))
-                if volume != 1:
-                    layer = layer.with_effects([afx.MultiplyVolume(volume)])
+                layer = _apply_dynamic_volume(layer, keyframes, volume)
                 layer = layer.with_start(start).with_duration(clip_duration)
                 audio_layers.append(layer)
                 owned_clips.append(layer)
@@ -175,28 +254,51 @@ def _render_timeline_v2(
                         continue
                     layer = source_video.subclipped(source_in, source_out)
                     source_span = source_out - source_in
-                    if abs(source_span - clip_duration) > .001:
+                    if has_keyframes(keyframes, "speed"):
+                        layer = layer.time_transform(
+                            speed_time_mapper(clip_duration, source_span, keyframes),
+                            apply_to=["mask", "audio"],
+                            keep_duration=True,
+                        ).with_duration(clip_duration)
+                    elif abs(source_span - clip_duration) > .001:
                         layer = layer.with_effects([vfx.MultiplySpeed(source_span / clip_duration)])
                 transform = clip_data.get("transform") if isinstance(clip_data.get("transform"), dict) else {}
+                layer = _apply_dynamic_crop(layer, keyframes, transform)
                 scale = max(.05, min(float(transform.get("scale", 1)), 8))
                 fit = min(target_w / float(layer.w), target_h / float(layer.h)) * scale
-                layer = layer.resized(fit)
+                if has_keyframes(keyframes, "scale"):
+                    layer = layer.with_effects([
+                        vfx.Resize(lambda at: fit / scale * keyframe_value(keyframes, "scale", at, scale)),
+                    ])
+                else:
+                    layer = layer.resized(fit)
                 rotation = float(transform.get("rotation", 0))
-                if rotation:
+                if has_keyframes(keyframes, "rotation"):
+                    layer = layer.with_effects([
+                        vfx.Rotate(
+                            lambda at: keyframe_value(keyframes, "rotation", at, rotation),
+                            expand=True,
+                        ),
+                    ])
+                elif rotation:
                     layer = layer.rotated(rotation, expand=True)
                 opacity = max(0, min(float(transform.get("opacity", 1)), 1))
-                if opacity != 1:
-                    layer = layer.with_opacity(opacity)
+                layer = _apply_dynamic_opacity(layer, keyframes, opacity)
                 x_value, y_value = transform.get("x", "center"), transform.get("y", "center")
-                position = (x_value, y_value)
+                if has_keyframes(keyframes, "x", "y"):
+                    position = lambda at: (
+                        keyframe_value(keyframes, "x", at, float(x_value) if isinstance(x_value, (int, float)) else 0),
+                        keyframe_value(keyframes, "y", at, float(y_value) if isinstance(y_value, (int, float)) else 0),
+                    )
+                else:
+                    position = (x_value, y_value)
                 layer = layer.with_start(start).with_duration(clip_duration).with_position(position)
                 audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
                 if layer.audio and (audio_config.get("muted") or track.get("muted")):
                     layer = layer.without_audio()
                 elif layer.audio:
                     volume = max(0, min(float(audio_config.get("volume", 1)), 4))
-                    if volume != 1:
-                        layer = layer.with_audio(layer.audio.with_effects([afx.MultiplyVolume(volume)]))
+                    layer = layer.with_audio(_apply_dynamic_volume(layer.audio, keyframes, volume))
                 visual_layers.append(layer)
                 owned_clips.append(layer)
 

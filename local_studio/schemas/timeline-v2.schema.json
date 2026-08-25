@@ -2,6 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "grok-crew.timeline/v2",
   "title": "Grok Crew Timeline v2",
+  "$defs": {
+    "keyframe": {
+      "type": "object",
+      "required": ["id", "at", "value", "interpolation"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "at": { "type": "number", "minimum": 0 },
+        "value": { "type": "number" },
+        "interpolation": { "enum": ["linear", "hold"] }
+      },
+      "additionalProperties": false
+    },
+    "keyframeTrack": {
+      "type": "array",
+      "maxItems": 250,
+      "items": { "$ref": "#/$defs/keyframe" }
+    }
+  },
   "type": "object",
   "required": ["schema", "revision", "settings", "assets", "tracks", "markers"],
   "properties": {
@@ -67,7 +85,23 @@
                 "transform": { "type": "object" },
                 "audio": { "type": "object" },
                 "effects": { "type": "array" },
-                "keyframes": { "type": "object" }
+                "keyframes": {
+                  "type": "object",
+                  "properties": {
+                    "x": { "$ref": "#/$defs/keyframeTrack" },
+                    "y": { "$ref": "#/$defs/keyframeTrack" },
+                    "scale": { "$ref": "#/$defs/keyframeTrack" },
+                    "rotation": { "$ref": "#/$defs/keyframeTrack" },
+                    "crop_left": { "$ref": "#/$defs/keyframeTrack" },
+                    "crop_right": { "$ref": "#/$defs/keyframeTrack" },
+                    "crop_top": { "$ref": "#/$defs/keyframeTrack" },
+                    "crop_bottom": { "$ref": "#/$defs/keyframeTrack" },
+                    "opacity": { "$ref": "#/$defs/keyframeTrack" },
+                    "volume": { "$ref": "#/$defs/keyframeTrack" },
+                    "speed": { "$ref": "#/$defs/keyframeTrack" }
+                  },
+                  "additionalProperties": false
+                }
               },
               "additionalProperties": true
             }

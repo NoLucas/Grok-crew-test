@@ -16,6 +16,7 @@ from typing import Any
 import config
 from config import utc_now
 from db import db, event, row_dict
+from keyframes import normalize_keyframes
 
 TIMELINE_SCHEMA = "grok-crew.timeline/v2"
 PATCH_SCHEMA = "grok-crew.timeline-patch/v1"
@@ -186,6 +187,7 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
             if asset_id is not None and asset_id not in asset_ids:
                 raise ValueError(f"Clip {clip_id} references an unknown asset.")
             clip["locked"] = bool(clip.get("locked"))
+            clip["keyframes"] = normalize_keyframes(clip.get("keyframes", {}), clip["duration"])
             group_id = clip.get("group_id")
             if group_id is not None:
                 clip["group_id"] = _safe_identifier(group_id, "clip.group_id")

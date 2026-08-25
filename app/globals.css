@@ -7034,6 +7034,20 @@ select {
 .desktop-precision-note { margin: 0; padding: 8px 11px; border-bottom: 1px solid #2b2d33; color: #e3b45c; font-size: 8px; line-height: 1.5; }
 .desktop-precision-note.busy { border-top: 1px solid #2b2d33; border-bottom: 0; color: #a79dff; }
 .desktop-precision-body { display: grid; flex: 1 1 auto; align-content: start; gap: 9px; min-height: 0; overflow: auto; padding: 9px 11px 12px; }
+.desktop-keyframes { display: grid; gap: 7px; padding: 8px; border: 1px solid #343641; border-radius: 8px; background: #202229; }
+.desktop-keyframes-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.desktop-keyframes-head b { font-size: 9px; }
+.desktop-keyframes-head span,
+.desktop-keyframes > p { margin: 0; color: #858790; font-size: 7px; }
+.desktop-keyframe-form { display: grid; grid-template-columns: 1fr 72px; gap: 5px; }
+.desktop-keyframe-form select,
+.desktop-keyframe-form input,
+.desktop-keyframe-form button,
+.desktop-keyframe-list button { min-width: 0; min-height: 26px; padding: 4px 6px; border: 1px solid #3a3d47; border-radius: 6px; background: #282b34; color: #e8e8eb; font-size: 8px; }
+.desktop-keyframe-form button { grid-column: 1 / -1; border-color: #4a44a8; background: #3a3586; font-weight: 700; }
+.desktop-keyframe-list { display: grid; gap: 4px; }
+.desktop-keyframe-list > div { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 4px; }
+.desktop-keyframe-list .desktop-keyframe-jump { overflow: hidden; color: #c9cad0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-precision-row { display: grid; gap: 4px; }
 .desktop-precision-label { color: #9a9ca4; font-size: 8px; font-weight: 700; letter-spacing: .04em; }
 .desktop-precision-controls { display: flex; gap: 5px; }

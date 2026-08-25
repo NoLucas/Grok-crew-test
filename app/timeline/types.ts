@@ -3,6 +3,16 @@
 // projections of the frozen contract and must not add renderer-only fields.
 
 export type TrackType = 'video' | 'audio' | 'caption' | 'overlay' | 'adjustment';
+export type KeyframeProperty =
+  | 'x' | 'y' | 'scale' | 'rotation'
+  | 'crop_left' | 'crop_right' | 'crop_top' | 'crop_bottom'
+  | 'opacity' | 'volume' | 'speed';
+export type TimelineKeyframe = {
+  id: string;
+  at: number;
+  value: number;
+  interpolation: 'linear' | 'hold';
+};
 
 export type TimelineClip = {
   id: string;
@@ -16,6 +26,7 @@ export type TimelineClip = {
   text?: string;
   transform?: Record<string, number>;
   audio?: Record<string, number | boolean>;
+  keyframes?: Partial<Record<KeyframeProperty, TimelineKeyframe[]>>;
 };
 
 export type TimelineTrack = {

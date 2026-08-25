@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLanguage } from '../language';
+import { TimelineKeyframePanel } from './TimelineKeyframePanel';
 import { adjacentNeighbours, clipEnd, clipLabel, formatTimecode, roundTime } from './geometry';
 import {
   buildMoveOperation,
@@ -175,6 +176,14 @@ export function TimelinePrecisionPanel({
       ) : null}
 
       <div className="desktop-precision-body">
+        <TimelineKeyframePanel
+          timeline={timeline}
+          selected={selected}
+          playhead={playhead}
+          onPlayheadChange={onPlayheadChange}
+          disabled={busy}
+          onRun={onRun}
+        />
         <Row label={t('위치 이동', 'Move to', '移动到', '移動先')}>
           <input
             type="number" min="0" step="0.1" inputMode="decimal" disabled={busy}
