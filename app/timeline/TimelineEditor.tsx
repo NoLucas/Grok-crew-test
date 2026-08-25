@@ -9,6 +9,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { useLanguage } from '../language';
 import { TimelineFeedback } from './TimelineFeedback';
 import { TimelinePrecisionPanel } from './TimelinePrecisionPanel';
+import { historyShortcut } from './history';
+import type { TimelineHistoryAction, TimelineHistoryState } from './history';
 import {
   NUDGE_STEP,
   NUDGE_STEP_LARGE,
@@ -88,6 +90,8 @@ export function TimelineEditor({
   selectedClipIds,
   onSelectClips,
   editing,
+  history,
+  onHistoryAction,
   onAddTrack,
   trackBusy,
 }: {
@@ -95,6 +99,8 @@ export function TimelineEditor({
   selectedClipIds: string[];
   onSelectClips: (clipIds: string[]) => void;
   editing: TimelineEditingController;
+  history: TimelineHistoryState;
+  onHistoryAction: (action: TimelineHistoryAction) => void;
   onAddTrack: (type: TrackType) => void;
   trackBusy: boolean;
 }) {
@@ -113,6 +119,29 @@ export function TimelineEditor({
   const anySolo = useMemo(() => tracks.some((track) => Boolean(track.solo)), [tracks]);
   const selected = useMemo(() => findClip(timeline, selectedClipId), [timeline, selectedClipId]);
   const locked = editing.pending || !editing.available;
+
+  useEffect(() => {
+    const onHistoryKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editingText = Boolean(
+        target?.isContentEditable
+        || target?.closest('input, textarea, select, [contenteditable="true"]'),
+      );
+      const action = historyShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        editingText,
+      });
+      if (!action || (action === 'undo' ? !history.can_undo : !history.can_redo)) return;
+      event.preventDefault();
+      onHistoryAction(action);
+    };
+    window.addEventListener('keydown', onHistoryKey);
+    return () => window.removeEventListener('keydown', onHistoryKey);
+  }, [history.can_redo, history.can_undo, onHistoryAction]);
 
   // Selecting a clip pulls the playhead into it when it sits elsewhere, so the
   // split and trim shortcuts always start from a point inside the clip.
@@ -721,6 +750,24 @@ export function TimelineEditor({
           <b>{t('타임라인 편집', 'Timeline editing', '时间线编辑', 'タイムライン編集')}</b>
           <span>{formatTimecode(timelineDuration(timeline))}</span>
           <span className="desktop-timeline-revision">v{timeline.revision}</span>
+          <button
+            type="button"
+            disabled={trackBusy || !history.can_undo}
+            title={t('실행 취소 (Ctrl/⌘+Z)', 'Undo (Ctrl/⌘+Z)', '撤销 (Ctrl/⌘+Z)', '取り消す (Ctrl/⌘+Z)')}
+            aria-label={t('마지막 편집 실행 취소', 'Undo last edit', '撤销上次编辑', '最後の編集を取り消す')}
+            onClick={() => onHistoryAction('undo')}
+          >
+            ↶ {t('취소', 'Undo', '撤销', '取消')}
+          </button>
+          <button
+            type="button"
+            disabled={trackBusy || !history.can_redo}
+            title={t('다시 실행 (Ctrl/⌘+Shift+Z)', 'Redo (Ctrl/⌘+Shift+Z)', '重做 (Ctrl/⌘+Shift+Z)', 'やり直す (Ctrl/⌘+Shift+Z)')}
+            aria-label={t('취소한 편집 다시 실행', 'Redo last undone edit', '重做已撤销的编辑', '取り消した編集をやり直す')}
+            onClick={() => onHistoryAction('redo')}
+          >
+            ↷ {t('다시', 'Redo', '重做', 'やり直し')}
+          </button>
         </div>
         <div role="group" aria-label={t('편집 도구', 'Edit tool', '编辑工具', '編集ツール')} className="desktop-tool-group">
           {toolOptions.map((option) => (

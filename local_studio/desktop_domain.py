@@ -19,6 +19,7 @@ from db import db, event, row_dict
 
 TIMELINE_SCHEMA = "grok-crew.timeline/v2"
 PATCH_SCHEMA = "grok-crew.timeline-patch/v1"
+HISTORY_SCHEMA = "grok-crew.timeline-history/v1"
 CONTROL_JOB_SCHEMA = "grok-crew.control-job/v1"
 RUNNER_EVENT_SCHEMA = "grok-crew.runner-event/v1"
 PUBLISH_POLICY_SCHEMA = "grok-crew.publish-policy/v1"
@@ -240,6 +241,70 @@ def list_timeline_versions(project_id: str) -> list[dict[str, Any]]:
     with db() as conn:
         rows = conn.execute("SELECT * FROM timeline_versions WHERE project_id = ? ORDER BY revision DESC LIMIT 100", (project_id,)).fetchall()
     return [row_dict(row) or {} for row in rows]
+
+
+def _history_stacks(conn: Any, project_id: str, head_revision: int) -> tuple[list[int], list[int]]:
+    row = conn.execute(
+        "SELECT head_revision, undo_json, redo_json FROM timeline_history WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    if not row or int(row["head_revision"]) != head_revision:
+        # Existing projects predate P1-03. Every chronological revision is a
+        # valid immutable snapshot, so initialise the stack without rewriting it.
+        return list(range(1, head_revision)), []
+    try:
+        undo = [int(value) for value in json.loads(row["undo_json"])]
+        redo = [int(value) for value in json.loads(row["redo_json"])]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return list(range(1, head_revision)), []
+    return undo, redo
+
+
+def _save_history_stacks(
+    conn: Any,
+    project_id: str,
+    head_revision: int,
+    undo: list[int],
+    redo: list[int],
+) -> None:
+    conn.execute(
+        """INSERT INTO timeline_history (project_id, head_revision, undo_json, redo_json, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+            head_revision = excluded.head_revision,
+            undo_json = excluded.undo_json,
+            redo_json = excluded.redo_json,
+            updated_at = excluded.updated_at""",
+        (project_id, head_revision, json.dumps(undo[-250:]), json.dumps(redo[-250:]), utc_now()),
+    )
+
+
+def _record_history_command(conn: Any, project_id: str, base_revision: int, next_revision: int) -> None:
+    undo, _redo = _history_stacks(conn, project_id, base_revision)
+    if not undo or undo[-1] != base_revision:
+        undo.append(base_revision)
+    _save_history_stacks(conn, project_id, next_revision, undo, [])
+
+
+def _history_payload(head_revision: int, undo: list[int], redo: list[int]) -> dict[str, Any]:
+    return {
+        "schema": HISTORY_SCHEMA,
+        "head_revision": head_revision,
+        "can_undo": bool(undo),
+        "can_redo": bool(redo),
+        "undo_count": len(undo),
+        "redo_count": len(redo),
+        "undo_revision": undo[-1] if undo else None,
+        "redo_revision": redo[-1] if redo else None,
+    }
+
+
+def get_timeline_history(project_id: str) -> dict[str, Any]:
+    current = get_timeline(project_id)
+    head_revision = int(current["timeline"]["revision"])
+    with db() as conn:
+        undo, redo = _history_stacks(conn, project_id, head_revision)
+    return _history_payload(head_revision, undo, redo)
 
 
 def _find_track(timeline: dict[str, Any], track_id: Any) -> dict[str, Any]:
@@ -653,9 +718,10 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
                 status=409,
                 details={"expected_revision": latest_revision, "received_revision": base_revision},
             )
+        _record_history_command(conn, project_id, base_revision, next_revision)
         conn.execute("""INSERT INTO timeline_versions
-            (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (version_id, project_id, next_revision, base_revision, json.dumps(timeline), origin, created_by, now))
+            (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at, action_kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'edit')""", (version_id, project_id, next_revision, base_revision, json.dumps(timeline), origin, created_by, now))
         conn.execute("UPDATE projects SET timeline_json = ?, updated_at = ? WHERE id = ?", (json.dumps(timeline), now, project_id))
         row = conn.execute("SELECT * FROM timeline_versions WHERE id = ?", (version_id,)).fetchone()
     event(project_id, None, "timeline_version_created", {"revision": next_revision, "origin": origin, "created_by": created_by, "operation_count": len(operations)})
@@ -664,23 +730,128 @@ def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any
 
 def restore_timeline_version(project_id: str, revision: int, created_by: str = "operator") -> dict[str, Any]:
     current = get_timeline(project_id)
+    current_revision = int(current["timeline"]["revision"])
     with db() as conn:
         row = conn.execute("SELECT * FROM timeline_versions WHERE project_id = ? AND revision = ?", (project_id, revision)).fetchone()
     source = row_dict(row)
     if not source:
         raise ValueError("Timeline version not found.")
     restored = copy.deepcopy(source["timeline_json"])
-    next_revision = int(current["timeline"]["revision"]) + 1
+    next_revision = current_revision + 1
     restored["revision"] = next_revision
     now, version_id = utc_now(), str(uuid.uuid4())
     with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        latest = conn.execute(
+            "SELECT revision FROM timeline_versions WHERE project_id = ? ORDER BY revision DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        latest_revision = int(latest["revision"]) if latest else 0
+        if latest_revision != current_revision:
+            raise TimelinePatchError(
+                "stale_timeline_revision",
+                f"stale_timeline_revision: expected {latest_revision}, received {current_revision}.",
+                status=409,
+                details={"expected_revision": latest_revision, "received_revision": current_revision},
+            )
+        _record_history_command(conn, project_id, current_revision, next_revision)
         conn.execute("""INSERT INTO timeline_versions
-            (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, 'human', ?, ?)""", (version_id, project_id, next_revision, int(current["timeline"]["revision"]), json.dumps(restored), created_by[:80], now))
+            (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at, action_kind, restored_from_revision)
+            VALUES (?, ?, ?, ?, ?, 'human', ?, ?, 'restore', ?)""",
+            (version_id, project_id, next_revision, current_revision, json.dumps(restored), created_by[:80], now, revision))
         conn.execute("UPDATE projects SET timeline_json = ?, updated_at = ? WHERE id = ?", (json.dumps(restored), now, project_id))
         result = conn.execute("SELECT * FROM timeline_versions WHERE id = ?", (version_id,)).fetchone()
     event(project_id, None, "timeline_version_restored", {"source_revision": revision, "revision": next_revision})
     return {"version": row_dict(result), "timeline": restored}
+
+
+def apply_timeline_history_action(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(body, dict) or body.get("schema") != HISTORY_SCHEMA:
+        raise TimelinePatchError("invalid_history_schema", f"schema must be {HISTORY_SCHEMA}.")
+    action = body.get("action")
+    if action not in {"undo", "redo"}:
+        raise TimelinePatchError(
+            "invalid_history_action", "action must be undo or redo.", details={"action": action},
+        )
+    raw_base_revision = body.get("base_revision")
+    if isinstance(raw_base_revision, bool) or not isinstance(raw_base_revision, int) or raw_base_revision < 1:
+        raise TimelinePatchError(
+            "invalid_base_revision", "base_revision must be an integer of at least 1.",
+        )
+    base_revision = raw_base_revision
+    created_by = str(body.get("created_by", "operator")).strip()[:80] or "operator"
+    now, version_id = utc_now(), str(uuid.uuid4())
+
+    with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        latest = conn.execute(
+            "SELECT revision FROM timeline_versions WHERE project_id = ? ORDER BY revision DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        latest_revision = int(latest["revision"]) if latest else 0
+        if latest_revision != base_revision:
+            raise TimelinePatchError(
+                "stale_timeline_revision",
+                f"stale_timeline_revision: expected {latest_revision}, received {base_revision}.",
+                status=409,
+                details={"expected_revision": latest_revision, "received_revision": base_revision},
+            )
+
+        undo, redo = _history_stacks(conn, project_id, latest_revision)
+        source_stack, destination_stack = (undo, redo) if action == "undo" else (redo, undo)
+        if not source_stack:
+            raise TimelinePatchError(
+                "history_action_unavailable",
+                f"There is nothing to {action}.",
+                status=409,
+                details={"action": action, "head_revision": latest_revision},
+            )
+        target_revision = source_stack.pop()
+        destination_stack.append(latest_revision)
+        source = conn.execute(
+            "SELECT timeline_json FROM timeline_versions WHERE project_id = ? AND revision = ?",
+            (project_id, target_revision),
+        ).fetchone()
+        if not source:
+            raise TimelinePatchError(
+                "timeline_item_not_found",
+                "The history target no longer exists.",
+                details={"revision": target_revision},
+            )
+        timeline = copy.deepcopy(json.loads(source["timeline_json"]))
+        next_revision = latest_revision + 1
+        timeline["revision"] = next_revision
+        try:
+            timeline = validate_timeline(timeline)
+        except (TypeError, ValueError) as exc:
+            raise TimelinePatchError("invalid_timeline_result", str(exc)) from exc
+
+        _save_history_stacks(conn, project_id, next_revision, undo, redo)
+        conn.execute("""INSERT INTO timeline_versions
+            (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at, action_kind, restored_from_revision)
+            VALUES (?, ?, ?, ?, ?, 'human', ?, ?, ?, ?)""",
+            (
+                version_id, project_id, next_revision, latest_revision, json.dumps(timeline),
+                created_by, now, action, target_revision,
+            ),
+        )
+        conn.execute(
+            "UPDATE projects SET timeline_json = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(timeline), now, project_id),
+        )
+        result = conn.execute("SELECT * FROM timeline_versions WHERE id = ?", (version_id,)).fetchone()
+
+    event(
+        project_id,
+        None,
+        f"timeline_{action}",
+        {"source_revision": target_revision, "revision": next_revision, "created_by": created_by},
+    )
+    return {
+        "version": row_dict(result),
+        "timeline": timeline,
+        "history": _history_payload(next_revision, undo, redo),
+    }
 
 
 def validate_publish_policy(value: Any) -> dict[str, str]:

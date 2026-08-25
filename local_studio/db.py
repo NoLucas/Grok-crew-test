@@ -80,6 +80,13 @@ def init_db() -> None:
             created_by TEXT NOT NULL, created_at TEXT NOT NULL,
             FOREIGN KEY(project_id) REFERENCES projects(id), UNIQUE(project_id, revision)
         )""")
+        _ensure_column(conn, "timeline_versions", "action_kind", "TEXT NOT NULL DEFAULT 'edit'")
+        _ensure_column(conn, "timeline_versions", "restored_from_revision", "INTEGER")
+        conn.execute("""CREATE TABLE IF NOT EXISTS timeline_history (
+            project_id TEXT PRIMARY KEY, head_revision INTEGER NOT NULL,
+            undo_json TEXT NOT NULL, redo_json TEXT NOT NULL, updated_at TEXT NOT NULL,
+            FOREIGN KEY(project_id) REFERENCES projects(id)
+        )""")
         conn.execute("""CREATE TABLE IF NOT EXISTS control_jobs (
             id TEXT PRIMARY KEY, project_id TEXT NOT NULL, base_revision INTEGER NOT NULL,
             status TEXT NOT NULL, settings_json TEXT NOT NULL, execution_policy TEXT NOT NULL,
@@ -176,7 +183,7 @@ def row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     value = dict(row)
-    for key in ("timeline_json", "payload_json", "result_json", "detail_json", "settings_json", "publish_policy_json", "media_json", "transcript_json", "thumbnails_json", "conflict_json"):
+    for key in ("timeline_json", "payload_json", "result_json", "detail_json", "settings_json", "publish_policy_json", "media_json", "transcript_json", "thumbnails_json", "conflict_json", "undo_json", "redo_json"):
         if key in value and value[key]:
             value[key] = json.loads(value[key])
     return value

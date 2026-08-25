@@ -7,6 +7,8 @@ import { useTimelineEditing } from './timeline/use-timeline-editing';
 import { findClip, timelineDuration } from './timeline/geometry';
 import { buildSplitOperation } from './timeline/operations';
 import type { TimelinePatch } from './timeline/operations';
+import { buildTimelineHistoryAction, emptyTimelineHistory } from './timeline/history';
+import type { TimelineHistoryAction, TimelineHistoryResult, TimelineHistoryState } from './timeline/history';
 import type { Timeline, TrackType } from './timeline/types';
 
 declare global {
@@ -46,7 +48,15 @@ type RunnerEvent = { id: string; control_job_id: string; runner_id: string; sequ
 type NeedsInput = { schema: 'grok-crew.runner-needs-input/v1'; question_id: string; question: string; options: Array<{ value: string; label: string; description?: string }> };
 type Runner = { runner_id: string; display_name: string; status: string; last_seen?: string };
 type MediaItem = { name: string; path: string; kind: string; size_bytes: number; area: string };
-type Version = { id: string; revision: number; origin: string; created_by: string; created_at: string };
+type Version = {
+  id: string;
+  revision: number;
+  origin: string;
+  created_by: string;
+  created_at: string;
+  action_kind?: 'edit' | 'undo' | 'redo' | 'restore';
+  restored_from_revision?: number | null;
+};
 type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[] };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;
@@ -115,6 +125,7 @@ export default function DesktopWorkspace() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
+  const [history, setHistory] = useState<TimelineHistoryState>(() => emptyTimelineHistory());
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const [activePanel, setActivePanel] = useState<'setup' | 'edit' | 'export'>('setup');
   const [method, setMethod] = useState({ ...defaultMethod });
@@ -153,10 +164,16 @@ export default function DesktopWorkspace() {
   }, [api, t]);
 
   const refreshProject = useCallback(async (projectId: string) => {
-    if (!projectId) { setTimeline(null); setVersions([]); setAnalysis(null); return; }
+    if (!projectId) { setTimeline(null); setVersions([]); setHistory(emptyTimelineHistory()); setAnalysis(null); return; }
     try {
-      const [timelineResponse, versionResponse, analysisResponse] = await Promise.all([api(`/api/v2/projects/${projectId}/timeline`), api(`/api/v2/projects/${projectId}/versions`), api(`/api/v2/projects/${projectId}/analysis`)]);
+      const [timelineResponse, versionResponse, historyResponse, analysisResponse] = await Promise.all([
+        api(`/api/v2/projects/${projectId}/timeline`),
+        api(`/api/v2/projects/${projectId}/versions`),
+        api(`/api/v2/projects/${projectId}/history`),
+        api(`/api/v2/projects/${projectId}/analysis`),
+      ]);
       setTimeline(timelineResponse.timeline as Timeline); setVersions(versionResponse.versions as Version[]);
+      setHistory(historyResponse.history as TimelineHistoryState);
       setAnalysis((analysisResponse.analysis as ProjectAnalysis | null) ?? null);
       setSelectedClipIds((current) => {
         const valid = new Set((timelineResponse.timeline as Timeline).tracks.flatMap((track) => track.clips.map((clip) => clip.id)));
@@ -228,6 +245,48 @@ export default function DesktopWorkspace() {
     onApplied: onTimelineApplied,
     onReloadRequired: onTimelineReloadRequired,
   });
+
+  const runTimelineHistoryAction = async (action: TimelineHistoryAction) => {
+    if (!selectedProjectId || !timeline || busy || timelineEditing.pending) return;
+    setBusy(true);
+    try {
+      const result = await api(
+        `/api/v2/projects/${selectedProjectId}/timeline/history`,
+        {
+          method: 'POST',
+          body: JSON.stringify(buildTimelineHistoryAction(timeline.revision, action)),
+        },
+      ) as TimelineHistoryResult;
+      setTimeline(result.timeline);
+      setHistory(result.history);
+      setSelectedClipIds((current) => {
+        const valid = new Set(result.timeline.tracks.flatMap((track) => track.clips.map((clip) => clip.id)));
+        return current.filter((clipId) => valid.has(clipId));
+      });
+      setMessage(action === 'undo'
+        ? t(
+            `마지막 편집을 취소하고 새 버전 v${result.timeline.revision}으로 저장했습니다.`,
+            `Undid the last edit and saved immutable version v${result.timeline.revision}.`,
+            `已撤销上次编辑并保存为不可变版本 v${result.timeline.revision}。`,
+            `最後の編集を取り消し、不変バージョン v${result.timeline.revision} として保存しました。`,
+          )
+        : t(
+            `취소한 편집을 다시 적용하고 새 버전 v${result.timeline.revision}으로 저장했습니다.`,
+            `Redid the edit and saved immutable version v${result.timeline.revision}.`,
+            `已重做编辑并保存为不可变版本 v${result.timeline.revision}。`,
+            `取り消した編集をやり直し、不変バージョン v${result.timeline.revision} として保存しました。`,
+          ));
+      await refreshWorkspace(true);
+      await refreshProject(selectedProjectId);
+    } catch (error) {
+      setMessage(error instanceof Error
+        ? error.message
+        : t('편집 이력을 적용하지 못했습니다.', 'Could not apply edit history.', '无法应用编辑历史。', '編集履歴を適用できませんでした。'));
+      await refreshProject(selectedProjectId);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const createProject = async () => {
     if (!newProject.title.trim() || !newProject.source_path) { setMessage(t('프로젝트 이름과 원본을 선택하세요.', 'Choose a project name and source.', '请选择项目名称和素材。', 'プロジェクト名と素材を選択してください。')); return; }
@@ -417,7 +476,34 @@ export default function DesktopWorkspace() {
           {createOpen && <section className="desktop-create-card"><input value={newProject.title} onChange={(event) => setNewProject({ ...newProject, title: event.target.value })} placeholder={t('프로젝트 이름', 'Project name', '项目名称', 'プロジェクト名')} /><select value={newProject.source_path} onChange={(event) => setNewProject({ ...newProject, source_path: event.target.value })}><option value="">{t('원본 선택', 'Choose source', '选择素材', '素材を選択')}</option>{workspace.media.filter((item) => item.kind === 'video' && item.area === 'inputs').map((item) => <option value={item.path} key={item.path}>{item.name}</option>)}</select><button className="desktop-secondary" disabled={busy} onClick={() => void importMedia()}>{t('내 컴퓨터에서 가져오기', 'Import from computer', '从电脑导入', 'コンピュータから読み込む')}</button><input value={newProject.output_path} onChange={(event) => setNewProject({ ...newProject, output_path: event.target.value })} /><button className="desktop-primary" disabled={busy} onClick={() => void createProject()}>{t('만들기', 'Create', '创建', '作成')}</button></section>}
           <div className="desktop-project-list">{workspace.projects.map((item) => <button className={item.id === selectedProjectId ? 'active' : ''} key={item.id} onClick={() => setSelectedProjectId(item.id)}><span>▣</span><div><b>{item.title}</b><small>v{item.current_revision} · {new Date(item.updated_at).toLocaleDateString()}</small></div></button>)}{!workspace.projects.length && <p>{t('아직 프로젝트가 없습니다.', 'No projects yet.', '暂无项目。', 'プロジェクトはまだありません。')}</p>}</div>
           <div className="desktop-side-head desktop-version-head"><b>{t('버전 기록', 'Versions', '版本', 'バージョン')}</b><span>{versions.length}</span></div>
-          <div className="desktop-version-list">{versions.slice(0, 8).map((version, index) => <button key={version.id} onClick={() => index ? void api(`/api/v2/projects/${selectedProjectId}/timeline/restore`, { method: 'POST', body: JSON.stringify({ revision: version.revision }) }).then(() => refreshProject(selectedProjectId)) : undefined}><b>v{version.revision}</b><span>{version.origin === 'remote_bot' ? 'Grok' : version.origin === 'human' ? t('사용자', 'You', '用户', 'ユーザー') : t('시스템', 'System', '系统', 'システム')}</span>{index > 0 && <small>{t('복원', 'Restore', '恢复', '復元')}</small>}</button>)}</div>
+          <div className="desktop-version-list">{versions.slice(0, 8).map((version, index) => (
+            <button
+              key={version.id}
+              title={version.restored_from_revision ? `v${version.restored_from_revision}` : undefined}
+              onClick={() => index
+                ? void api(`/api/v2/projects/${selectedProjectId}/timeline/restore`, {
+                    method: 'POST',
+                    body: JSON.stringify({ revision: version.revision }),
+                  }).then(() => refreshProject(selectedProjectId))
+                : undefined}
+            >
+              <b>v{version.revision}</b>
+              <span>
+                {version.action_kind === 'undo'
+                  ? t('실행 취소', 'Undo', '撤销', '取り消し')
+                  : version.action_kind === 'redo'
+                    ? t('다시 실행', 'Redo', '重做', 'やり直し')
+                    : version.action_kind === 'restore'
+                      ? t('버전 복원', 'Restore', '恢复版本', 'バージョン復元')
+                      : version.origin === 'remote_bot'
+                        ? 'Grok'
+                        : version.origin === 'human'
+                          ? t('사용자', 'You', '用户', 'ユーザー')
+                          : t('시스템', 'System', '系统', 'システム')}
+              </span>
+              {index > 0 && <small>{t('복원', 'Restore', '恢复', '復元')}</small>}
+            </button>
+          ))}</div>
           <a className="desktop-legacy" href="/production">{t('고급·레거시 도구', 'Advanced & legacy tools', '高级与旧版工具', '高度・レガシーツール')} ↗</a>
         </aside>
 
@@ -495,6 +581,8 @@ export default function DesktopWorkspace() {
           selectedClipIds={selectedClipIds}
           onSelectClips={setSelectedClipIds}
           editing={timelineEditing}
+          history={history}
+          onHistoryAction={(action) => void runTimelineHistoryAction(action)}
           onAddTrack={(type) => void addTrack(type)}
           trackBusy={busy || timelineEditing.pending}
         />

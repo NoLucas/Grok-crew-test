@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-crew.timeline-history/v1",
+  "title": "Grok Crew Timeline History Action v1",
+  "type": "object",
+  "required": ["schema", "base_revision", "action"],
+  "properties": {
+    "schema": { "const": "grok-crew.timeline-history/v1" },
+    "base_revision": { "type": "integer", "minimum": 1 },
+    "action": { "enum": ["undo", "redo"] },
+    "created_by": { "type": "string", "minLength": 1, "maxLength": 80 }
+  },
+  "additionalProperties": false
+}
