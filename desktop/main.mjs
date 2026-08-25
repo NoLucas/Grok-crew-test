@@ -131,6 +131,51 @@ function registerIpc(apiBase) {
     return payload;
   };
   ipcMain.handle('studio:request', async (_event, value) => request(String(value?.path ?? ''), value));
+  ipcMain.handle('timeline:apply-patch', async (_event, projectId, timelinePatch) => {
+    const safeProjectId = String(projectId ?? '').trim();
+    if (!safeProjectId || safeProjectId.length > 120 || !/^[A-Za-z0-9_.-]+$/.test(safeProjectId)) {
+      return {
+        ok: false, status: 0,
+        error: { code: 'invalid_project_id', message: 'A valid project ID is required.', details: {} },
+      };
+    }
+    if (!timelinePatch || typeof timelinePatch !== 'object' || Array.isArray(timelinePatch)) {
+      return {
+        ok: false, status: 0,
+        error: { code: 'invalid_patch', message: 'Timeline patch must be an object.', details: {} },
+      };
+    }
+    try {
+      const patchBody = JSON.stringify(timelinePatch);
+      if (Buffer.byteLength(patchBody) > 2 * 1024 * 1024) {
+        return {
+          ok: false, status: 0,
+          error: { code: 'timeline_patch_too_large', message: 'Timeline patch is too large.', details: { maximum_bytes: 2 * 1024 * 1024 } },
+        };
+      }
+      const response = await fetch(`${apiBase}/api/v2/projects/${safeProjectId}/timeline/patch`, {
+        method: 'POST',
+        body: patchBody,
+        headers: { Authorization: `Bearer ${studioToken}`, 'Content-Type': 'application/json' },
+      });
+      const payload = await response.json();
+      if (response.ok) return { ok: true, status: response.status, value: payload };
+      return {
+        ok: false,
+        status: response.status,
+        error: {
+          code: String(payload.code ?? 'timeline_patch_failed'),
+          message: String(payload.error ?? `Local Studio ${response.status}`),
+          details: payload.details && typeof payload.details === 'object' ? payload.details : {},
+        },
+      };
+    } catch {
+      return {
+        ok: false, status: 0,
+        error: { code: 'timeline_patch_transport_error', message: 'The local editing service is unavailable.', details: {} },
+      };
+    }
+  });
   ipcMain.handle('desktop:select-media', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'mkv', 'webm', 'mp3', 'wav', 'png', 'jpg', 'jpeg', 'webp'] }] });
     if (result.canceled) return null;

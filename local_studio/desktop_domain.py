@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import uuid
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,27 @@ RUNNER_STAGES = {"connected", "claimed", "analyzing", "planning", "needs_input",
 RUNNER_STATUSES = {"active", "waiting", "succeeded", "failed", "cancelled"}
 EXECUTION_POLICIES = {"auto_edit_render", "review_before_render"}
 PUBLISH_MODES = {"export_only", "ask", "auto"}
+TIMELINE_EPSILON = 0.000001
+
+
+class TimelinePatchError(ValueError):
+    """A stable, renderer-safe error contract for Timeline v2 patch failures."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status: int = 400,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status = status
+        self.details = details or {}
+
+    def payload(self) -> dict[str, Any]:
+        return {"error": str(self), "code": self.code, "details": self.details}
 
 
 def default_publish_policy() -> dict[str, str]:
@@ -189,7 +211,7 @@ def list_timeline_versions(project_id: str) -> list[dict[str, Any]]:
 def _find_track(timeline: dict[str, Any], track_id: Any) -> dict[str, Any]:
     value = next((track for track in timeline["tracks"] if track.get("id") == track_id), None)
     if not value:
-        raise ValueError("Track not found.")
+        raise TimelinePatchError("timeline_item_not_found", "Track not found.", details={"track_id": track_id})
     return value
 
 
@@ -198,100 +220,350 @@ def _find_clip(timeline: dict[str, Any], clip_id: Any) -> tuple[dict[str, Any], 
         clip = next((item for item in track["clips"] if item.get("id") == clip_id), None)
         if clip:
             return track, clip
-    raise ValueError("Clip not found.")
+    raise TimelinePatchError("timeline_item_not_found", "Clip not found.", details={"clip_id": clip_id})
 
 
-def _assert_mutable(track: dict[str, Any], clip: dict[str, Any] | None, origin: str) -> None:
-    if origin == "remote_bot" and (track.get("locked") or (clip and clip.get("locked"))):
-        raise ValueError("Remote bot cannot modify a locked track or clip.")
+def _assert_mutable(track: dict[str, Any], clip: dict[str, Any] | None = None) -> None:
+    if track.get("locked"):
+        raise TimelinePatchError(
+            "timeline_item_locked", "A locked track cannot be modified.",
+            details={"track_id": track.get("id"), "clip_id": clip.get("id") if clip else None},
+        )
+    if clip and clip.get("locked"):
+        raise TimelinePatchError(
+            "timeline_item_locked", "A locked clip cannot be modified.",
+            details={"track_id": track.get("id"), "clip_id": clip.get("id")},
+        )
+
+
+def _assert_update_mutable(
+    track: dict[str, Any],
+    clip: dict[str, Any] | None,
+    changes: dict[str, Any],
+    origin: str,
+) -> None:
+    target = clip if clip is not None else track
+    explicit_human_unlock = (
+        origin in {"human", "local_system"}
+        and target.get("locked")
+        and changes == {"locked": False}
+        and not (clip is not None and track.get("locked"))
+    )
+    if not explicit_human_unlock:
+        _assert_mutable(track, clip)
+
+
+def _number(value: Any, field: str, *, minimum: float | None = None) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TimelinePatchError("invalid_operation", f"{field} must be a finite number.", details={"field": field})
+    result = float(value)
+    if not math.isfinite(result):
+        raise TimelinePatchError("invalid_operation", f"{field} must be a finite number.", details={"field": field})
+    if minimum is not None and result < minimum:
+        raise TimelinePatchError(
+            "invalid_time_range", f"{field} must be at least {minimum}.",
+            details={"field": field, "minimum": minimum, "received": result},
+        )
+    return result
+
+
+def _clip_end(clip: dict[str, Any]) -> float:
+    return float(clip["timeline_start"]) + float(clip["duration"])
+
+
+def _assert_touching(left: dict[str, Any], right: dict[str, Any]) -> None:
+    if abs(_clip_end(left) - float(right["timeline_start"])) > TIMELINE_EPSILON:
+        raise TimelinePatchError(
+            "clips_not_adjacent", "The clips must touch at the same edit point.",
+            details={"left_clip_id": left.get("id"), "right_clip_id": right.get("id")},
+        )
+
+
+def _validate_source_window(timeline: dict[str, Any], clip: dict[str, Any], *, required: bool = False) -> None:
+    has_in, has_out = "source_in" in clip, "source_out" in clip
+    if not has_in and not has_out and not required:
+        return
+    if not has_in or not has_out:
+        raise TimelinePatchError(
+            "invalid_source_range", "The clip requires both source_in and source_out.",
+            details={"clip_id": clip.get("id")},
+        )
+    source_in = _number(clip.get("source_in"), "source_in", minimum=0)
+    source_out = _number(clip.get("source_out"), "source_out", minimum=0)
+    if source_out - source_in <= TIMELINE_EPSILON:
+        raise TimelinePatchError(
+            "invalid_source_range", "source_out must be greater than source_in.",
+            details={"clip_id": clip.get("id"), "source_in": source_in, "source_out": source_out},
+        )
+    asset = next((item for item in timeline["assets"] if item.get("id") == clip.get("asset_id")), None)
+    if asset and asset.get("duration") is not None:
+        asset_duration = _number(asset.get("duration"), "asset.duration", minimum=0)
+        if source_out - asset_duration > TIMELINE_EPSILON:
+            raise TimelinePatchError(
+                "source_range_exceeds_asset", "The source range exceeds the asset duration.",
+                details={"clip_id": clip.get("id"), "source_out": source_out, "asset_duration": asset_duration},
+            )
+
+
+def _apply_trim(timeline: dict[str, Any], clip: dict[str, Any], edge: Any, at: Any) -> float:
+    boundary = _number(at, "at", minimum=0)
+    old_start, old_end = float(clip["timeline_start"]), _clip_end(clip)
+    if boundary - old_start <= TIMELINE_EPSILON or old_end - boundary <= TIMELINE_EPSILON:
+        raise TimelinePatchError(
+            "invalid_time_range", "The trim point must be strictly inside the clip.",
+            details={"clip_id": clip.get("id"), "start": old_start, "end": old_end, "at": boundary},
+        )
+    if edge == "start":
+        delta = boundary - old_start
+        clip["timeline_start"] = boundary
+        clip["duration"] = old_end - boundary
+        if "source_in" in clip:
+            clip["source_in"] = float(clip["source_in"]) + delta
+    elif edge == "end":
+        delta = boundary - old_end
+        clip["duration"] = boundary - old_start
+        if "source_out" in clip:
+            clip["source_out"] = float(clip["source_out"]) + delta
+    else:
+        raise TimelinePatchError(
+            "invalid_operation", "edge must be start or end.",
+            details={"field": "edge", "received": edge},
+        )
+    _validate_source_window(timeline, clip)
+    return delta
+
+
+def _same_track(
+    timeline: dict[str, Any],
+    first_id: Any,
+    second_id: Any,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    first_track, first = _find_clip(timeline, first_id)
+    second_track, second = _find_clip(timeline, second_id)
+    if first_track["id"] != second_track["id"]:
+        raise TimelinePatchError(
+            "clips_on_different_tracks", "The clips must be on the same track.",
+            details={"first_clip_id": first_id, "second_clip_id": second_id},
+        )
+    return first_track, first, second
 
 
 def apply_timeline_patch(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(body, dict):
+        raise TimelinePatchError("invalid_patch", "Timeline patch must be an object.")
     if body.get("schema") != PATCH_SCHEMA:
-        raise ValueError(f"schema must be {PATCH_SCHEMA}.")
+        raise TimelinePatchError("invalid_patch_schema", f"schema must be {PATCH_SCHEMA}.")
     origin = str(body.get("origin", "human"))
     if origin not in ORIGINS:
-        raise ValueError("Unsupported timeline origin.")
+        raise TimelinePatchError("invalid_patch_origin", "Unsupported timeline origin.", details={"origin": origin})
     current = get_timeline(project_id)
     timeline = copy.deepcopy(current["timeline"])
-    base_revision = int(body.get("base_revision", 0))
+    raw_base_revision = body.get("base_revision")
+    if isinstance(raw_base_revision, bool) or not isinstance(raw_base_revision, int) or raw_base_revision < 1:
+        raise TimelinePatchError("invalid_base_revision", "base_revision must be an integer of at least 1.")
+    base_revision = raw_base_revision
     if base_revision != int(timeline["revision"]):
-        raise ValueError(f"stale_timeline_revision: expected {timeline['revision']}, received {base_revision}.")
+        raise TimelinePatchError(
+            "stale_timeline_revision",
+            f"stale_timeline_revision: expected {timeline['revision']}, received {base_revision}.",
+            status=409,
+            details={"expected_revision": int(timeline["revision"]), "received_revision": base_revision},
+        )
     operations = body.get("operations")
     if not isinstance(operations, list) or not operations:
-        raise ValueError("operations must be a non-empty array.")
+        raise TimelinePatchError("invalid_operations", "operations must be a non-empty array.")
     if len(operations) > 250:
-        raise ValueError("A timeline patch may contain up to 250 operations.")
-    for operation in operations:
+        raise TimelinePatchError("too_many_operations", "A timeline patch may contain up to 250 operations.", details={"maximum": 250})
+    for operation_index, operation in enumerate(operations):
         if not isinstance(operation, dict):
-            raise ValueError("Every operation must be an object.")
+            raise TimelinePatchError(
+                "invalid_operation", "Every operation must be an object.",
+                details={"operation_index": operation_index},
+            )
         kind = operation.get("op")
-        if kind == "add_track":
-            track = copy.deepcopy(operation.get("track"))
-            if not isinstance(track, dict):
-                raise ValueError("add_track requires track.")
-            timeline["tracks"].append(track)
-        elif kind == "update_track":
-            track = _find_track(timeline, operation.get("track_id")); _assert_mutable(track, None, origin)
-            changes = operation.get("changes")
-            if not isinstance(changes, dict): raise ValueError("update_track requires changes.")
-            if origin == "remote_bot" and changes.get("locked") is False and track.get("locked"):
-                raise ValueError("Remote bot cannot unlock a track.")
-            track.update({key: value for key, value in changes.items() if key not in {"id", "clips"}})
-        elif kind == "remove_track":
-            track = _find_track(timeline, operation.get("track_id")); _assert_mutable(track, None, origin)
-            timeline["tracks"].remove(track)
-        elif kind == "add_clip":
-            track = _find_track(timeline, operation.get("track_id")); _assert_mutable(track, None, origin)
-            clip = copy.deepcopy(operation.get("clip"))
-            if not isinstance(clip, dict): raise ValueError("add_clip requires clip.")
-            track["clips"].append(clip)
-        elif kind == "update_clip":
-            track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip, origin)
-            changes = operation.get("changes")
-            if not isinstance(changes, dict): raise ValueError("update_clip requires changes.")
-            if origin == "remote_bot" and changes.get("locked") is False and clip.get("locked"):
-                raise ValueError("Remote bot cannot unlock a clip.")
-            clip.update({key: value for key, value in changes.items() if key != "id"})
-        elif kind == "move_clip":
-            source_track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(source_track, clip, origin)
-            target_track = _find_track(timeline, operation.get("track_id", source_track["id"])); _assert_mutable(target_track, None, origin)
-            source_track["clips"].remove(clip); target_track["clips"].append(clip)
-            clip["timeline_start"] = float(operation.get("timeline_start", clip["timeline_start"]))
-        elif kind == "remove_clip":
-            track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip, origin)
-            track["clips"].remove(clip)
-        elif kind == "split_clip":
-            track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip, origin)
-            split_at = float(operation.get("at", -1)); relative = split_at - float(clip["timeline_start"])
-            if relative <= 0 or relative >= float(clip["duration"]): raise ValueError("Split point must be inside the clip.")
-            left, right = copy.deepcopy(clip), copy.deepcopy(clip)
-            left["id"] = _safe_identifier(operation.get("left_id", f"{clip['id']}-a"), "left_id")
-            right["id"] = _safe_identifier(operation.get("right_id", f"{clip['id']}-b"), "right_id")
-            left["duration"] = relative
-            right["timeline_start"], right["duration"] = split_at, float(clip["duration"]) - relative
-            if "source_in" in clip:
-                left["source_out"] = float(clip.get("source_in", 0)) + relative
-                right["source_in"] = left["source_out"]
-            index = track["clips"].index(clip); track["clips"][index:index + 1] = [left, right]
-        elif kind == "set_settings":
-            changes = operation.get("changes")
-            if not isinstance(changes, dict): raise ValueError("set_settings requires changes.")
-            timeline["settings"].update(changes)
-        elif kind == "add_marker":
-            marker = copy.deepcopy(operation.get("marker"))
-            if not isinstance(marker, dict): raise ValueError("add_marker requires marker.")
-            timeline["markers"].append(marker)
-        elif kind == "remove_marker":
-            timeline["markers"] = [marker for marker in timeline["markers"] if marker.get("id") != operation.get("marker_id")]
-        else:
-            raise ValueError(f"Unsupported timeline operation: {kind}")
+        try:
+            if kind == "add_track":
+                track = copy.deepcopy(operation.get("track"))
+                if not isinstance(track, dict):
+                    raise TimelinePatchError("invalid_operation", "add_track requires track.", details={"field": "track"})
+                timeline["tracks"].append(track)
+            elif kind == "update_track":
+                track = _find_track(timeline, operation.get("track_id"))
+                changes = operation.get("changes")
+                if not isinstance(changes, dict) or not changes:
+                    raise TimelinePatchError("invalid_operation", "update_track requires non-empty changes.", details={"field": "changes"})
+                _assert_update_mutable(track, None, changes, origin)
+                track.update({key: value for key, value in changes.items() if key not in {"id", "clips"}})
+            elif kind == "remove_track":
+                track = _find_track(timeline, operation.get("track_id")); _assert_mutable(track)
+                timeline["tracks"].remove(track)
+            elif kind == "add_clip":
+                track = _find_track(timeline, operation.get("track_id")); _assert_mutable(track)
+                clip = copy.deepcopy(operation.get("clip"))
+                if not isinstance(clip, dict):
+                    raise TimelinePatchError("invalid_operation", "add_clip requires clip.", details={"field": "clip"})
+                track["clips"].append(clip)
+            elif kind == "update_clip":
+                track, clip = _find_clip(timeline, operation.get("clip_id"))
+                changes = operation.get("changes")
+                if not isinstance(changes, dict) or not changes:
+                    raise TimelinePatchError("invalid_operation", "update_clip requires non-empty changes.", details={"field": "changes"})
+                _assert_update_mutable(track, clip, changes, origin)
+                clip.update({key: value for key, value in changes.items() if key != "id"})
+                clip["timeline_start"] = _number(clip.get("timeline_start"), "timeline_start", minimum=0)
+                clip["duration"] = _number(clip.get("duration"), "duration")
+                if clip["duration"] <= TIMELINE_EPSILON:
+                    raise TimelinePatchError(
+                        "invalid_time_range", "duration must be greater than zero.",
+                        details={"field": "duration", "received": clip["duration"]},
+                    )
+                _validate_source_window(timeline, clip)
+            elif kind == "move_clip":
+                source_track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(source_track, clip)
+                target_track = _find_track(timeline, operation.get("track_id", source_track["id"])); _assert_mutable(target_track)
+                if source_track["id"] != target_track["id"]:
+                    source_track["clips"].remove(clip); target_track["clips"].append(clip)
+                clip["timeline_start"] = _number(operation.get("timeline_start"), "timeline_start", minimum=0)
+            elif kind == "trim_clip":
+                track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip)
+                _apply_trim(timeline, clip, operation.get("edge"), operation.get("at"))
+            elif kind == "remove_clip":
+                track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip)
+                track["clips"].remove(clip)
+            elif kind == "split_clip":
+                track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip)
+                split_at = _number(operation.get("at"), "at", minimum=0)
+                relative = split_at - float(clip["timeline_start"])
+                if relative <= TIMELINE_EPSILON or float(clip["duration"]) - relative <= TIMELINE_EPSILON:
+                    raise TimelinePatchError(
+                        "invalid_time_range", "The split point must be strictly inside the clip.",
+                        details={"clip_id": clip.get("id"), "at": split_at},
+                    )
+                left, right = copy.deepcopy(clip), copy.deepcopy(clip)
+                try:
+                    left["id"] = _safe_identifier(operation.get("left_id", f"{clip['id']}-a"), "left_id")
+                    right["id"] = _safe_identifier(operation.get("right_id", f"{clip['id']}-b"), "right_id")
+                except ValueError as exc:
+                    raise TimelinePatchError("invalid_operation", str(exc)) from exc
+                left["duration"] = relative
+                right["timeline_start"], right["duration"] = split_at, float(clip["duration"]) - relative
+                if "source_in" in clip and "source_out" in clip:
+                    left["source_out"] = float(clip["source_in"]) + relative
+                    right["source_in"] = left["source_out"]
+                    _validate_source_window(timeline, left); _validate_source_window(timeline, right)
+                index = track["clips"].index(clip); track["clips"][index:index + 1] = [left, right]
+            elif kind == "ripple_trim":
+                track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip)
+                if operation.get("edge") != "end":
+                    raise TimelinePatchError(
+                        "invalid_operation", "ripple_trim currently supports edge=end only.",
+                        details={"field": "edge", "received": operation.get("edge")},
+                    )
+                old_end = _clip_end(clip)
+                followers = [
+                    item for item in track["clips"]
+                    if item is not clip and float(item["timeline_start"]) >= old_end - TIMELINE_EPSILON
+                ]
+                for follower in followers:
+                    _assert_mutable(track, follower)
+                delta = _apply_trim(timeline, clip, "end", operation.get("at"))
+                for follower in followers:
+                    follower["timeline_start"] = float(follower["timeline_start"]) + delta
+            elif kind == "roll_edit":
+                track, left, right = _same_track(timeline, operation.get("left_clip_id"), operation.get("right_clip_id"))
+                _assert_mutable(track, left); _assert_mutable(track, right); _assert_touching(left, right)
+                boundary = _number(operation.get("at"), "at", minimum=0)
+                outer_start, outer_end = float(left["timeline_start"]), _clip_end(right)
+                if boundary - outer_start <= TIMELINE_EPSILON or outer_end - boundary <= TIMELINE_EPSILON:
+                    raise TimelinePatchError(
+                        "invalid_time_range", "The roll point must keep both clips longer than zero.",
+                        details={"at": boundary, "outer_start": outer_start, "outer_end": outer_end},
+                    )
+                delta = boundary - _clip_end(left)
+                left["duration"] = boundary - outer_start
+                right["timeline_start"] = boundary
+                right["duration"] = outer_end - boundary
+                if "source_out" in left: left["source_out"] = float(left["source_out"]) + delta
+                if "source_in" in right: right["source_in"] = float(right["source_in"]) + delta
+                _validate_source_window(timeline, left); _validate_source_window(timeline, right)
+            elif kind == "slip_clip":
+                track, clip = _find_clip(timeline, operation.get("clip_id")); _assert_mutable(track, clip)
+                _validate_source_window(timeline, clip, required=True)
+                source_span = float(clip["source_out"]) - float(clip["source_in"])
+                clip["source_in"] = _number(operation.get("source_in"), "source_in", minimum=0)
+                clip["source_out"] = float(clip["source_in"]) + source_span
+                _validate_source_window(timeline, clip, required=True)
+            elif kind == "slide_clip":
+                previous_track, previous, selected = _same_track(
+                    timeline, operation.get("previous_clip_id"), operation.get("clip_id"),
+                )
+                next_track, selected_again, following = _same_track(
+                    timeline, operation.get("clip_id"), operation.get("next_clip_id"),
+                )
+                if previous_track["id"] != next_track["id"] or selected is not selected_again:
+                    raise TimelinePatchError("clips_on_different_tracks", "All slide clips must be on the same track.")
+                _assert_mutable(previous_track, previous); _assert_mutable(previous_track, selected); _assert_mutable(previous_track, following)
+                _assert_touching(previous, selected); _assert_touching(selected, following)
+                new_start = _number(operation.get("timeline_start"), "timeline_start", minimum=0)
+                delta = new_start - float(selected["timeline_start"])
+                previous_duration = float(previous["duration"]) + delta
+                following_duration = float(following["duration"]) - delta
+                if previous_duration <= TIMELINE_EPSILON or following_duration <= TIMELINE_EPSILON:
+                    raise TimelinePatchError(
+                        "invalid_time_range", "The slide must keep both neighboring clips longer than zero.",
+                        details={"timeline_start": new_start},
+                    )
+                previous["duration"] = previous_duration
+                selected["timeline_start"] = new_start
+                following["timeline_start"] = float(following["timeline_start"]) + delta
+                following["duration"] = following_duration
+                if "source_out" in previous: previous["source_out"] = float(previous["source_out"]) + delta
+                if "source_in" in following: following["source_in"] = float(following["source_in"]) + delta
+                _validate_source_window(timeline, previous); _validate_source_window(timeline, following)
+            elif kind == "set_settings":
+                changes = operation.get("changes")
+                if not isinstance(changes, dict) or not changes:
+                    raise TimelinePatchError("invalid_operation", "set_settings requires non-empty changes.", details={"field": "changes"})
+                timeline["settings"].update(changes)
+            elif kind == "add_marker":
+                marker = copy.deepcopy(operation.get("marker"))
+                if not isinstance(marker, dict):
+                    raise TimelinePatchError("invalid_operation", "add_marker requires marker.", details={"field": "marker"})
+                timeline["markers"].append(marker)
+            elif kind == "remove_marker":
+                timeline["markers"] = [marker for marker in timeline["markers"] if marker.get("id") != operation.get("marker_id")]
+            else:
+                raise TimelinePatchError(
+                    "unsupported_operation", f"Unsupported timeline operation: {kind}",
+                    details={"op": kind},
+                )
+        except TimelinePatchError as exc:
+            raise TimelinePatchError(
+                exc.code, str(exc), status=exc.status,
+                details={"operation_index": operation_index, "op": kind, **exc.details},
+            ) from exc
     next_revision = base_revision + 1
     timeline["revision"] = next_revision
-    timeline = validate_timeline(timeline)
+    try:
+        timeline = validate_timeline(timeline)
+    except (TypeError, ValueError) as exc:
+        raise TimelinePatchError("invalid_timeline_result", str(exc)) from exc
     version_id, now = str(uuid.uuid4()), utc_now()
     created_by = str(body.get("created_by", origin)).strip()[:80] or origin
     with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        latest = conn.execute(
+            "SELECT revision FROM timeline_versions WHERE project_id = ? ORDER BY revision DESC LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        latest_revision = int(latest["revision"]) if latest else 0
+        if latest_revision != base_revision:
+            raise TimelinePatchError(
+                "stale_timeline_revision",
+                f"stale_timeline_revision: expected {latest_revision}, received {base_revision}.",
+                status=409,
+                details={"expected_revision": latest_revision, "received_revision": base_revision},
+            )
         conn.execute("""INSERT INTO timeline_versions
             (id, project_id, revision, parent_revision, timeline_json, origin, created_by, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (version_id, project_id, next_revision, base_revision, json.dumps(timeline), origin, created_by, now))
