@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and publish"
+        required: true
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -13,8 +19,12 @@ jobs:
     name: Build GrokCrew-Windows.exe
     runs-on: windows-latest
     timeout-minutes: 90
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -35,17 +45,21 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --win --publish never
+      - name: Show release artifacts
+        shell: pwsh
+        run: Get-ChildItem release | Format-Table Name, Length
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Grok Crew ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Grok Crew ${{ env.RELEASE_TAG }}
           body_path: docs/RELEASE_NOTES.v1.0.md
           files: |
             release/GrokCrew-Windows.exe
             release/GrokCrew-Windows.exe.blockmap
             release/latest.yml
             release/GrokCrew-bot-pack.zip
+          fail_on_unmatched_files: true
           draft: false
           make_latest: true
         env:
