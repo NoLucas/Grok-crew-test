@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import attach_spec_project, get_spec, normalize_door
+from edit_spec import attach_spec_project, get_spec, normalize_agent, normalize_door, resolve_sender
 
 BUNDLE_SCHEMA = "local-video-workspace.project-bundle/v1"
 ALLOWED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
@@ -164,17 +164,28 @@ def apply_package_local(
                 "door": package_door,
             }
     spec_id = str(project.get("edit_spec_id") or "").strip()
-    if spec_id:
-        record = get_spec(spec_id)
-        if record:
-            spec_door = normalize_door(record.get("door") or (record.get("spec") or {}).get("door"))
-            if spec_door != package_door:
-                return {
-                    "ok": False,
-                    "folder": folder.name,
-                    "reason": f"edit_spec_id belongs to the {spec_door} door, not {package_door}",
-                    "door": package_door,
-                }
+    spec_record = get_spec(spec_id) if spec_id else None
+    if spec_record:
+        spec_door = normalize_door(spec_record.get("door") or (spec_record.get("spec") or {}).get("door"))
+        if spec_door != package_door:
+            return {
+                "ok": False,
+                "folder": folder.name,
+                "reason": f"edit_spec_id belongs to the {spec_door} door, not {package_door}",
+                "door": package_door,
+            }
+    spec_payload = spec_record.get("spec") if spec_record and isinstance(spec_record.get("spec"), dict) else {}
+    try:
+        _door, sender = resolve_sender(
+            {**project, "door": package_door},
+            {"door": package_door, "agent": spec_record.get("agent") if spec_record else spec_payload.get("agent")},
+        )
+        sender = normalize_agent(sender, package_door)
+    except ValueError as exc:
+        return {"ok": False, "folder": folder.name, "reason": str(exc), "door": package_door}
+    project["door"] = package_door
+    project["created_by"] = sender
+    project["agent"] = sender
     try:
         copied = copy_package_media(folder, workspace, project)
     except RuntimeError as exc:
@@ -194,6 +205,7 @@ def apply_package_local(
         "copied": copied,
         "edit_spec_id": spec_id or None,
         "door": package_door,
+        "agent": sender,
     }
 
 
@@ -256,14 +268,14 @@ def write_demo_package(spec_id: str | None = None, door: str | None = None) -> d
         raise ValueError("The bundled sample clip is missing, so a demo package cannot be written.")
     title = "Bot-delivered cut"
     resolved_door = normalize_door(door) if door else "grok"
-    agent = "Grok" if resolved_door == "grok" else "agent"
+    agent = normalize_agent(None, resolved_door)
     if spec_id:
         record = get_spec(spec_id)
         if record:
             title = str(record.get("title") or title)
             spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
             resolved_door = normalize_door(record.get("door") or spec.get("door") or resolved_door)
-            agent = str(record.get("agent") or spec.get("agent") or agent)
+            agent = normalize_agent(record.get("agent") or spec.get("agent"), resolved_door)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
     folder = door_inbox_dir(resolved_door) / f"{stamp}-{resolved_door}-source"
     folder.mkdir(parents=True, exist_ok=False)
@@ -279,7 +291,8 @@ def write_demo_package(spec_id: str | None = None, door: str | None = None) -> d
             "caption": str(manifest.get("caption") or ""),
             "edit_spec_id": spec_id or "",
             "door": resolved_door,
-            "created_by": "grok" if resolved_door == "grok" else agent,
+            "created_by": agent,
+            "agent": agent,
         },
         "jobs": [{"kind": "render", "approved": True, "payload": {}}],
         "artifacts": [],
@@ -290,6 +303,7 @@ def write_demo_package(spec_id: str | None = None, door: str | None = None) -> d
         "path": str(folder),
         "edit_spec_id": spec_id or None,
         "door": resolved_door,
+        "agent": agent,
         "inbox_dir": str(door_inbox_dir(resolved_door)),
     }
 

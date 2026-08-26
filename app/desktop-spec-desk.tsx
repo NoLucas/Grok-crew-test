@@ -47,7 +47,7 @@ type SpecDeskProps = {
   sampleAvailable: boolean;
   onOpenSample: () => void;
   onOpenOwnFootage: () => void;
-  onImported: (projectId: string) => Promise<void>;
+  onImported: (projectId: string, sender?: { door: DoorId; agent: string }) => Promise<void>;
   onRefresh: () => Promise<void>;
   request: (path: string, init?: RequestInit) => Promise<JsonObject>;
 };
@@ -98,7 +98,7 @@ function DoorCard({
   pendingCount: number;
   busy: boolean;
   studioReady: boolean;
-  onImported: (projectId: string) => Promise<void>;
+  onImported: (projectId: string, sender?: { door: DoorId; agent: string }) => Promise<void>;
   onRefresh: () => Promise<void>;
   request: (path: string, init?: RequestInit) => Promise<JsonObject>;
 }) {
@@ -176,10 +176,11 @@ function DoorCard({
           edit_spec_id: activeSpecId || waiting[0]?.id || '',
         }),
       });
-      const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string } }> : [];
+      const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string; handoff_agent?: string }; agent?: string; door?: string }> : [];
       const projectId = imported[0]?.project?.id;
       if (projectId) {
-        await onImported(projectId);
+        const agent = String(imported[0]?.agent || imported[0]?.project?.handoff_agent || (door === 'grok' ? 'Grok' : 'agent'));
+        await onImported(projectId, { door, agent });
         return;
       }
       if (demo) {
@@ -225,7 +226,14 @@ function DoorCard({
         {!grokDoor ? (
           <label className="desktop-spec-field">
             <span>{t('에이전트 이름', 'Agent name', '代理名称', 'エージェント名')}</span>
-            <input value={draft.agent} onChange={(event) => setDraft({ ...draft, agent: event.target.value })} placeholder="Claude / Codex / ChatGPT" />
+            <input list="agent-names" value={draft.agent} onChange={(event) => setDraft({ ...draft, agent: event.target.value })} placeholder="Claude / Codex / ChatGPT" />
+            <datalist id="agent-names">
+              <option value="Claude" />
+              <option value="Codex" />
+              <option value="ChatGPT" />
+              <option value="Gemini" />
+              <option value="Cursor" />
+            </datalist>
           </label>
         ) : null}
         <div className="desktop-spec-row">
@@ -307,6 +315,7 @@ function DoorCard({
       {error ? <p className="desktop-spec-error" role="alert">{error}</p> : null}
       <p className="desktop-spec-meta">
         {t(`대기 ${waiting.length} · 받은 컷 ${received.length} · 폴더 ${pendingCount}`, `${waiting.length} waiting · ${received.length} received · ${pendingCount} folders`, `等待 ${waiting.length} · 已收 ${received.length} · 文件夹 ${pendingCount}`, `待ち ${waiting.length} · 受取 ${received.length} · フォルダ ${pendingCount}`)}
+        {received[0]?.agent ? ` · ${received.map((item) => item.agent).filter(Boolean).slice(0, 3).join(', ')}` : ''}
       </p>
     </section>
   );

@@ -52,7 +52,7 @@
         "caption": "Instagram 文案,最多 2200 字符",
         "edit_spec_id": "履行操作者规格时必填 — 复制对方发来的 id",
         "door": "必填：grok 或 agent。必须与收件箱文件夹和规格一致",
-        "created_by": "Grok 门写 grok；其他代理门写你的名字",
+        "created_by": "工作台用这个名字标记送来的人。Grok 门写 grok。其他代理门写 Claude、Codex、ChatGPT、Gemini、Cursor 或你的名字",
         "handoff_auto_upload_requested": "布尔值,可选——参见下方 auto_upload_policy"
       },
       "jobs": [

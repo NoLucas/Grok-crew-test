@@ -52,7 +52,7 @@
         "caption": "Instagram 캡션, 최대 2200자",
         "edit_spec_id": "운영자 규격을 이행할 때 필수 — 받은 글에 있는 id를 그대로 넣습니다",
         "door": "필수: grok 또는 agent. 인박스 폴더와 규격과 같아야 합니다",
-        "created_by": "Grok 문이면 grok, 다른 에이전트 문이면 당신 이름",
+        "created_by": "이 데스크가 보낸 사람을 구분하는 이름. Grok 문은 grok. 다른 에이전트 문은 Claude, Codex, ChatGPT, Gemini, Cursor, 또는 당신 이름",
         "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
       },
       "jobs": [

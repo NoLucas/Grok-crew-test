@@ -3,7 +3,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from edit_spec import create_spec, spec_brief
+from edit_spec import create_spec, normalize_agent, resolve_sender, spec_brief
 from handoff_inbox import apply_package_local, media_relpaths, pull_handoff, write_demo_package
 import first_run
 
@@ -46,6 +46,20 @@ def test_agent_door_brief_excludes_grok_inbox(studio):
     assert "Claude" in brief["text"]
 
 
+def test_sender_name_distinguishes_agents():
+    assert normalize_agent("grok", "grok") == "Grok"
+    assert normalize_agent("claude-code", "agent") == "Claude"
+    assert normalize_agent("Codex", "agent") == "Codex"
+    assert normalize_agent("chatgpt", "agent") == "ChatGPT"
+    assert normalize_agent("gemini-cli", "agent") == "Gemini"
+    assert normalize_agent("Cursor", "agent") == "Cursor"
+    assert resolve_sender({"door": "agent", "created_by": "Claude"}) == ("agent", "Claude")
+    with pytest.raises(ValueError, match="Grok door"):
+        normalize_agent("Claude", "grok")
+    with pytest.raises(ValueError, match="Grok door"):
+        normalize_agent("grok", "agent")
+
+
 def test_media_relpaths_include_broll():
     paths = media_relpaths({
         "source_path": "inputs/handoff/pkg/source.mp4",
@@ -77,6 +91,10 @@ def test_apply_package_imports_bot_source_and_links_spec(studio, tmp_path):
     result = apply_package_local(folder)
     assert result["ok"] is True
     assert result["edit_spec_id"] == record["id"]
+    assert result["door"] == "grok"
+    assert result["agent"] == "Grok"
+    assert result["project"]["handoff_door"] == "grok"
+    assert result["project"]["handoff_agent"] == "Grok"
     import config
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/source.mp4").read_bytes() == b"x" * 32
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/broll.mp4").read_bytes() == b"y" * 32
@@ -117,7 +135,10 @@ def test_agent_demo_is_invisible_to_grok_pull(studio, tmp_path, monkeypatch):
     assert written["folder"] not in {item.get("folder") for item in grok_pull["imported"]}
     assert written["folder"] not in {item.get("folder") for item in grok_pull["processed"]}
     agent_pull = pull_handoff({"door": "agent", "edit_spec_id": record["id"]})
-    assert written["folder"] in {item.get("folder") for item in agent_pull["imported"]}
+    imported = next(item for item in agent_pull["imported"] if item.get("folder") == written["folder"])
+    assert imported["agent"] == "Codex"
+    assert imported["project"]["handoff_door"] == "agent"
+    assert imported["project"]["handoff_agent"] == "Codex"
 
 
 def test_grok_pull_rejects_agent_spec(studio):
@@ -147,6 +168,31 @@ def test_apply_rejects_door_mismatch(studio, tmp_path):
     result = apply_package_local(folder, expected_door="grok")
     assert result["ok"] is False
     assert "agent" in result["reason"]
+
+
+def test_apply_stores_named_agent(studio, tmp_path):
+    record = create_spec({"title": "Claude cut", "goal": "Name the sender", "language": "en", "door": "agent", "agent": "Claude"})
+    folder = tmp_path / "agents" / "claude-pkg"
+    folder.mkdir(parents=True)
+    (folder / "source.mp4").write_bytes(b"x" * 32)
+    (folder / "bundle.json").write_text(json.dumps({
+        "schema": "local-video-workspace.project-bundle/v1",
+        "project": {
+            "title": "Claude cut",
+            "source_path": "inputs/handoff/pkg/source.mp4",
+            "output_path": "outputs/handoff/pkg.mp4",
+            "edit_spec_id": record["id"],
+            "door": "agent",
+            "created_by": "claude-code",
+            "timeline": {"clips": [{"in": 0, "out": 4, "keep": True, "caption": ""}]},
+        },
+        "jobs": [{"kind": "render", "approved": True, "payload": {}}],
+    }), encoding="utf-8")
+    result = apply_package_local(folder, expected_door="agent")
+    assert result["ok"] is True
+    assert result["agent"] == "Claude"
+    assert result["project"]["handoff_agent"] == "Claude"
+    assert result["project"]["handoff_door"] == "agent"
 
 
 def test_http_spec_brief_and_handoff_status(live_server):

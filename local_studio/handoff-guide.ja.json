@@ -52,7 +52,7 @@
         "caption": "Instagram キャプションのテキスト、最大2200文字",
         "edit_spec_id": "操作者の仕様を満たすときは必須 — 渡された id をそのまま入れる",
         "door": "必須: grok または agent。受信箱フォルダと仕様と一致させる",
-        "created_by": "Grok ドアなら grok、他エージェントドアなら自分の名前",
+        "created_by": "デスクが送り主を見分ける名前。Grok ドアは grok。他エージェントドアは Claude、Codex、ChatGPT、Gemini、Cursor、または自分の名前",
         "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
       },
       "jobs": [

@@ -17,6 +17,31 @@ PLATFORMS = {
 }
 SOURCE_RULE = "The operator does not attach footage. The bot must put the source video in the handoff package."
 DOORS = ("grok", "agent")
+AGENT_ALIASES = {
+    "grok": "Grok",
+    "grok-bot": "Grok",
+    "grokbot": "Grok",
+    "claude": "Claude",
+    "claude-code": "Claude",
+    "anthropic": "Claude",
+    "codex": "Codex",
+    "openai-codex": "Codex",
+    "chatgpt": "ChatGPT",
+    "chat-gpt": "ChatGPT",
+    "gpt": "ChatGPT",
+    "gpt-4": "ChatGPT",
+    "gpt-5": "ChatGPT",
+    "openai": "ChatGPT",
+    "gemini": "Gemini",
+    "gemini-cli": "Gemini",
+    "bard": "Gemini",
+    "cursor": "Cursor",
+    "cursor-agent": "Cursor",
+}
+
+
+def agent_key(value: Any) -> str:
+    return str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
 
 
 def normalize_door(value: Any, *, required: bool = False) -> str:
@@ -28,6 +53,46 @@ def normalize_door(value: Any, *, required: bool = False) -> str:
     if text in {"agent", "agents", "other", "other-agent", "other-agents"}:
         return "agent"
     raise ValueError("door must be grok or agent.")
+
+
+def normalize_agent(value: Any, door: str) -> str:
+    """Canonical sender name. Door is the inbox; agent is who used that inbox."""
+    resolved_door = normalize_door(door)
+    key = agent_key(value)
+    canonical = AGENT_ALIASES.get(key)
+    if resolved_door == "grok":
+        if canonical and canonical != "Grok":
+            raise ValueError("Only Grok may deliver through the Grok door.")
+        return "Grok"
+    if canonical == "Grok":
+        raise ValueError("Grok must deliver through the Grok door, not agents/.")
+    if canonical:
+        return canonical
+    text = str(value or "").strip()[:80]
+    if not text or key in {"agent", "agents", "bot", "other", "other-agent"}:
+        return "agent"
+    return text
+
+
+def resolve_sender(project: dict[str, Any], spec: dict[str, Any] | None = None) -> tuple[str, str]:
+    """Return (door, agent) for an incoming package or saved spec."""
+    raw_door = project.get("door") if isinstance(project, dict) else None
+    if raw_door not in (None, ""):
+        door = normalize_door(raw_door, required=True)
+    else:
+        created = agent_key((project or {}).get("created_by") or (project or {}).get("agent"))
+        if created in {"grok", "grok-bot", "grokbot"}:
+            door = "grok"
+        elif created:
+            door = "agent"
+        elif spec:
+            door = normalize_door(spec.get("door"))
+        else:
+            door = "grok"
+    raw_agent = (project or {}).get("created_by") or (project or {}).get("agent")
+    if not raw_agent and spec:
+        raw_agent = spec.get("agent")
+    return door, normalize_agent(raw_agent, door)
 
 
 def _as_bool(value: Any, default: bool = False) -> bool:
@@ -64,9 +129,7 @@ def normalize_spec(body: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("duration_seconds must be between 1 and 180 seconds.")
     language = str(body.get("language") or "ko").strip().lower()[:8] or "ko"
     door = normalize_door(body.get("door"))
-    agent = str(body.get("agent") or "").strip()[:80]
-    if not agent:
-        agent = "Grok" if door == "grok" else "agent"
+    agent = normalize_agent(body.get("agent"), door)
     return {
         "schema": SCHEMA,
         "title": title,

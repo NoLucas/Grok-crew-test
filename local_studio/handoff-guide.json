@@ -52,7 +52,7 @@
         "caption": "Instagram caption text, up to 2200 characters",
         "edit_spec_id": "required when fulfilling an operator spec — copy the id from the brief the operator sent",
         "door": "required: grok or agent. Must match the inbox folder and the spec.",
-        "created_by": "grok on the Grok door; your agent name on the other-agent door",
+        "created_by": "How the desk labels the sender. Use grok on the Grok door. On the other-agent door use Claude, Codex, ChatGPT, Gemini, Cursor, or your name.",
         "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
       },
       "jobs": [
