@@ -73,6 +73,7 @@ from studio_server import (
 from first_run import first_run_status, open_sample_project
 from edit_spec import create_spec, get_spec, list_specs, spec_brief
 from handoff_inbox import handoff_status, pull_handoff
+from handoff_outbox import outbox_status, push_handoff_outbox
 from desktop_domain import (
     TimelinePatchError,
     answer_control_job,
@@ -278,6 +279,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, {"edit_specs": list_specs()})
             elif path == "/api/v2/handoff":
                 self._json(200, handoff_status())
+            elif path == "/api/v2/handoff/outbox":
+                self._json(200, outbox_status())
             elif path.startswith("/api/v2/edit-specs/") and path.endswith("/brief"):
                 self._json(200, spec_brief(path.split("/")[4]))
             elif path.startswith("/api/v2/edit-specs/"):
@@ -395,6 +398,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, {"edit_spec": create_spec(body)})
             elif path == "/api/v2/handoff/pull":
                 self._json(200, pull_handoff(body))
+            elif path == "/api/v2/handoff/outbox/push":
+                self._json(200, push_handoff_outbox(body))
             elif path == "/api/v2/runners/pair":
                 self._json(201, {"runner": pair_runner(body)})
             elif path == "/api/v2/runner-events":

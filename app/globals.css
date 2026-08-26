@@ -6897,6 +6897,16 @@ select {
 .desktop-spec-desk .desktop-spec-check input { width: auto; margin: 0; }
 .desktop-spec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .desktop-spec-error { margin: 0; color: #b42318; font-size: 13px; }
+.desktop-spec-outbox {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #c7e4f3;
+  background: #f3f9fd;
+  color: #245a72;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .desktop-spec-meta { margin: 0; color: var(--desktop-muted); font-size: 12px; text-align: center; }
 .desktop-spec-advanced { color: var(--desktop-muted); font-size: 12px; }
 .desktop-spec-advanced summary { cursor: pointer; }

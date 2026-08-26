@@ -28,12 +28,34 @@ type DoorStatus = {
   inbox_dir?: string;
 };
 
+type OutboxItem = {
+  id?: string;
+  title?: string;
+  agent?: string;
+  path?: string;
+};
+
+type OutboxDoor = {
+  pending_count?: number;
+  outbox_dir?: string;
+  git_prefix?: string;
+  pending?: OutboxItem[];
+};
+
 type HandoffStatus = {
   pending_count?: number;
   git_configured?: boolean;
   doors?: {
     grok?: DoorStatus;
     agent?: DoorStatus;
+  };
+  outbox?: {
+    pending_count?: number;
+    git_configured?: boolean;
+    doors?: {
+      grok?: OutboxDoor;
+      agent?: OutboxDoor;
+    };
   };
 };
 
@@ -87,6 +109,8 @@ function DoorCard({
   door,
   specs,
   pendingCount,
+  outbox,
+  gitConfigured,
   busy,
   studioReady,
   onImported,
@@ -96,6 +120,8 @@ function DoorCard({
   door: DoorId;
   specs: EditSpec[];
   pendingCount: number;
+  outbox?: OutboxDoor;
+  gitConfigured: boolean;
   busy: boolean;
   studioReady: boolean;
   onImported: (projectId: string, sender?: { door: DoorId; agent: string }) => Promise<void>;
@@ -110,6 +136,7 @@ function DoorCard({
   const [pulling, setPulling] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [outboxNotice, setOutboxNotice] = useState('');
 
   const waiting = useMemo(
     () => specs.filter((item) => item.status === 'waiting_for_bot' && specDoor(item) === door),
@@ -141,10 +168,17 @@ function DoorCard({
           agent: door === 'grok' ? 'Grok' : draft.agent.trim() || 'agent',
         }),
       });
-      const record = created.edit_spec as EditSpec;
+      const record = created.edit_spec as EditSpec & { outbox?: { path?: string; git_prefix?: string; git?: { ok?: boolean; skipped?: boolean; reason?: string } } };
       const printed = await request(`/api/v2/edit-specs/${record.id}/brief`);
       setActiveSpecId(record.id);
       setBrief(String(printed.text || ''));
+      const outboxPath = record.outbox?.path || '';
+      const git = record.outbox?.git;
+      if (outboxPath && git?.ok) {
+        setOutboxNotice(t(`보낼함에 올렸고 git에도 올렸습니다. 봇은 ${record.outbox?.git_prefix} 에서 spec.json 을 읽습니다.`, `Placed in the outbox and pushed to git. The bot reads spec.json under ${record.outbox?.git_prefix}.`, `已放入发件箱并推到 git。机器人从 ${record.outbox?.git_prefix} 读取 spec.json。`, `送信箱に入れ、git にも上げました。ボットは ${record.outbox?.git_prefix} の spec.json を読みます。`));
+      } else if (outboxPath) {
+        setOutboxNotice(t(`보낼함에 올렸습니다. ${outboxPath}`, `Placed in the outbox. ${outboxPath}`, `已放入发件箱。${outboxPath}`, `送信箱に入れました。${outboxPath}`));
+      }
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('규격을 저장하지 못했습니다.', 'Could not save the spec.', '无法保存规格。', '仕様を保存できませんでした。'));
@@ -275,11 +309,13 @@ function DoorCard({
             {saving
               ? t('저장 중…', 'Saving…', '保存中…', '保存中…')
               : grokDoor
-                ? t('Grok에게 보낼 글 만들기', 'Save the Grok brief', '生成给 Grok 的说明', 'Grok 用の文を作る')
-                : t('다른 에이전트에게 보낼 글 만들기', 'Save the other-agent brief', '生成给其他代理的说明', '他エージェント用の文を作る')}
+                ? t('규격 저장하고 Grok 보낼함에 올리기', 'Save to the Grok outbox', '保存规格并放入 Grok 发件箱', '仕様を保存して Grok 送信箱へ')
+                : t('규격 저장하고 다른 에이전트 보낼함에 올리기', 'Save to the other-agent outbox', '保存规格并放入其他代理发件箱', '仕様を保存して他エージェント送信箱へ')}
           </button>
         </div>
       </form>
+
+      {outboxNotice ? <p className="desktop-spec-outbox" role="status">{outboxNotice}</p> : null}
 
       {brief ? (
         <div className="desktop-spec-brief">
@@ -287,12 +323,12 @@ function DoorCard({
             <span>02</span>
             <div>
               <b>{grokDoor
-                ? t('이 글을 다른 컴퓨터의 Grok에게 주세요', 'Give this text to Grok on another computer', '把这段话交给另一台电脑上的 Grok', '別のパソコンの Grok にこの文を渡す')
-                : t('이 글을 다른 컴퓨터의 에이전트에게 주세요', 'Give this text to the other agent', '把这段话交给另一台电脑上的代理', '別のパソコンの他エージェントにこの文を渡す')}</b>
-              <small>{t('원본 파일은 보내지 않습니다. 그 문이 소스와 컷을 만듭니다.', 'Do not send a source file. That door makes the footage and the cut.', '不要发送原片。由这扇门做素材和剪辑。', '原版は送らない。素材とカットはそのドアが作る。')}</small>
+                ? t('봇은 보낼함의 spec.json 을 읽습니다', 'The bot reads spec.json from this outbox', '机器人从发件箱读取 spec.json', 'ボットはこの送信箱の spec.json を読む')
+                : t('그 에이전트는 보낼함의 spec.json 을 읽습니다', 'That agent reads spec.json from this outbox', '该代理从发件箱读取 spec.json', 'そのエージェントはこの送信箱の spec.json を読む')}</b>
+              <small>{t('글을 복사하는 것은 예비입니다. 원본 파일은 보내지 않습니다.', 'Copying the text is a backup. Do not send a source file.', '复制文字只是备用。不要发送原片。', '文のコピーは予備。原版は送らない。')}</small>
             </div>
           </div>
-          <textarea readOnly value={brief} rows={10} />
+          <textarea readOnly value={brief} rows={8} />
         </div>
       ) : null}
 
@@ -314,7 +350,8 @@ function DoorCard({
 
       {error ? <p className="desktop-spec-error" role="alert">{error}</p> : null}
       <p className="desktop-spec-meta">
-        {t(`대기 ${waiting.length} · 받은 컷 ${received.length} · 폴더 ${pendingCount}`, `${waiting.length} waiting · ${received.length} received · ${pendingCount} folders`, `等待 ${waiting.length} · 已收 ${received.length} · 文件夹 ${pendingCount}`, `待ち ${waiting.length} · 受取 ${received.length} · フォルダ ${pendingCount}`)}
+        {t(`보낼함 ${outbox?.pending_count ?? 0} · 대기 ${waiting.length} · 받은 컷 ${received.length} · 받을 폴더 ${pendingCount}`, `${outbox?.pending_count ?? 0} in outbox · ${waiting.length} waiting · ${received.length} received · ${pendingCount} inbound`, `发件箱 ${outbox?.pending_count ?? 0} · 等待 ${waiting.length} · 已收 ${received.length} · 收件 ${pendingCount}`, `送信箱 ${outbox?.pending_count ?? 0} · 待ち ${waiting.length} · 受取 ${received.length} · 受信 ${pendingCount}`)}
+        {gitConfigured ? ` · ${t('git 연결됨', 'git is set', '已设置 git', 'git 設定済み')}` : ''}
         {received[0]?.agent ? ` · ${received.map((item) => item.agent).filter(Boolean).slice(0, 3).join(', ')}` : ''}
       </p>
     </section>
@@ -339,8 +376,8 @@ export function SpecDesk({
     <div className="desktop-spec-desk">
       <div className="desktop-spec-hero">
         <span>✦</span>
-        <h1>{t('문은 두 개입니다. 규격만 적으면 그 문이 영상과 편집을 넘깁니다', 'Two doors. You write the brief. That door brings the footage and the cut.', '两扇门。你只写规格。那扇门送来素材和剪辑。', 'ドアは二つ。仕様だけ書く。映像と編集はそのドアが渡す。')}</h1>
-        <p>{t('Grok에게 맡길 일과 Claude·Codex·ChatGPT에게 맡길 일을 섞지 마세요. 각 문은 자기 인박스만 봅니다. 원본은 이 컴퓨터에 두지 않아도 됩니다.', 'Do not mix Grok work with Claude, Codex, or ChatGPT. Each door reads only its own inbox. You do not have to drop a file here.', '不要把 Grok 的工作和 Claude、Codex、ChatGPT 混在一起。每扇门只看自己的收件箱。不必把原片放在这台电脑。', 'Grok の仕事と Claude・Codex・ChatGPT を混ぜない。各ドアは自分の受信箱だけ見る。原版をこのパソコンに置かなくて大丈夫。')}</p>
+        <h1>{t('규격을 저장하면 그 문 보낼함에 올라갑니다', 'Save the spec. It goes in that door\'s outbox.', '保存规格后会进入那扇门的发件箱。', '仕様を保存すると、そのドアの送信箱に入る。')}</h1>
+        <p>{t('봇이 자기 문 보낼함에서 spec.json 을 가져가 소스와 컷을 만들고, 같은 문 인박스로 돌려줍니다. Grok과 다른 에이전트는 섞이지 않습니다. 글을 복사하는 것은 예비입니다.', 'The bot picks spec.json from its outbox, makes the source and the cut, and returns them to the same door\'s inbox. Grok and other agents stay apart. Copying the text is only a backup.', '机器人从自己的发件箱取 spec.json，做好素材和剪辑后再交回同一扇门的收件箱。Grok 和其他代理不会混用。复制文字只是备用。', 'ボットは自分の送信箱から spec.json を取り、素材とカットを作って同じドアの受信箱に返す。Grok と他エージェントは混ざらない。文のコピーは予備。')}</p>
       </div>
 
       <div className="desktop-spec-doors">
@@ -348,6 +385,8 @@ export function SpecDesk({
           door="grok"
           specs={specs}
           pendingCount={handoff?.doors?.grok?.pending_count ?? 0}
+          outbox={handoff?.outbox?.doors?.grok}
+          gitConfigured={Boolean(handoff?.git_configured || handoff?.outbox?.git_configured)}
           busy={busy}
           studioReady={studioReady}
           onImported={onImported}
@@ -358,6 +397,8 @@ export function SpecDesk({
           door="agent"
           specs={specs}
           pendingCount={handoff?.doors?.agent?.pending_count ?? 0}
+          outbox={handoff?.outbox?.doors?.agent}
+          gitConfigured={Boolean(handoff?.git_configured || handoff?.outbox?.git_configured)}
           busy={busy}
           studioReady={studioReady}
           onImported={onImported}
@@ -367,7 +408,7 @@ export function SpecDesk({
       </div>
 
       <p className="desktop-spec-meta">
-        {handoff?.git_configured ? t('git 인계 연결됨 · 원격 패키지도 grok/ 또는 agents/ 아래에 두세요', 'git handoff is set · remote packages also go under grok/ or agents/', '已设置 git 交接 · 远程包也放在 grok/ 或 agents/ 下', 'git 引き継ぎ設定済み · リモート包も grok/ か agents/ の下へ') : t('로컬 인박스: handoff-inbox/grok 와 handoff-inbox/agents', 'Local inboxes: handoff-inbox/grok and handoff-inbox/agents', '本地收件箱：handoff-inbox/grok 与 handoff-inbox/agents', 'ローカル受信箱: handoff-inbox/grok と handoff-inbox/agents')}
+        {t('보낼함: handoff-outbox/grok · handoff-outbox/agents · 인박스: handoff-inbox/grok · handoff-inbox/agents', 'Outbox: handoff-outbox/grok · handoff-outbox/agents · Inbox: handoff-inbox/grok · handoff-inbox/agents', '发件箱：handoff-outbox/grok · handoff-outbox/agents · 收件箱：handoff-inbox/grok · handoff-inbox/agents', '送信箱: handoff-outbox/grok · handoff-outbox/agents · 受信箱: handoff-inbox/grok · handoff-inbox/agents')}
       </p>
 
       <details className="desktop-spec-advanced">

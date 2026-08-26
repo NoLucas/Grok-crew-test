@@ -108,6 +108,15 @@ def test_pending_folders_lists_door_inboxes(tmp_path):
     assert names == ["g-pkg", "a-pkg"]
 
 
+def test_pending_folders_skips_outbox_tree(tmp_path):
+    (tmp_path / "outbox" / "grok" / "spec-id").mkdir(parents=True)
+    (tmp_path / "outbox" / "grok" / "spec-id" / "spec.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "grok" / "cut-pkg").mkdir(parents=True)
+    names = [f"{p.parent.name}/{p.name}" if p.parent.name in {"grok", "agents"} else p.name for p in hw.pending_folders(tmp_path, processed=set())]
+    assert names == ["grok/cut-pkg"]
+    assert all("outbox" not in name for name in names)
+
+
 def test_process_folder_skips_agent_package_in_grok_inbox(tmp_path):
     folder = tmp_path / "grok" / "20260826-agent"
     folder.mkdir(parents=True)

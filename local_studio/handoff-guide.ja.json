@@ -2,13 +2,23 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドボット向けの契約です。操作者は仕様だけ書きます。ボットが素材と編集を作り、このPCへ接続せず専用 git ブランチで渡します。",
   "roles": {
-    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは Grok か他エージェントのどちらか一方。原版は付けない。",
-    "grok_door": "Grok のみ。パッケージは grok/ の下。Runner ペアリングもこのドアだけ。agents/ は使わない。",
-    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。パッケージは agents/ の下。grok/ と Runner は使わない。",
-    "bot": "素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を push する。"
+    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは Grok か他エージェントのどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
+    "grok_door": "Grok のみ。読むのは outbox/grok/。返すパッケージは grok/ の下。Runner ペアリングもこのドアだけ。agents/ は使わない。",
+    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。読むのは outbox/agents/。返すパッケージは agents/ の下。grok/ と Runner は使わない。",
+    "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
+  },
+  "outbox": {
+    "purpose": "操作者が仕様を保存すると、このPCがそのドアの送信箱に spec.json と brief.txt を書く。ボットは自分のドアだけ読む。127.0.0.1 には接続しない。同じドアの受信箱がカットを受け取ると、送信箱フォルダは .processed/ へ移る。",
+    "schema": "grok-crew.outbox-spec/v1",
+    "local_root": "local_studio/workspace/handoff-outbox/",
+    "git_root": "outbox/",
+    "files": ["spec.json", "brief.txt"],
+    "rule": "自分のドアだけ読む。完成パッケージは同じドアの受信箱（grok/ または agents/）へ返す。outbox/ に映像を置かない。"
   },
   "doors": {
     "grok": {
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "git_outbox": "outbox/grok/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
@@ -16,6 +26,8 @@
       "runner": true
     },
     "agent": {
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "git_outbox": "outbox/agents/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
@@ -29,7 +41,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "本リポジトリの main ブランチにのみコミットを push してください。ローカル運用者のマシンに属する IP アドレスやホスト名に接続を試みないでください——このリポジトリだけが許可されたチャネルです。",
-    "folder_naming": "1回の提出につき grok/ または agents/ の下にフォルダを1つ、'<UTC タイムスタンプ>-<短いスラッグ>' の形式で命名します(例: grok/2026-08-23T07-19-00Z-payoff-hook)。フォルダ名はドアごとに一意である必要があります。Grok の受け取りは agents/ を取り込まず、他エージェントの受け取りは grok/ を取り込みません。"
+    "folder_naming": "出す仕様は outbox/grok/{edit_spec_id}/ または outbox/agents/{edit_spec_id}/（spec.json + brief.txt）。戻すカットは grok/ または agents/ の下、名前は '<UTC タイムスタンプ>-<短いスラッグ>'（例: grok/2026-08-23T07-19-00Z-payoff-hook）。outbox/ に映像を置かない。Grok の受け取りは agents/ を取り込まず、他エージェントの受け取りは grok/ を取り込みません。"
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],

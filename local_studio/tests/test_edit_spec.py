@@ -24,6 +24,7 @@ def test_spec_marks_bot_as_source_owner(studio):
     assert record["id"] in brief["text"]
     assert "will not attach footage" in brief["text"]
     assert "Grok-only door" in brief["text"]
+    assert "handoff-outbox/grok" in brief["text"]
     assert "handoff-inbox/grok" in brief["text"]
     assert "Do not use the agents/ folder" in brief["text"]
 
@@ -40,6 +41,7 @@ def test_agent_door_brief_excludes_grok_inbox(studio):
     brief = spec_brief(record["id"])
     assert brief["door"] == "agent"
     assert "other-agent door" in brief["text"]
+    assert "handoff-outbox/agents" in brief["text"]
     assert "handoff-inbox/agents" in brief["text"]
     assert "Do not use the Grok door" in brief["text"]
     assert "Desktop Runner pairing is only" not in brief["text"]
@@ -214,3 +216,8 @@ def test_http_spec_brief_and_handoff_status(live_server):
     assert "agent" in status["doors"]
     assert status["doors"]["grok"]["inbox_dir"].endswith("/grok")
     assert status["doors"]["agent"]["inbox_dir"].endswith("/agents")
+    assert status["outbox"]["doors"]["grok"]["outbox_dir"].endswith("/grok")
+    assert status["outbox"]["doors"]["agent"]["outbox_dir"].endswith("/agents")
+    assert created["edit_spec"]["outbox"]["git"]["skipped"] is True
+    outbox = json.loads(urlopen(f"{live_server}/api/v2/handoff/outbox").read().decode())
+    assert spec_id in {item["id"] for item in outbox["doors"]["grok"]["pending"]}

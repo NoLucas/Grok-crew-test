@@ -2,13 +2,23 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. The operator only writes an edit spec. The bot supplies the source video and the cut, then hands both off through a dedicated git branch — never a network call to this PC.",
   "roles": {
-    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: Grok or other-agent. Do not attach footage.",
-    "grok_door": "Only Grok. Packages go under grok/. Runner pairing is this door only. Do not use agents/.",
-    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent. Packages go under agents/. Do not use grok/ or Runner pairing.",
-    "bot": "Find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
+    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: Grok or other-agent. Saving puts spec.json in that door's outbox. Do not attach footage.",
+    "grok_door": "Only Grok. Read outbox/grok/. Return packages under grok/. Runner pairing is this door only. Do not use agents/.",
+    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent. Read outbox/agents/. Return packages under agents/. Do not use grok/ or Runner pairing.",
+    "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
+  },
+  "outbox": {
+    "purpose": "The operator saves a spec. This PC writes spec.json and brief.txt into that door's outbox. The bot picks up only its door. It never calls 127.0.0.1. After the matching inbox receives the cut, the outbox folder moves to .processed/.",
+    "schema": "grok-crew.outbox-spec/v1",
+    "local_root": "local_studio/workspace/handoff-outbox/",
+    "git_root": "outbox/",
+    "files": ["spec.json", "brief.txt"],
+    "rule": "Read only your door. Return the finished package to the matching inbox (grok/ or agents/), never into outbox/."
   },
   "doors": {
     "grok": {
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "git_outbox": "outbox/grok/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
@@ -16,6 +26,8 @@
       "runner": true
     },
     "agent": {
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "git_outbox": "outbox/agents/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
@@ -29,7 +41,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "Push commits only to this repository's main branch. Never attempt to reach an IP address or hostname belonging to the local operator's machine — this repository is the only sanctioned channel.",
-    "folder_naming": "One folder per submission under grok/ or agents/, named '<UTC timestamp>-<short-slug>' (e.g. grok/2026-08-23T07-19-00Z-payoff-hook). The folder name must be unique per door; it is used to detect duplicates. A Grok pull never imports agents/, and an other-agent pull never imports grok/."
+    "folder_naming": "Outbound specs live under outbox/grok/{edit_spec_id}/ or outbox/agents/{edit_spec_id}/ (spec.json + brief.txt). Inbound cuts stay under grok/ or agents/, named '<UTC timestamp>-<short-slug>' (e.g. grok/2026-08-23T07-19-00Z-payoff-hook). Never put media under outbox/. A Grok pull never imports agents/, and an other-agent pull never imports grok/."
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],

@@ -20,6 +20,7 @@ def studio(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(config, "WORKSPACE_DIR", tmp_path / "workspace")
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "data" / "studio.db")
+    monkeypatch.delenv("HANDOFF_REPO_REMOTE", raising=False)
     db.init_db()
     import preview_cache  # noqa: E402
     preview_cache.preview_composite_cache.reset()

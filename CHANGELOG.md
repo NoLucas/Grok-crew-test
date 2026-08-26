@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Door-scoped outbox. Saving a spec writes `spec.json` and `brief.txt` to `handoff-outbox/grok/{id}` or `handoff-outbox/agents/{id}`. Optional git push uses `outbox/grok/` or `outbox/agents/` and never fails the save if `HANDOFF_REPO_REMOTE` is unset. Receiving a cut archives that spec to `.processed/`. Bots still must not call `127.0.0.1`.
 - Two handoff doors. The operator writes a spec on the Grok door or the other-agent door. Grok packages land in `handoff-inbox/grok`; Claude, Codex, ChatGPT, and other agents land in `handoff-inbox/agents`. A Grok pull never imports the other door. Runner pairing stays Grok-only. Desktop shows the spec desk only when no project is open.
 - Incoming packages store `handoff_door` plus a sender name from `bundle.project.created_by` (Grok, Claude, Codex, ChatGPT, Gemini, Cursor, or the written name). The project list and project bar show who delivered the cut.
 - Desktop first screen stays local-first: Runner/GitHub controls stay collapsed until pairing, a live job, or the operator opens them. Opening a project lands on Edit (program monitor + timeline) instead of Setup.

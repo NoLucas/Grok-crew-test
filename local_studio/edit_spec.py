@@ -180,7 +180,11 @@ def create_spec(body: dict[str, Any]) -> dict[str, Any]:
             (spec_id, json.dumps(spec, ensure_ascii=False), "waiting_for_bot", None, now, now),
         )
         row = conn.execute("SELECT * FROM edit_specs WHERE id = ?", (spec_id,)).fetchone()
-    return _record(row_dict(row)) or {}
+    record = _record(row_dict(row)) or {}
+    from handoff_outbox import write_outbox
+
+    record["outbox"] = write_outbox(record)
+    return record
 
 
 def get_spec(spec_id: str) -> dict[str, Any] | None:
@@ -205,6 +209,9 @@ def attach_spec_project(spec_id: str, project_id: str) -> dict[str, Any] | None:
             ("received", project_id, now, spec_id),
         )
         conn.execute("UPDATE projects SET edit_spec_id = ? WHERE id = ?", (spec_id, project_id))
+    from handoff_outbox import archive_outbox
+
+    archive_outbox(spec_id)
     return get_spec(spec_id)
 
 
@@ -248,10 +255,11 @@ def spec_brief(spec_id: str) -> dict[str, Any]:
             f"Claude, Codex, ChatGPT 같은 다른 에이전트는 다른 에이전트 문을 쓰세요.\n\n"
             f"{common}\n"
             f"원본은 운영자가 주지 않습니다. 당신이 소스와 컷을 만드세요.\n"
+            f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/grok/{record['id']}/ 에 있습니다. "
+            f"git이면 outbox/grok/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"같은 PC면 `python local_studio/grok_crew.py` 와 Bot Check로 체크인하세요. "
             f"데스크톱 Runner 페어링은 Grok 문에서만 씁니다.\n"
-            f"다른 컴퓨터면 패키지를 local_studio/workspace/handoff-inbox/grok/ 에 두거나 "
-            f"git 인계의 grok/ 아래에 push 하세요. "
+            f"끝난 패키지는 local_studio/workspace/handoff-inbox/grok/ 또는 git 인계의 grok/ 아래에 두세요. "
             f"bundle.project.door는 grok, created_by는 grok, edit_spec_id는 {record['id']}. "
             f"agents/ 폴더에는 넣지 마세요. 127.0.0.1에는 접속하지 마세요."
             if language.startswith("ko")
@@ -260,10 +268,12 @@ def spec_brief(spec_id: str) -> dict[str, Any]:
                 f"Claude, Codex, ChatGPT, and other agents must use the other-agent door.\n\n"
                 f"{common}\n"
                 f"The operator will not attach footage. You supply the source and the cut.\n"
+                f"This spec is in the outbox at local_studio/workspace/handoff-outbox/grok/{record['id']}/. "
+                f"On git read spec.json under outbox/grok/{record['id']}/.\n"
                 f"On the same PC use `python local_studio/grok_crew.py` and Bot Check. "
                 f"Desktop Runner pairing is only for this Grok door.\n"
-                f"On another computer put the package in local_studio/workspace/handoff-inbox/grok/ "
-                f"or push under grok/ on the git handoff repo. "
+                f"Put the finished package in local_studio/workspace/handoff-inbox/grok/ "
+                f"or under grok/ on the git handoff repo. "
                 f"Set bundle.project.door to grok, created_by to grok, edit_spec_id to {record['id']}. "
                 f"Do not use the agents/ folder. Do not connect to 127.0.0.1."
             )
@@ -275,9 +285,10 @@ def spec_brief(spec_id: str) -> dict[str, Any]:
             f"당신은 {agent}이거나 Claude, Codex, ChatGPT, Gemini, Cursor 같은 다른 에이전트입니다.\n\n"
             f"{common}\n"
             f"원본은 운영자가 주지 않습니다. 당신이 소스와 컷을 만드세요.\n"
+            f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/agents/{record['id']}/ 에 있습니다. "
+            f"git이면 outbox/agents/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"같은 PC면 `python local_studio/grok_crew.py spec brief --id {record['id']}` 로 이 글을 읽고 CLI로 작업하세요.\n"
-            f"다른 컴퓨터면 패키지를 local_studio/workspace/handoff-inbox/agents/ 에 두거나 "
-            f"git 인계의 agents/ 아래에 push 하세요. "
+            f"끝난 패키지는 local_studio/workspace/handoff-inbox/agents/ 또는 git 인계의 agents/ 아래에 두세요. "
             f"bundle.project.door는 agent, created_by는 당신 이름, edit_spec_id는 {record['id']}. "
             f"127.0.0.1에는 접속하지 마세요. 규칙: local_studio/handoff-guide.json."
             if language.startswith("ko")
@@ -287,10 +298,12 @@ def spec_brief(spec_id: str) -> dict[str, Any]:
                 f"You are {agent}, or Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent.\n\n"
                 f"{common}\n"
                 f"The operator will not attach footage. You supply the source and the cut.\n"
+                f"This spec is in the outbox at local_studio/workspace/handoff-outbox/agents/{record['id']}/. "
+                f"On git read spec.json under outbox/agents/{record['id']}/.\n"
                 f"On the same PC re-read this with "
                 f"`python local_studio/grok_crew.py spec brief --id {record['id']}` and use the CLI.\n"
-                f"On another computer put the package in local_studio/workspace/handoff-inbox/agents/ "
-                f"or push under agents/ on the git handoff repo. "
+                f"Put the finished package in local_studio/workspace/handoff-inbox/agents/ "
+                f"or under agents/ on the git handoff repo. "
                 f"Set bundle.project.door to agent, created_by to your name, edit_spec_id to {record['id']}. "
                 f"Do not connect to 127.0.0.1. Rules: local_studio/handoff-guide.json."
             )

@@ -21,6 +21,7 @@ from typing import Any
 
 import config
 from edit_spec import attach_spec_project, get_spec, normalize_agent, normalize_door, resolve_sender
+from handoff_outbox import outbox_status
 
 BUNDLE_SCHEMA = "local-video-workspace.project-bundle/v1"
 ALLOWED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
@@ -330,13 +331,14 @@ def handoff_status() -> dict[str, Any]:
         "pending_count": grok["pending_count"] + agent["pending_count"],
         "pending": grok["pending"] + agent["pending"],
         "doors": {"grok": grok, "agent": agent},
+        "outbox": outbox_status(),
         "git_configured": bool(remote),
         "git_remote_set": bool(remote),
         "source_owner": "bot",
         "note": (
-            "Two doors. Grok packages go in handoff-inbox/grok. "
-            "Claude, Codex, ChatGPT, and other agents go in handoff-inbox/agents. "
-            "The operator writes a spec. The assigned door supplies the source and the cut."
+            "Two doors. Specs wait in handoff-outbox/grok or handoff-outbox/agents. "
+            "Finished packages return to handoff-inbox/grok or handoff-inbox/agents. "
+            "A Grok pull never imports the other door."
         ),
     }
 

@@ -2,13 +2,23 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。操作者只写规格。机器人提供原片和剪辑，再通过专用 git 分支交接，而不是连接这台电脑。",
   "roles": {
-    "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：Grok 或其他代理。不要附上原片。",
-    "grok_door": "仅 Grok。包裹放在 grok/ 下。Runner 配对也只用这扇门。不要用 agents/。",
-    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
-    "bot": "准备原片并剪辑，然后推送包含视频文件和带 edit_spec_id、project.door 的 bundle.json 的包裹。"
+    "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：Grok 或其他代理。保存后会把 spec.json 放入那扇门的发件箱。不要附上原片。",
+    "grok_door": "仅 Grok。读取 outbox/grok/。交回包裹放在 grok/ 下。Runner 配对也只用这扇门。不要用 agents/。",
+    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。读取 outbox/agents/。交回包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
+    "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。"
+  },
+  "outbox": {
+    "purpose": "操作者保存规格后，这台电脑把 spec.json 和 brief.txt 写入那扇门的发件箱。机器人只读自己的门，绝不连接 127.0.0.1。对应收件箱收到剪辑后，发件箱文件夹会移到 .processed/。",
+    "schema": "grok-crew.outbox-spec/v1",
+    "local_root": "local_studio/workspace/handoff-outbox/",
+    "git_root": "outbox/",
+    "files": ["spec.json", "brief.txt"],
+    "rule": "只读自己的门。成品包裹交回对应收件箱（grok/ 或 agents/），不要放进 outbox/。"
   },
   "doors": {
     "grok": {
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "git_outbox": "outbox/grok/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
@@ -16,6 +26,8 @@
       "runner": true
     },
     "agent": {
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "git_outbox": "outbox/agents/{edit_spec_id}/",
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
@@ -29,7 +41,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "只能向本仓库的 main 分支 push 提交。绝不要尝试连接本地运营者机器所属的任何 IP 地址或主机名——本仓库是唯一被允许的通道。",
-    "folder_naming": "每次提交在 grok/ 或 agents/ 下建一个文件夹,命名为 '<UTC 时间戳>-<短标签>'(例如 grok/2026-08-23T07-19-00Z-payoff-hook)。文件夹名在同一扇门内必须唯一。Grok 接收不会导入 agents/，其他代理接收不会导入 grok/。"
+    "folder_naming": "待取规格在 outbox/grok/{edit_spec_id}/ 或 outbox/agents/{edit_spec_id}/（spec.json + brief.txt）。交回的剪辑仍在 grok/ 或 agents/ 下，命名为 '<UTC 时间戳>-<短标签>'(例如 grok/2026-08-23T07-19-00Z-payoff-hook)。不要把视频放进 outbox/。Grok 接收不会导入 agents/，其他代理接收不会导入 grok/。"
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],

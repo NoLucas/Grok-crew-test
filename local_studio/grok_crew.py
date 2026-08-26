@@ -195,9 +195,13 @@ def build_parser() -> argparse.ArgumentParser:
     spec_brief = spec_sub.add_parser("brief", help="Print the text to give that door's bot on another computer.")
     spec_brief.add_argument("--id", required=True)
 
-    handoff = commands.add_parser("handoff", help="Receive a package a remote bot already wrote.")
+    handoff = commands.add_parser("handoff", help="Send specs through the outbox or receive a returned package.")
     handoff_sub = handoff.add_subparsers(dest="command", required=True)
-    handoff_sub.add_parser("status", help="Show both door inboxes and whether a git remote is set.")
+    handoff_sub.add_parser("status", help="Show both door inboxes, outboxes, and whether a git remote is set.")
+    handoff_sub.add_parser("outbox", help="List specs waiting in each door's outbox.")
+    handoff_push = handoff_sub.add_parser("push-outbox", help="Copy pending outbox specs onto the git handoff remote.")
+    handoff_push.add_argument("--door", choices=("grok", "agent"), default="")
+    handoff_push.add_argument("--spec-id", default="")
     handoff_pull = handoff_sub.add_parser("pull", help="Import pending packages from one door only.")
     handoff_pull.add_argument("--demo", action="store_true", help="Write a sample package as if that door sent source and a cut.")
     handoff_pull.add_argument("--spec-id", default="")
@@ -318,8 +322,17 @@ def main() -> None:
     if args.group == "handoff":
         if args.command == "status":
             print_json(client.request("/api/v2/handoff"))
-        else:
+        elif args.command == "outbox":
+            print_json(client.request("/api/v2/handoff/outbox"))
+        elif args.command == "push-outbox":
             payload: dict[str, Any] = {}
+            if args.door:
+                payload["door"] = args.door
+            if args.spec_id:
+                payload["edit_spec_id"] = args.spec_id
+            print_json(client.request("/api/v2/handoff/outbox/push", payload))
+        else:
+            payload = {}
             if args.demo:
                 payload["demo"] = True
             if args.spec_id:

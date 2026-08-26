@@ -75,7 +75,18 @@ type Version = {
 type FirstRun = { sample_available?: boolean; sample_open?: boolean; sample_path?: string; has_projects?: boolean };
 type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string; door?: string; agent?: string };
 type DoorInboxStatus = { pending_count?: number; inbox_dir?: string };
-type HandoffStatus = { pending_count?: number; git_configured?: boolean; inbox_dir?: string; doors?: { grok?: DoorInboxStatus; agent?: DoorInboxStatus } };
+type OutboxDoorStatus = { pending_count?: number; outbox_dir?: string; git_prefix?: string };
+type HandoffStatus = {
+  pending_count?: number;
+  git_configured?: boolean;
+  inbox_dir?: string;
+  doors?: { grok?: DoorInboxStatus; agent?: DoorInboxStatus };
+  outbox?: {
+    pending_count?: number;
+    git_configured?: boolean;
+    doors?: { grok?: OutboxDoorStatus; agent?: OutboxDoorStatus };
+  };
+};
 type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;

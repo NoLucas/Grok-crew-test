@@ -100,7 +100,7 @@ def sync_mirror(remote: str, branch: str) -> Path:
     return MIRROR_DIR
 
 
-RESERVED_MIRROR_NAMES = {".git", ".processed", "grok", "agents"}
+RESERVED_MIRROR_NAMES = {".git", ".processed", "grok", "agents", "outbox"}
 
 
 def pending_folders(mirror: Path, processed: set[str]) -> list[Path]:

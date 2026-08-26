@@ -9,7 +9,7 @@
 영상을 맡아 주는 웹사이트가 아닙니다. 봇은 이 PC를 열지 않고, 패키지만 보냅니다.
 
 ```
-내 규격  →  Grok 문 또는 다른 에이전트 문  →  그 문 인박스  →  이 PC가 받음  →  내가 원할 때만 게시
+내 규격  →  그 문 보낼함  →  봇이 spec.json 을 가져감  →  그 문 인박스  →  이 PC가 받음  →  내가 원할 때만 게시
 ```
 
 ## 누가 쓰나요
@@ -22,7 +22,7 @@
 
 ## 화면에 보이는 것
 
-첫 화면에는 **문이 두 개**입니다. Grok 문 또는 다른 에이전트 문에 규격을 적고, 그 글만 그 도우미에게 주세요. Grok 패키지는 `handoff-inbox/grok`, Claude·Codex·ChatGPT는 `handoff-inbox/agents`에 둡니다. **받기**는 자기 문만 가져옵니다. **이 문으로 예시 도착 보기**는 같은 도착을 번들 클립으로 보여 줍니다.
+첫 화면에는 **문이 두 개**입니다. Grok 문 또는 다른 에이전트 문에 규격을 저장하면 그 문 보낼함(`handoff-outbox/grok` 또는 `handoff-outbox/agents`)에 올라갑니다. 봇은 그곳의 `spec.json`을 읽습니다. git이면 `outbox/grok/` · `outbox/agents/`입니다. 이 PC는 열지 않습니다. 끝난 Grok 패키지는 `handoff-inbox/grok`, Claude·Codex·ChatGPT는 `handoff-inbox/agents`에 둡니다. **받기**는 자기 문만 가져오고, 그 규격은 보낼함에서 치웁니다. 글 복사는 예비입니다. **이 문으로 예시 도착 보기**는 같은 도착을 번들 클립으로 보여 줍니다.
 
 그다음은 세 탭입니다.
 
