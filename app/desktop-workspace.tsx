@@ -1000,6 +1000,39 @@ export default function DesktopWorkspace() {
                   </>
                 )}
               />
+              {videoAssets.length ? (
+                <section className="desktop-proxy-strip" aria-label={t('미리보기 프록시', 'Preview proxies', '预览代理', 'プレビュープロキシ')}>
+                  <div className="desktop-proxy-strip-head">
+                    <b>{t('미리보기 프록시', 'Preview proxies', '预览代理', 'プレビュープロキシ')}</b>
+                    <span>{readyProxyCount}/{videoAssets.length}{proxyBusy ? ` · ${proxyProgress}%` : ''}</span>
+                    <small>{t('초안 모니터만. 최종 렌더는 원본.', 'Draft monitor only. Final render uses the original.', '仅草稿监视器。最终渲染用原片。', '草案モニターのみ。最終レンダーは元素材。')}</small>
+                  </div>
+                  <ul>
+                    {videoAssets.map((asset, index) => {
+                      const proxy = proxies.find((item) => item.asset_id === asset.id);
+                      const status = proxy?.status ?? 'missing';
+                      const percent = ['queued', 'running'].includes(status) ? Math.max(0, Math.min(100, proxy?.progress ?? 0)) : status === 'ready' ? 100 : 0;
+                      return (
+                        <li key={asset.id} className={`desktop-proxy-row ${status}`}>
+                          <div>
+                            <b>{asset.name || asset.id}</b>
+                            <small>{index === 0 ? t('프라이머리', 'Primary', '主素材', 'プライマリ') : 'B-roll'} · {status === 'missing' ? t('없음', 'none', '无', 'なし') : status}{['queued', 'running'].includes(status) ? ` ${percent}%` : ''}</small>
+                          </div>
+                          <i style={{ width: `${percent}%` }} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="desktop-proxy-actions">
+                    <button type="button" disabled={proxyBusy || readyProxyCount === videoAssets.length} onClick={() => void ensureAllProxies(proxies.some((proxy) => proxy.status === 'failed'))}>
+                      {proxies.some((proxy) => proxy.status === 'failed')
+                        ? t('실패한 프록시 다시', 'Retry failed proxies', '重试失败代理', '失敗プロキシ再試行')
+                        : t('없는 프록시 만들기', 'Build missing proxies', '生成缺失代理', '未作成プロキシを作る')}
+                    </button>
+                    {proxyBusy ? <button type="button" onClick={() => void cancelProxy()}>{t('생성 취소', 'Cancel build', '取消生成', '生成をキャンセル')}</button> : null}
+                  </div>
+                </section>
+              ) : null}
             </div>}
 
             {activePanel === 'export' && <div className="desktop-export-grid"><section className="desktop-card"><div className="desktop-card-title"><span>01</span><div><b>{t('플랫폼 게시 정책', 'Publishing policy', '发布策略', '公開ポリシー')}</b><small>{t('기본은 확인 후 게시입니다.', 'Default: ask before publishing.', '默认发布前确认。', '初期値は公開前に確認。')}</small></div></div>{(['instagram', 'tiktok', 'youtube'] as const).map((platform) => <div className="desktop-publish-row" key={platform}><b>{platform === 'youtube' ? 'YouTube Shorts' : platform[0].toUpperCase() + platform.slice(1)}</b><select aria-label={`${platform} publish policy`} value={publishPolicy[platform]} onChange={(e) => setPublishPolicy({ ...publishPolicy, [platform]: e.target.value as PublishMode })}><option value="export_only">{t('파일만 내보내기', 'Export only', '仅导出', '書き出しのみ')}</option><option value="ask">{t('게시 전 확인', 'Ask before posting', '发布前确认', '公開前に確認')}</option><option value="auto">{t('자동 게시', 'Auto publish', '自动发布', '自動公開')}</option></select><button disabled={busy || !outputReady || publishPolicy[platform] === 'export_only'} onClick={() => void publishNow(platform)}>{t('게시', 'Publish', '发布', '公開')}</button></div>)}</section><section className="desktop-card desktop-render-card"><div className="desktop-card-title"><span>02</span><div><b>{t('최종 파일', 'Final render', '最终文件', '最終ファイル')}</b><small>{relativeWorkspacePath(project.output_path)}</small></div></div><div className={`desktop-render-state ${outputReady ? 'ready' : ''}`}><span>{outputReady ? '✓' : '○'}</span><div><b>{outputReady ? t('렌더 파일 준비됨', 'Render ready', '渲染文件已就绪', 'レンダー準備完了') : t('아직 렌더되지 않음', 'Not rendered yet', '尚未渲染', '未レンダー')}</b><small>{timeline.settings.quality} · {timeline.settings.fps}fps</small></div></div><button className="desktop-primary" disabled={busy} onClick={() => void runLocalRender()}>{t('지금 로컬 렌더', 'Render locally now', '立即本地渲染', '今すぐローカルレンダー')}</button><button className="desktop-secondary" disabled={busy} onClick={() => void enqueueQueuedRender()}>{t('대기열에 넣기', 'Add to queue', '加入队列', 'キューに追加')}</button>{queueJobs.length ? <small>{queueJobs.length} {t('개 대기', 'queued', '个排队', '件待機')}</small> : null}</section><section className="desktop-card"><div className="desktop-card-title"><span>03</span><div><b>{t('교환 파일', 'Exchange', '交换文件', '交換')}</b><small>EDL · OTIO</small></div></div><div className="desktop-relay-actions"><button onClick={() => void exportExchange('edl')}>EDL</button><button onClick={() => void exportExchange('otio')}>OTIO</button></div>{exchangeText ? <textarea className="desktop-exchange" readOnly value={exchangeText} /> : null}</section><section className="desktop-card desktop-receipts-card"><div className="desktop-card-title"><span>04</span><div><b>{t('게시 영수증', 'Publish receipts', '发布回执', '公開レシート')}</b><small>{t('실패와 중단된 게시는 재시도할 수 있습니다. 중단 후 재시도는 플랫폼에 한 번 더 올라갈 수 있습니다.', 'Failed or interrupted publishes can be retried. Retrying an interrupted upload may create a second copy.', '失败或中断的发布可以重试。中断后重试可能在平台上再上传一份。', '失敗と中断した公開は再試行できます。中断後の再試行はもう1本増えることがあります。')}</small></div></div>{confirmReceipt && confirmReceipt.project_id === selectedProjectId ? <div className="desktop-receipt-confirm" role="alertdialog" aria-labelledby="receipt-confirm-title"><b id="receipt-confirm-title">{t('중단된 게시', 'Interrupted publish', '已中断的发布', '中断された公開')}</b><p>{t('플랫폼이 이미 첫 업로드를 받았다면 영상이 하나 더 올라갈 수 있습니다. 그래도 다시 올리겠습니까?', 'If the platform already accepted the first upload, a second copy may appear. Retry anyway?', '如果平台已接受第一次上传，可能会再出现一份。仍要重试吗？', '最初のアップロードが受理済みなら、もう1本増えることがあります。それでも再試行しますか？')}</p><div><button type="button" disabled={busy} onClick={() => void retryReceipt(confirmReceipt, true)}>{t('그래도 재시도', 'Retry anyway', '仍要重试', 'それでも再試行')}</button><button type="button" className="desktop-secondary" disabled={busy} onClick={() => setConfirmReceipt(null)}>{t('취소', 'Cancel', '取消', 'キャンセル')}</button></div></div> : null}{visibleReceipts.length ? visibleReceipts.map((receipt) => <div className={`desktop-receipt ${receipt.status}`} key={receipt.id}><div><b>{receipt.platform} · {receipt.status}</b><small>{receipt.error_text || receipt.idempotency_key}</small></div><button disabled={busy || (receipt.status !== 'failed' && receipt.status !== 'interrupted')} onClick={() => void retryReceipt(receipt)}>{receipt.status === 'interrupted' ? t('중복 확인', 'Confirm retry', '确认重试', '重複を確認') : t('재시도', 'Retry', '重试', '再試行')}</button></div>) : <div className="desktop-receipt-empty"><b>{t('아직 게시 영수증이 없습니다', 'No publish receipts yet', '暂无发布回执', '公開レシートはまだありません')}</b><p>{outputReady ? t('위에서 플랫폼을 고른 뒤 게시하면 성공·실패가 여기에 남습니다.', 'Publish a platform above to keep success and failure here.', '在上方选择平台并发布后，成功和失败会记录在这里。', '上でプラットフォームを選んで公開すると、成功と失敗がここに残ります。') : t('먼저 로컬 렌더를 만든 다음 Instagram, TikTok, YouTube에 게시하세요.', 'Render locally first, then publish to Instagram, TikTok, or YouTube.', '请先完成本地渲染，再发布到 Instagram、TikTok 或 YouTube。', '先にローカルレンダーを作り、Instagram・TikTok・YouTube に公開してください。')}</p></div>}</section></div>}
