@@ -6,6 +6,14 @@ All notable changes to Grok Crew are documented here.
 
 ### Security
 
+- Instagram, YouTube, and TikTok upload URLs are now https-only, host-allowlisted, and rejected when they resolve to a private or loopback address.
+- Publish error text also redacts OAuth headers, refresh tokens, `ya29.` / `ghp_` / `github_pat_` / `sk-` secrets.
+- Publish retry keeps only caption/privacy/render fields; client `approved` / `receipt_id` / extra keys are not forwarded into the publisher.
+- GitHub update checks require an `owner/repo` slug; `openExternal` only opens that repo's `https://github.com/.../releases` pages, and new windows are limited to github.com.
+- `INSTAGRAM_API_VERSION` / `INSTAGRAM_USER_ID` and Instagram container ids are constrained before they enter URL paths.
+- Publish results store a workspace-relative `source_path` (filename only if the file is outside the workspace).
+- Local Studio token compare is length-safe, so a short Authorization header returns 401 instead of leaking a digest-length error.
+- GitHub device-flow verification URLs must be `https://github.com/login/device...` before the desktop opens them.
 - Timeline assets, LUT files, and OTIO imports now reject paths outside the local workspace, so render/preview cannot read arbitrary files.
 - Electron IPC normalizes Studio URLs before fetch, so `/api/../media` no longer bypasses the `/api` allowlist.
 - Renderer navigation now compares origins instead of string prefixes, blocking `http://127.0.0.1:port@evil` style loads.
