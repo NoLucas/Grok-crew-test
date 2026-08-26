@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. The operator only writes an edit spec. The bot supplies the source video and the cut, then hands both off through a dedicated git branch — never a network call to this PC.",
   "roles": {
-    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: Grok or other-agent. Saving puts spec.json in that door's outbox. Do not attach footage.",
-    "grok_door": "Only Grok. Read outbox/grok/. Return packages under grok/. Runner pairing is this door only. Do not use agents/.",
-    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent. Read outbox/agents/. Return packages under agents/. Do not use grok/ or Runner pairing.",
+    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: editor (folder grok/) or collector / other-agent (folder agents/). Saving puts spec.json in that door's outbox. Do not attach footage.",
+    "grok_door": "Editor door. Folder names stay grok/. Whoever is assigned as editor. Runner pairing is this door only. Do not use agents/.",
+    "other_agent_door": "Collector / other-agent door. Folder names stay agents/. Whoever is assigned as collector, or a non-crew other-agent. Do not use grok/ or Runner pairing.",
     "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
   },
   "style_recipes": {
@@ -13,7 +13,7 @@
   },
   "source_modes": {
     "collect": "Collector gathers clips. Both outboxes. Status waiting_for_collector.",
-    "own": "Operator files only. Grok outbox only. Status waiting_for_editor.",
+    "own": "Operator files only. Editor outbox only. Status waiting_for_editor.",
     "own_and_collect": "Operator A-roll plus collector b-roll. Both outboxes. Keep owned clips."
   },
   "crew": {
@@ -50,7 +50,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
-      "created_by": "grok",
+      "created_by": "the assigned editor name",
       "runner": true
     },
     "agent": {
@@ -59,7 +59,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
-      "created_by": "your agent name",
+      "created_by": "the assigned collector or other-agent name",
       "runner": false
     }
   },
@@ -92,7 +92,7 @@
         "caption": "Instagram caption text, up to 2200 characters",
         "edit_spec_id": "required when fulfilling an operator spec — copy the id from the brief the operator sent",
         "door": "required: grok or agent. Must match the inbox folder and the spec.",
-        "created_by": "How the desk labels the sender. Use grok on the Grok door. On the other-agent door use Claude, Codex, ChatGPT, Gemini, Cursor, or your name.",
+        "created_by": "How the desk labels the sender. Use the assigned bot name — the name that checked in, or the name the operator typed. Do not assume Grok or Claude.",
         "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
       },
       "jobs": [

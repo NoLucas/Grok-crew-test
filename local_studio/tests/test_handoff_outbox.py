@@ -33,7 +33,7 @@ def test_create_spec_writes_only_that_door_outbox(studio):
     assert payload["schema"] == OUTBOX_SCHEMA
     assert payload["id"] == grok["id"]
     assert payload["door"] == "grok"
-    assert payload["agent"] == "Grok"
+    assert payload["agent"] == "editor"
     assert payload["return"]["inbox"].endswith("handoff-inbox/grok/")
     assert payload["return"]["git_prefix"] == "grok/"
     assert "will not attach footage" in brief

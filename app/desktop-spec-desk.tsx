@@ -102,9 +102,24 @@ type HandoffStatus = {
 
 type JsonObject = Record<string, unknown>;
 
+type CrewBot = {
+  bot_id?: string;
+  display_name?: string;
+  presence?: string;
+  purpose?: string;
+  role_hint?: string;
+};
+
+type CrewRoster = {
+  bots?: CrewBot[];
+  suggested_collector?: string;
+  suggested_editor?: string;
+};
+
 type SpecDeskProps = {
   specs: EditSpec[];
   recipes?: StyleRecipe[];
+  roster?: CrewRoster;
   handoff?: HandoffStatus;
   busy: boolean;
   studioReady: boolean;
@@ -129,6 +144,7 @@ type CrewDraft = {
   must_keep: string;
   must_drop: string;
   collector: string;
+  editor: string;
   collect_query: string;
   collect_min: string;
   collect_max: string;
@@ -149,7 +165,8 @@ const emptyDraft = (): CrewDraft => ({
   look: '',
   must_keep: '',
   must_drop: '',
-  collector: 'Claude',
+  collector: '',
+  editor: '',
   collect_query: '',
   collect_min: '3',
   collect_max: '8',
@@ -183,6 +200,23 @@ function ownedPaths(text: string): string[] {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
+function visibleBotName(
+  name: string,
+  role: 'collect' | 'edit',
+  t: (ko: string, en: string, zh: string, ja: string) => string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === 'collector' || trimmed === 'agent') {
+    return role === 'collect'
+      ? t('수집 봇', 'Collector', '收集机器人', '収集ボット')
+      : t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
+  }
+  if (trimmed === 'editor') {
+    return t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
+  }
+  return trimmed;
+}
+
 function specMode(item: EditSpec): string {
   return item.source_mode || item.spec?.source_mode || (item.crew || item.spec?.crew ? 'collect' : 'bot');
 }
@@ -190,6 +224,7 @@ function specMode(item: EditSpec): string {
 export function SpecDesk({
   specs,
   recipes: recipesProp,
+  roster,
   handoff,
   busy,
   studioReady,
@@ -241,6 +276,17 @@ export function SpecDesk({
     });
   }, [recipes]);
 
+  useEffect(() => {
+    const suggestedCollector = roster?.suggested_collector || '';
+    const suggestedEditor = roster?.suggested_editor || '';
+    if (!suggestedCollector && !suggestedEditor) return;
+    setDraft((value) => ({
+      ...value,
+      collector: value.collector || suggestedCollector,
+      editor: value.editor || suggestedEditor,
+    }));
+  }, [roster?.suggested_collector, roster?.suggested_editor]);
+
   const recipeCards = useMemo(() => {
     const byId = new Map(recipes.map((item) => [item.id, item]));
     return RECIPE_ORDER.map((id) => byId.get(id)).filter((item): item is StyleRecipe => Boolean(item));
@@ -250,7 +296,17 @@ export function SpecDesk({
   const editing = specs.filter((item) => item.status === 'waiting_for_editor' || item.status === 'waiting_for_bot');
   const received = specs.filter((item) => item.status === 'received');
   const active = specs.find((item) => item.id === activeSpecId) || collecting[0] || editing[0] || received[0];
-  const collectorName = active?.collector?.agent || active?.spec?.collector?.agent || draft.collector || 'Claude';
+  const connectedBots = roster?.bots ?? [];
+  const collectorName = visibleBotName(
+    active?.collector?.agent || active?.spec?.collector?.agent || draft.collector,
+    'collect',
+    t,
+  );
+  const editorName = visibleBotName(
+    active?.editor?.agent || active?.spec?.editor?.agent || draft.editor,
+    'edit',
+    t,
+  );
   const materialsCount = handoff?.materials?.pending_count ?? 0;
   const unknownLicense = handoff?.materials?.unknown_license_count ?? 0;
   const needsCollector = draft.source_mode !== 'own';
@@ -281,8 +337,8 @@ export function SpecDesk({
           upload: false,
           language,
           crew: draft.source_mode !== 'own',
-          collector: draft.collector.trim() || 'Claude',
-          editor: 'Grok',
+          collector: draft.collector.trim() || undefined,
+          editor: draft.editor.trim() || undefined,
         }),
       });
       const record = created.edit_spec as EditSpec & {
@@ -304,8 +360,8 @@ export function SpecDesk({
       }
       if (draft.source_mode === 'own') {
         setOutboxNotice(record.outbox?.git?.ok
-          ? t('Grok 보낼함에 올렸고 git에도 올렸습니다. 내 파일만 자릅니다.', 'Placed in the Grok outbox and pushed to git. Grok cuts your files.', '已放入 Grok 发件箱并推到 git。只剪你的文件。', 'Grok 送信箱に入れ、git にも上げました。自分のファイルだけ切る。')
-          : t('Grok 보낼함에 올렸습니다. 내 파일만 자릅니다.', 'Placed in the Grok outbox. Grok cuts your files.', '已放入 Grok 发件箱。只剪你的文件。', 'Grok 送信箱に入れました。自分のファイルだけ切る。'));
+          ? t(`${editorName} 보낼함에 올렸고 git에도 올렸습니다. 내 파일만 자릅니다.`, `Placed in the ${editorName} outbox and pushed to git. ${editorName} cuts your files.`, `已放入 ${editorName} 发件箱并推到 git。只剪你的文件。`, `${editorName} 送信箱に入れ、git にも上げました。自分のファイルだけ切る。`)
+          : t(`${editorName} 보낼함에 올렸습니다. 내 파일만 자릅니다.`, `Placed in the editor outbox. ${editorName} cuts your files.`, `已放入编辑发件箱。${editorName} 只剪你的文件。`, `編集送信箱に入れました。${editorName} が自分のファイルだけ切る。`));
       } else if (record.outbox?.collect?.git?.ok && record.outbox?.edit?.git?.ok) {
         setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. 수집 봇은 outbox/agents, 편집 봇은 outbox/grok 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. The collector reads outbox/agents; the editor reads outbox/grok.', '已放入两个发件箱并推到 git。收集机器人读 outbox/agents，剪辑机器人读 outbox/grok。', '両方の送信箱に入れ、git にも上げました。収集は outbox/agents、編集は outbox/grok を読む。'));
       } else {
@@ -379,12 +435,12 @@ export function SpecDesk({
       const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string; handoff_agent?: string }; agent?: string; door?: string }> : [];
       const projectId = imported[0]?.project?.id;
       if (projectId) {
-        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || 'Grok') });
+        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || editorName) });
         return;
       }
       setError(demo
         ? t('예시 컷을 만들지 못했습니다.', 'Could not write the demo cut.', '无法写入示例剪辑。', 'デモカットを作れませんでした。')
-        : t('아직 Grok이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.', 'No editor cut yet. The editor returns it after materials arrive.', '还没有剪辑。素材到了之后由剪辑机器人交回。', 'カットはまだありません。素材のあと編集ボットが返します。'));
+        : t(`아직 ${editorName}이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.`, `No ${editorName} cut yet. The editor returns it after materials arrive.`, `还没有 ${editorName} 的剪辑。素材到了之后交回。`, `${editorName} のカットはまだありません。素材のあと編集ボットが返します。`));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('받지 못했습니다.', 'Could not receive the package.', '无法接收。', '受け取れませんでした。'));
     } finally {
@@ -394,7 +450,7 @@ export function SpecDesk({
 
   const locked = busy || saving || pulling || !studioReady;
   const saveLabel = draft.source_mode === 'own'
-    ? t('규격 저장하고 Grok 보낼함에 올리기', 'Save to the Grok outbox', '保存规格并放入 Grok 发件箱', '仕様を保存して Grok 送信箱へ')
+    ? t(`규격 저장하고 ${editorName} 보낼함에 올리기`, `Save to the ${editorName} outbox`, `保存规格并放入 ${editorName} 发件箱`, `仕様を保存して ${editorName} 送信箱へ`)
     : t('규격 저장하고 두 보낼함에 올리기', 'Save to both outboxes', '保存规格并放入两个发件箱', '仕様を保存して両方の送信箱へ');
 
   return (
@@ -402,7 +458,7 @@ export function SpecDesk({
       <div className="desktop-spec-hero">
         <span>✦</span>
         <h1>{t('스타일을 고르면 규격이 채워집니다', 'Pick a style. The spec fills in.', '选风格，规格会填好。', 'スタイルを選ぶと仕様が埋まる。')}</h1>
-        <p>{t('인스타·틱톡·유튜브 레시피를 고르고, 화면은 내 파일인지 수집인지 정하세요. 수집 봇이 자료를 모으면 Grok이 그 클립만 자릅니다. 이 책상은 사이트를 긁지 않습니다.', 'Choose Instagram, TikTok, or YouTube, then say whether the pictures are yours or collected. The collector drops clips; Grok cuts only those. This desk does not scrape sites.', '先选 Instagram、TikTok 或 YouTube，再决定画面是你的文件还是收集来的。收集机器人放素材，Grok 只剪那些片段。这个工作台不抓网站。', 'Instagram・TikTok・YouTube のレシピを選び、画面が自分のファイルか収集かを決める。収集ボットが素材を置き、Grok はそのクリップだけ切る。このデスクはサイトを掻かない。')}</p>
+        <p>{t('인스타·틱톡·유튜브 레시피를 고르고, 화면은 내 파일인지 수집인지 정하세요. 역할 이름은 체크인한 봇을 따릅니다. 이 책상은 사이트를 긁지 않습니다.', 'Choose Instagram, TikTok, or YouTube, then say whether the pictures are yours or collected. Role names follow the bots that check in. This desk does not scrape sites.', '先选 Instagram、TikTok 或 YouTube，再决定画面从哪来。角色名跟着签到的机器人变。这个工作台不抓网站。', 'Instagram・TikTok・YouTube のレシピを選び、画面の出どころを決める。役割名はチェックインしたボットに従う。このデスクはサイトを掻かない。')}</p>
       </div>
 
       <form className="desktop-spec-form" onSubmit={(event) => { event.preventDefault(); void saveSpec(); }}>
@@ -446,7 +502,7 @@ export function SpecDesk({
           <legend>{t('화면은 어디서', 'Where do the pictures come from', '画面从哪来', '画面はどこから')}</legend>
           <div className="desktop-spec-source-grid">
             {([
-              ['own', t('내 파일', 'My files', '我的文件', '自分のファイル'), t('이 컴퓨터의 영상만 Grok이 자릅니다. 수집 봇은 부르지 않습니다.', 'Grok cuts files already on this computer. No collector.', 'Grok 只剪这台电脑上的文件。不叫收集机器人。', 'このPCの映像だけ Grok が切る。収集ボットは呼ばない。')],
+              ['own', t('내 파일', 'My files', '我的文件', '自分のファイル'), t(`이 컴퓨터의 영상만 ${editorName}이 자릅니다. 수집 봇은 부르지 않습니다.`, `${editorName} cuts files already on this computer. No collector.`, `${editorName} 只剪这台电脑上的文件。不叫收集机器人。`, `このPCの映像だけ ${editorName} が切る。収集ボットは呼ばない。`)],
               ['collect', t('수집', 'Collect', '收集', '収集'), t('수집 봇이 쓸 수 있는 출처에서 클립을 모읍니다. 이 PC는 사이트를 긁지 않습니다.', 'The collector gathers allowed clips. This PC does not scrape.', '收集机器人从你能用的来源找片段。这台电脑不抓站。', '収集ボットが使える出典から集める。このPCは掻かない。')],
               ['own_and_collect', t('둘 다', 'Both', '两者', '両方'), t('내 파일이 본편입니다. 수집 봇은 B롤과 커버만 보탭니다.', 'Your files are the A-roll. The collector adds b-roll and covers only.', '你的文件是主画面。收集机器人只补 B-roll 和封面。', '自分のファイルが本編。収集は Bロールとカバーだけ足す。')],
             ] as const).map(([id, label, hint]) => (
@@ -464,18 +520,16 @@ export function SpecDesk({
           </div>
         </fieldset>
 
+        <p className="desktop-spec-meta">
+          {connectedBots.filter((bot) => bot.presence === 'active').length
+            ? t(`지금 연결된 봇 ${connectedBots.filter((bot) => bot.presence === 'active').length}명`, `${connectedBots.filter((bot) => bot.presence === 'active').length} bot(s) checked in`, `当前已连接 ${connectedBots.filter((bot) => bot.presence === 'active').length} 个机器人`, `接続中のボット ${connectedBots.filter((bot) => bot.presence === 'active').length} 人`)
+            : t('아직 체크인한 봇이 없습니다. 이름을 적거나, 봇이 들어오면 여기 이름이 바뀝니다.', 'No bot has checked in yet. Type a name, or wait for a bot to join.', '还没有机器人签到。可以先写名字，签到后名称会变。', 'まだチェックインしたボットはいない。名前を書くか、ボットが入ると名前が変わる。')}
+        </p>
         {needsCollector ? (
           <>
             <label className="desktop-spec-field">
               <span>{t('수집 봇', 'Collector', '收集机器人', '収集ボット')}</span>
-              <input list="collector-names" value={draft.collector} onChange={(event) => setDraft({ ...draft, collector: event.target.value })} placeholder="Claude / Codex / ChatGPT" />
-              <datalist id="collector-names">
-                <option value="Claude" />
-                <option value="Codex" />
-                <option value="ChatGPT" />
-                <option value="Gemini" />
-                <option value="Cursor" />
-              </datalist>
+              <input list="connected-bot-names" value={draft.collector} onChange={(event) => setDraft({ ...draft, collector: event.target.value })} placeholder={collectorName} />
             </label>
             <label className="desktop-spec-field desktop-spec-wide">
               <span>{t('찾아올 것', 'Find', '要找什么', '探してくるもの')}</span>
@@ -493,6 +547,15 @@ export function SpecDesk({
             </div>
           </>
         ) : null}
+        <label className="desktop-spec-field">
+          <span>{t('편집 봇', 'Editor', '剪辑机器人', '編集ボット')}</span>
+          <input list="connected-bot-names" value={draft.editor} onChange={(event) => setDraft({ ...draft, editor: event.target.value })} placeholder={editorName} />
+          <datalist id="connected-bot-names">
+            {connectedBots.map((bot) => (
+              <option key={bot.bot_id || bot.display_name} value={bot.display_name || ''} />
+            ))}
+          </datalist>
+        </label>
 
         {needsOwned ? (
           <label className="desktop-spec-field desktop-spec-wide">
@@ -563,7 +626,7 @@ export function SpecDesk({
             <div className="desktop-spec-door-head">
               <span>{t('수집', 'Collect', '收集', '収集')}</span>
               <div>
-                <b>{t(`${collectorName}가 자료를 모읍니다`, `${collectorName} gathers the clips`, `${collectorName} 收集素材`, `${collectorName} が素材を集める`)}</b>
+                <b>{t(`${collectorName} · 자료를 모읍니다`, `${collectorName} gathers the clips`, `${collectorName} 收集素材`, `${collectorName} が素材を集める`)}</b>
                 <small>{activeRecipe ? localized(activeRecipe.name, language, activeRecipe.id) : t('레시피 없음', 'No recipe', '无风格', 'レシピなし')} · {t('사이트를 이 PC에서 긁지 않습니다. 클립과 manifest.json 만 자료함에 둡니다. 컷은 만들지 않습니다.', 'This PC does not scrape. Drop clips and manifest.json in the materials box. Do not make the cut.', '这台电脑不抓站。只把片段和 manifest.json 放进资料箱。不要做成品剪辑。', 'このPCは掻かない。クリップと manifest.json だけ素材箱へ。カットは作らない。')}</small>
               </div>
             </div>
@@ -599,9 +662,9 @@ export function SpecDesk({
 
         <section className="desktop-spec-door is-grok">
           <div className="desktop-spec-door-head">
-            <span>Grok</span>
+            <span>{editorName}</span>
             <div>
-              <b>{t('Grok이 그 자료만 편집합니다', 'Grok edits those clips only', 'Grok 只剪那些素材', 'Grok はその素材だけ編集する')}</b>
+              <b>{t(`${editorName} · 그 자료만 편집합니다`, `${editorName} edits those clips only`, `${editorName} 只剪那些素材`, `${editorName} はその素材だけ編集する`)}</b>
               <small>{activeRecipe ? localized(activeRecipe.name, language, activeRecipe.id) : t('레시피 없음', 'No recipe', '无风格', 'レシピなし')} · {specMode(active || { id: '', status: '', title: '', goal: '' }) === 'own' ? t('자료함의 내 파일을 자릅니다.', 'Cuts your files in the materials box.', '剪资料箱里你的文件。', '素材箱の自分のファイルを切る。') : t('자료함의 클립을 잘라 인박스로 돌려줍니다. Runner 페어링도 이 역할입니다.', 'Cuts the materials-box clips and returns them to the inbox. Runner pairing is this role only.', '剪资料箱里的片段并交回收件箱。Runner 配对也只用这个角色。', '素材箱のクリップを切って受信箱に返す。Runner ペアリングもこの役割だけ。')}</small>
             </div>
           </div>
@@ -613,7 +676,7 @@ export function SpecDesk({
               </button>
             ) : null}
             <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveCut(false)}>
-              {t('Grok이 넘긴 편집 받기', 'Receive the Grok cut', '接收 Grok 剪辑', 'Grok の編集を受け取る')}
+              {t(`${editorName} 편집 받기`, `Receive the ${editorName} cut`, `接收 ${editorName} 剪辑`, `${editorName} の編集を受け取る`)}
             </button>
             <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveCut(true)}>
               {t('편집 예시 도착 보기', 'See an editor sample', '查看剪辑示例', '編集の届き方を見る')}

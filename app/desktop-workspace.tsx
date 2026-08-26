@@ -101,7 +101,12 @@ type HandoffStatus = {
   };
   materials?: { pending_count?: number; unknown_license_count?: number; has_unknown_license?: boolean };
 };
-type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus; style_recipes?: StyleRecipe[] };
+type CrewRoster = {
+  bots?: Array<{ bot_id?: string; display_name?: string; presence?: string; purpose?: string; role_hint?: string }>;
+  suggested_collector?: string;
+  suggested_editor?: string;
+};
+type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus; style_recipes?: StyleRecipe[]; crew_roster?: CrewRoster };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;
 type AnalysisScene = { id: string; at: number; size_bytes: number };
@@ -164,6 +169,19 @@ function relativeWorkspacePath(value: string) {
   const marker = '/workspace/';
   const index = normalized.toLowerCase().lastIndexOf(marker);
   return index >= 0 ? normalized.slice(index + marker.length) : normalized;
+}
+
+function handoffSenderLabel(
+  item: { handoff_agent?: string | null; handoff_door?: string | null },
+  t: (ko: string, en: string, zh: string, ja: string) => string,
+) {
+  const name = (item.handoff_agent || '').trim();
+  if (name && name !== 'editor' && name !== 'collector' && name !== 'agent') {
+    return name;
+  }
+  if (item.handoff_door === 'grok') return t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
+  if (item.handoff_door === 'agent') return t('수집 봇', 'Collector', '收集机器人', '収集ボット');
+  return t('이 PC', 'This PC', '本机', 'このPC');
 }
 
 function mediaUrl(path: string) {
@@ -908,7 +926,7 @@ export default function DesktopWorkspace() {
         <aside className={`desktop-sidebar ${drawer === 'projects' ? 'open' : ''}`}>
           <div className="desktop-side-head"><b>{t('프로젝트', 'Projects', '项目', 'プロジェクト')}</b><div className="desktop-side-head-actions"><button type="button" className={specDeskOpen || !project ? 'active' : ''} onClick={() => { setSpecDeskOpen(true); setDrawer('none'); }}>{t('새 규격', 'New brief', '新规格', '新しい仕様')}</button><button type="button" aria-label={t('새 프로젝트', 'New project', '新建项目', '新規プロジェクト')} onClick={() => setCreateOpen((value) => !value)}>＋</button></div></div>
           {createOpen && <section className="desktop-create-card">{sampleAvailable ? <button type="button" className="desktop-primary" disabled={busy} onClick={() => void openSampleProject()}>{t('샘플로 시작', 'Start with the sample', '从示例开始', 'サンプルで始める')}</button> : null}<input value={newProject.title} onChange={(event) => setNewProject({ ...newProject, title: event.target.value })} placeholder={t('프로젝트 이름', 'Project name', '项目名称', 'プロジェクト名')} /><select value={newProject.source_path} onChange={(event) => setNewProject({ ...newProject, source_path: event.target.value })}><option value="">{t('원본 선택', 'Choose source', '选择素材', '素材を選択')}</option>{workspace.media.filter((item) => item.kind === 'video' && item.area === 'inputs').map((item) => <option value={item.path} key={item.path}>{item.name}</option>)}</select><button className="desktop-secondary" disabled={busy} onClick={() => void importMedia()}>{t('내 컴퓨터에서 가져오기', 'Import from computer', '从电脑导入', 'コンピュータから読み込む')}</button><input value={newProject.output_path} onChange={(event) => setNewProject({ ...newProject, output_path: event.target.value })} /><button className="desktop-primary" disabled={busy} onClick={() => void createProject()}>{t('만들기', 'Create', '创建', '作成')}</button></section>}
-          <div className="desktop-project-list">{workspace.projects.map((item) => <button className={!specDeskOpen && item.id === selectedProjectId ? 'active' : ''} key={item.id} onClick={() => { setSpecDeskOpen(false); setSelectedProjectId(item.id); setDrawer('none'); }}><span>▣</span><div><b>{item.title}</b><small>{item.handoff_agent || (item.handoff_door === 'grok' ? 'Grok' : item.handoff_door === 'agent' ? t('다른 에이전트', 'Other agent', '其他代理', '他エージェント') : t('이 PC', 'This PC', '本机', 'このPC'))} · v{item.current_revision} · {new Date(item.updated_at).toLocaleDateString()}</small></div></button>)}{studioState === 'loading' && !workspace.projects.length ? <p className="desktop-side-empty">{t('Local Studio에 연결하는 중…', 'Connecting to Local Studio…', '正在连接本地工作室…', 'Local Studio に接続しています…')}</p> : null}{studioState === 'error' && !workspace.projects.length ? <p className="desktop-side-empty">{t('연결하지 못했습니다. 다시 시도하세요.', 'Could not connect. Retry from the banner.', '无法连接。请从横幅重试。', '接続できません。バナーから再試行してください。')}</p> : null}{studioState === 'ready' && !workspace.projects.length ? <div className="desktop-side-empty"><p>{t('아직 봇이 넘긴 컷이 없습니다. 가운데 두 문 중 하나에 규격을 적으세요.', 'No bot cut yet. Write the brief on one of the two doors.', '还没有机器人剪辑。请在中间两扇门之一写规格。', 'ボットのカットはまだありません。中央の2つのドアに仕様を書いてください。')}</p></div> : null}</div>
+          <div className="desktop-project-list">{workspace.projects.map((item) => <button className={!specDeskOpen && item.id === selectedProjectId ? 'active' : ''} key={item.id} onClick={() => { setSpecDeskOpen(false); setSelectedProjectId(item.id); setDrawer('none'); }}><span>▣</span><div><b>{item.title}</b><small>{handoffSenderLabel(item, t)} · v{item.current_revision} · {new Date(item.updated_at).toLocaleDateString()}</small></div></button>)}{studioState === 'loading' && !workspace.projects.length ? <p className="desktop-side-empty">{t('Local Studio에 연결하는 중…', 'Connecting to Local Studio…', '正在连接本地工作室…', 'Local Studio に接続しています…')}</p> : null}{studioState === 'error' && !workspace.projects.length ? <p className="desktop-side-empty">{t('연결하지 못했습니다. 다시 시도하세요.', 'Could not connect. Retry from the banner.', '无法连接。请从横幅重试。', '接続できません。バナーから再試行してください。')}</p> : null}{studioState === 'ready' && !workspace.projects.length ? <div className="desktop-side-empty"><p>{t('아직 봇이 넘긴 컷이 없습니다. 가운데 두 문 중 하나에 규격을 적으세요.', 'No bot cut yet. Write the brief on one of the two doors.', '还没有机器人剪辑。请在中间两扇门之一写规格。', 'ボットのカットはまだありません。中央の2つのドアに仕様を書いてください。')}</p></div> : null}</div>
           <div className="desktop-side-head desktop-version-head"><b>{t('버전 기록', 'Versions', '版本', 'バージョン')}</b><span>{versions.length}</span></div>
           <div className="desktop-version-list">{!versions.length ? <p className="desktop-side-empty">{project ? t('이 프로젝트의 버전은 아직 없습니다.', 'No versions for this project yet.', '此项目还没有版本。', 'このプロジェクトのバージョンはまだありません。') : t('프로젝트를 열면 버전 기록이 여기에 쌓입니다.', 'Open a project to collect version history here.', '打开项目后版本会显示在这里。', 'プロジェクトを開くと履歴がここに残ります。')}</p> : null}{versions.slice(0, 8).map((version, index) => (
             <button
@@ -930,7 +948,7 @@ export default function DesktopWorkspace() {
                     : version.action_kind === 'restore'
                       ? t('버전 복원', 'Restore', '恢复版本', 'バージョン復元')
                       : version.origin === 'remote_bot'
-                        ? 'Grok'
+                        ? (version.created_by && version.created_by !== 'remote_bot' ? version.created_by : t('편집 봇', 'Editor', '剪辑机器人', '編集ボット'))
                         : version.origin === 'human'
                           ? t('사용자', 'You', '用户', 'ユーザー')
                           : t('시스템', 'System', '系统', 'システム')}
@@ -948,6 +966,7 @@ export default function DesktopWorkspace() {
           : specDeskOpen || !project ? <SpecDesk
               specs={workspace.edit_specs ?? []}
               recipes={workspace.style_recipes ?? []}
+              roster={workspace.crew_roster}
               handoff={workspace.handoff}
               busy={busy}
               studioReady={studioState === 'ready'}
@@ -962,13 +981,13 @@ export default function DesktopWorkspace() {
                 setActivePanel('edit');
                 await refreshWorkspace(true);
                 await refreshProject(projectId);
-                const name = sender?.agent || (sender?.door === 'grok' ? 'Grok' : t('다른 에이전트', 'another agent', '其他代理', '他のエージェント'));
+                const name = handoffSenderLabel({ handoff_agent: sender?.agent, handoff_door: sender?.door }, t);
                 setMessage(t(`${name} 쪽에서 넘긴 소스와 편집을 열었습니다.`, `Opened the source and cut from ${name}.`, `已打开 ${name} 交来的素材和剪辑。`, `${name} が渡した素材と編集を開きました。`));
               }}
             />
           : !timeline ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('타임라인을 불러오는 중', 'Loading the timeline', '正在加载时间线', 'タイムラインを読み込み中')}</h1><p>{t('프로젝트가 열려 있습니다. 규격 화면으로 돌아가지 않습니다.', 'A project is open. The spec desk stays hidden.', '项目已打开。不会回到规格页。', 'プロジェクトは開いています。仕様デスクには戻りません。')}</p><button type="button" className="desktop-secondary" onClick={() => void refreshProject(project.id)}>{t('다시 읽기', 'Reload', '重新读取', '再読み込み')}</button></div>
           : <>
-            <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips">{project.handoff_agent ? <span className={project.handoff_door === 'grok' ? 'is-grok' : 'is-agent'}>{project.handoff_door === 'grok' ? t('Grok 문', 'Grok door', 'Grok 门', 'Grok ドア') : t('다른 에이전트 문', 'Other-agent door', '其他代理门', '他エージェントドア')} · {project.handoff_agent}</span> : null}<span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
+            <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips">{project.handoff_agent ? <span className={project.handoff_door === 'grok' ? 'is-grok' : 'is-agent'}>{project.handoff_door === 'grok' ? t('편집 문', 'Editor door', '剪辑门', '編集ドア') : t('수집 문', 'Collector door', '收集门', '収集ドア')} · {handoffSenderLabel(project, t)}</span> : null}<span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
               <section className="desktop-card desktop-source-card">
                 <div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div>

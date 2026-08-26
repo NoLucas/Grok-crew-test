@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 사용자는 규격만 적습니다. 봇이 소스 영상과 편집을 만들어, 이 PC로 네트워크 호출을 하지 않고 전용 git 브랜치로 넘깁니다.",
   "roles": {
-    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 Grok 또는 다른 에이전트 중 하나만 고릅니다. 저장하면 그 문 보낼함에 spec.json 이 올라갑니다. 원본 파일을 붙이지 않습니다.",
-    "grok_door": "Grok만. 보낼함은 outbox/grok/. 끝난 패키지는 grok/ 아래. Runner 페어링도 이 문만. agents/ 는 쓰지 마세요.",
-    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor 등 Grok이 아닌 에이전트. 보낼함은 outbox/agents/. 끝난 패키지는 agents/ 아래. grok/ 와 Runner는 쓰지 마세요.",
+    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 편집(폴더 grok/) 또는 수집·다른 에이전트(폴더 agents/) 중 하나만 고릅니다. 저장하면 그 문 보낼함에 spec.json 이 올라갑니다. 원본 파일을 붙이지 않습니다.",
+    "grok_door": "편집 문. 폴더 이름은 grok/ 그대로. 지정된 편집 봇만. Runner 페어링도 이 문만. agents/ 는 쓰지 마세요.",
+    "other_agent_door": "수집·다른 에이전트 문. 폴더 이름은 agents/ 그대로. 지정된 수집 봇, 또는 크루가 아닌 다른 에이전트. grok/ 와 Runner는 쓰지 마세요.",
     "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다."
   },
   "style_recipes": {
@@ -13,7 +13,7 @@
   },
   "source_modes": {
     "collect": "수집 봇이 클립을 모읍니다. 보낼함 둘. 상태는 waiting_for_collector.",
-    "own": "운영자 파일만. Grok 보낼함만. 상태는 waiting_for_editor.",
+    "own": "운영자 파일만. 편집 보낼함만. 상태는 waiting_for_editor.",
     "own_and_collect": "운영자 본편 + 수집 B롤. 보낼함 둘. owned 클립은 유지."
   },
   "crew": {
@@ -50,7 +50,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
-      "created_by": "grok",
+      "created_by": "지정된 편집 봇 이름",
       "runner": true
     },
     "agent": {
@@ -59,7 +59,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
-      "created_by": "에이전트 이름",
+      "created_by": "지정된 수집 봇 또는 다른 에이전트 이름",
       "runner": false
     }
   },
@@ -92,7 +92,7 @@
         "caption": "Instagram 캡션, 최대 2200자",
         "edit_spec_id": "운영자 규격을 이행할 때 필수 — 받은 글에 있는 id를 그대로 넣습니다",
         "door": "필수: grok 또는 agent. 인박스 폴더와 규격과 같아야 합니다",
-        "created_by": "이 데스크가 보낸 사람을 구분하는 이름. Grok 문은 grok. 다른 에이전트 문은 Claude, Codex, ChatGPT, Gemini, Cursor, 또는 당신 이름",
+        "created_by": "이 데스크가 보낸 사람을 구분하는 이름. 체크인한 봇 이름, 또는 운영자가 적은 이름. Grok이나 Claude로 단정하지 마세요.",
         "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
       },
       "jobs": [

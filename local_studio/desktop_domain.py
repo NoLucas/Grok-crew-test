@@ -1216,7 +1216,7 @@ def workspace_v2() -> dict[str, Any]:
         version = ensure_timeline_version(project["id"])
         project["current_revision"] = version["revision"]
     from first_run import first_run_status
-    from edit_spec import list_specs
+    from edit_spec import crew_roster, list_specs
     from handoff_inbox import handoff_status
     from style_recipes import list_recipes
 
@@ -1231,4 +1231,5 @@ def workspace_v2() -> dict[str, Any]:
         "edit_specs": list_specs(),
         "handoff": handoff_status(),
         "style_recipes": list_recipes(),
+        "crew_roster": crew_roster(),
     }

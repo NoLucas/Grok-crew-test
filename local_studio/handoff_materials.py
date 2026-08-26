@@ -146,7 +146,7 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
     if not clips:
         return {"ok": False, "folder": folder.name, "reason": "collector package must include at least one video clip"}
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
-    agent = normalize_agent(manifest.get("agent") or collector.get("agent") or "Claude", "agent")
+    agent = normalize_agent(manifest.get("agent") or collector.get("agent") or "collector", "agent")
     written = {
         "schema": MATERIALS_SCHEMA,
         "edit_spec_id": resolved_id,
@@ -274,7 +274,7 @@ def write_demo_materials(spec_id: str) -> dict[str, Any]:
     if source_mode_of(spec) == "own":
         return write_owned_materials(spec_id, [str(sample)])
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
-    agent = normalize_agent(collector.get("agent") or "Claude", "agent")
+    agent = normalize_agent(collector.get("agent") or "collector", "agent")
     folder = materials_folder(spec_id)
     folder.mkdir(parents=True, exist_ok=True)
     existing = _read_manifest(folder) or {}

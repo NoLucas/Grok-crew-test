@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。操作者只写规格。机器人提供原片和剪辑，再通过专用 git 分支交接，而不是连接这台电脑。",
   "roles": {
-    "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：Grok 或其他代理。保存后会把 spec.json 放入那扇门的发件箱。不要附上原片。",
-    "grok_door": "仅 Grok。读取 outbox/grok/。交回包裹放在 grok/ 下。Runner 配对也只用这扇门。不要用 agents/。",
-    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。读取 outbox/agents/。交回包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
+    "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：剪辑门（文件夹 grok/）或收集/其他代理门（文件夹 agents/）。保存后会把 spec.json 放入那扇门的发件箱。不要附上原片。",
+    "grok_door": "剪辑门。文件夹名仍是 grok/。谁被指定为剪辑机器人就写谁。Runner 配对也只用这扇门。不要用 agents/。",
+    "other_agent_door": "收集/其他代理门。文件夹名仍是 agents/。谁被指定为收集机器人，或非组员的其他代理。不要用 grok/ 或 Runner。",
     "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。"
   },
   "style_recipes": {
@@ -13,7 +13,7 @@
   },
   "source_modes": {
     "collect": "收集机器人找片段。两个发件箱。状态 waiting_for_collector。",
-    "own": "只用操作者的文件。只有 Grok 发件箱。状态 waiting_for_editor。",
+    "own": "只用操作者的文件。只有剪辑发件箱。状态 waiting_for_editor。",
     "own_and_collect": "操作者主画面加收集 B-roll。两个发件箱。保留 owned 片段。"
   },
   "crew": {
@@ -50,7 +50,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
-      "created_by": "grok",
+      "created_by": "指定的剪辑机器人名称",
       "runner": true
     },
     "agent": {
@@ -59,7 +59,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
-      "created_by": "你的代理名称",
+      "created_by": "指定的收集机器人或其他代理名称",
       "runner": false
     }
   },
@@ -92,7 +92,7 @@
         "caption": "Instagram 文案,最多 2200 字符",
         "edit_spec_id": "履行操作者规格时必填 — 复制对方发来的 id",
         "door": "必填：grok 或 agent。必须与收件箱文件夹和规格一致",
-        "created_by": "工作台用这个名字标记送来的人。Grok 门写 grok。其他代理门写 Claude、Codex、ChatGPT、Gemini、Cursor 或你的名字",
+        "created_by": "工作台用这个名字标记送来的人。写签到的机器人名，或操作者填写的名字。不要默认成 Grok 或 Claude。",
         "handoff_auto_upload_requested": "布尔值,可选——参见下方 auto_upload_policy"
       },
       "jobs": [

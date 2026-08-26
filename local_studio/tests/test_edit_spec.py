@@ -23,7 +23,7 @@ def test_spec_marks_bot_as_source_owner(studio):
     brief = spec_brief(record["id"])
     assert record["id"] in brief["text"]
     assert "will not attach footage" in brief["text"]
-    assert "Grok-only door" in brief["text"]
+    assert "editor door" in brief["text"]
     assert "handoff-outbox/grok" in brief["text"]
     assert "handoff-inbox/grok" in brief["text"]
     assert "Do not use the agents/ folder" in brief["text"]
@@ -43,23 +43,25 @@ def test_agent_door_brief_excludes_grok_inbox(studio):
     assert "other-agent door" in brief["text"]
     assert "handoff-outbox/agents" in brief["text"]
     assert "handoff-inbox/agents" in brief["text"]
-    assert "Do not use the Grok door" in brief["text"]
+    assert "Do not use the editor door" in brief["text"]
     assert "Desktop Runner pairing is only" not in brief["text"]
     assert "Claude" in brief["text"]
 
 
-def test_sender_name_distinguishes_agents():
+def test_sender_name_follows_connected_bot_not_door():
     assert normalize_agent("grok", "grok") == "Grok"
     assert normalize_agent("claude-code", "agent") == "Claude"
     assert normalize_agent("Codex", "agent") == "Codex"
     assert normalize_agent("chatgpt", "agent") == "ChatGPT"
     assert normalize_agent("gemini-cli", "agent") == "Gemini"
     assert normalize_agent("Cursor", "agent") == "Cursor"
+    assert normalize_agent("Claude", "grok") == "Claude"
+    assert normalize_agent("Grok", "agent") == "Grok"
+    assert normalize_agent("", "grok") == "editor"
+    assert normalize_agent("", "agent") == "collector"
     assert resolve_sender({"door": "agent", "created_by": "Claude"}) == ("agent", "Claude")
-    with pytest.raises(ValueError, match="Grok door"):
-        normalize_agent("Claude", "grok")
-    with pytest.raises(ValueError, match="Grok door"):
-        normalize_agent("grok", "agent")
+    assert resolve_sender({"door": "grok", "created_by": "Claude"}) == ("grok", "Claude")
+    assert resolve_sender({"door": "grok", "created_by": "Orion"}) == ("grok", "Orion")
 
 
 def test_media_relpaths_include_broll():
@@ -94,9 +96,9 @@ def test_apply_package_imports_bot_source_and_links_spec(studio, tmp_path):
     assert result["ok"] is True
     assert result["edit_spec_id"] == record["id"]
     assert result["door"] == "grok"
-    assert result["agent"] == "Grok"
+    assert result["agent"] == "editor"
     assert result["project"]["handoff_door"] == "grok"
-    assert result["project"]["handoff_agent"] == "Grok"
+    assert result["project"]["handoff_agent"] == "editor"
     import config
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/source.mp4").read_bytes() == b"x" * 32
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/broll.mp4").read_bytes() == b"y" * 32
@@ -221,3 +223,64 @@ def test_http_spec_brief_and_handoff_status(live_server):
     assert created["edit_spec"]["outbox"]["git"]["skipped"] is True
     outbox = json.loads(urlopen(f"{live_server}/api/v2/handoff/outbox").read().decode())
     assert spec_id in {item["id"] for item in outbox["doors"]["grok"]["pending"]}
+
+
+def test_unnamed_spec_uses_role_defaults_not_grok_or_claude(studio):
+    record = create_spec({"title": "Unnamed crew", "goal": "No brand defaults", "language": "en", "crew": True})
+    assert record["collector"]["agent"] == "collector"
+    assert record["editor"]["agent"] == "editor"
+    assert record["agent"] == "editor"
+
+
+def test_crew_roster_suggests_names_from_checkin_purpose(studio):
+    from config import utc_now
+    from db import db
+    from edit_spec import crew_roster
+
+    now = utc_now()
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO bot_sessions (bot_id, display_name, last_action, last_detail_json, last_seen, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("bot-collect", "Nova", "heartbeat", json.dumps({"purpose": "collect"}), now, now),
+        )
+        conn.execute(
+            """INSERT INTO bot_sessions (bot_id, display_name, last_action, last_detail_json, last_seen, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("bot-edit", "Orion", "heartbeat", json.dumps({"purpose": "edit_video"}), now, now),
+        )
+        conn.execute(
+            """INSERT INTO bot_entries (id, bot_id, display_name, purpose, task, joined_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("e1", "bot-collect", "Nova", "collect", "", now),
+        )
+        conn.execute(
+            """INSERT INTO bot_entries (id, bot_id, display_name, purpose, task, joined_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("e2", "bot-edit", "Orion", "edit_video", "", now),
+        )
+    roster = crew_roster()
+    assert roster["suggested_collector"] == "Nova"
+    assert roster["suggested_editor"] == "Orion"
+    names = {item["display_name"] for item in roster["bots"]}
+    assert names == {"Nova", "Orion"}
+    record = create_spec({
+        "title": "Connected names",
+        "goal": "Use whoever checked in",
+        "language": "en",
+        "crew": True,
+        "collector": "Nova",
+        "editor": "Orion",
+    })
+    assert record["collector"]["agent"] == "Nova"
+    assert record["editor"]["agent"] == "Orion"
+    swapped = create_spec({
+        "title": "Swapped brands",
+        "goal": "Claude may edit",
+        "language": "en",
+        "crew": True,
+        "collector": "Grok",
+        "editor": "Claude",
+    })
+    assert swapped["collector"]["agent"] == "Grok"
+    assert swapped["editor"]["agent"] == "Claude"

@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドボット向けの契約です。操作者は仕様だけ書きます。ボットが素材と編集を作り、このPCへ接続せず専用 git ブランチで渡します。",
   "roles": {
-    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは Grok か他エージェントのどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
-    "grok_door": "Grok のみ。読むのは outbox/grok/。返すパッケージは grok/ の下。Runner ペアリングもこのドアだけ。agents/ は使わない。",
-    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。読むのは outbox/agents/。返すパッケージは agents/ の下。grok/ と Runner は使わない。",
+    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは編集（フォルダ grok/）か収集・他エージェント（フォルダ agents/）のどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
+    "grok_door": "編集ドア。フォルダ名は grok/ のまま。割り当てた編集ボットだけ。Runner ペアリングもこのドアだけ。agents/ は使わない。",
+    "other_agent_door": "収集・他エージェントドア。フォルダ名は agents/ のまま。割り当てた収集ボット、またはクルー以外の他エージェント。grok/ と Runner は使わない。",
     "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
   },
   "style_recipes": {
@@ -13,7 +13,7 @@
   },
   "source_modes": {
     "collect": "収集ボットがクリップを集める。送信箱は二つ。状態は waiting_for_collector。",
-    "own": "操作者のファイルだけ。Grok 送信箱だけ。状態は waiting_for_editor。",
+    "own": "操作者のファイルだけ。編集送信箱だけ。状態は waiting_for_editor。",
     "own_and_collect": "操作者の本編＋収集 Bロール。送信箱は二つ。owned クリップは残す。"
   },
   "crew": {
@@ -50,7 +50,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/grok/",
       "git_prefix": "grok/",
       "bundle_project_door": "grok",
-      "created_by": "grok",
+      "created_by": "割り当てた編集ボット名",
       "runner": true
     },
     "agent": {
@@ -59,7 +59,7 @@
       "inbox": "local_studio/workspace/handoff-inbox/agents/",
       "git_prefix": "agents/",
       "bundle_project_door": "agent",
-      "created_by": "エージェント名",
+      "created_by": "割り当てた収集ボットまたは他エージェント名",
       "runner": false
     }
   },
@@ -92,7 +92,7 @@
         "caption": "Instagram キャプションのテキスト、最大2200文字",
         "edit_spec_id": "操作者の仕様を満たすときは必須 — 渡された id をそのまま入れる",
         "door": "必須: grok または agent。受信箱フォルダと仕様と一致させる",
-        "created_by": "デスクが送り主を見分ける名前。Grok ドアは grok。他エージェントドアは Claude、Codex、ChatGPT、Gemini、Cursor、または自分の名前",
+        "created_by": "デスクが送り主を見分ける名前。チェックインしたボット名、または操作者が書いた名前。Grok や Claude と決めつけない。",
         "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
       },
       "jobs": [

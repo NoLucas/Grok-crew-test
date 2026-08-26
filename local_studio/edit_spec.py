@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from config import utc_now
@@ -37,9 +38,11 @@ OWN_AND_COLLECT_RULE = (
 DOORS = ("grok", "agent")
 ROLES = ("collect", "edit")
 CREW_ROLES = {
-    "collect": {"door": "agent", "default_agent": "Claude"},
-    "edit": {"door": "grok", "default_agent": "Grok"},
+    "collect": {"door": "agent", "default_agent": "collector"},
+    "edit": {"door": "grok", "default_agent": "editor"},
 }
+COLLECT_PURPOSE_HINTS = ("collect", "collector", "gather", "scrape", "scraping", "research", "materials")
+EDIT_PURPOSE_HINTS = ("edit", "editor", "cut", "edit_video", "render")
 AGENT_ALIASES = {
     "grok": "Grok",
     "grok-bot": "Grok",
@@ -90,21 +93,15 @@ def normalize_door(value: Any, *, required: bool = False) -> str:
 
 
 def normalize_agent(value: Any, door: str) -> str:
-    """Canonical sender name. Door is the inbox; agent is who used that inbox."""
+    """Canonical sender name. The door is the inbox; the name is whoever is connected."""
     resolved_door = normalize_door(door)
     key = agent_key(value)
     canonical = AGENT_ALIASES.get(key)
-    if resolved_door == "grok":
-        if canonical and canonical != "Grok":
-            raise ValueError("Only Grok may deliver through the Grok door.")
-        return "Grok"
-    if canonical == "Grok":
-        raise ValueError("Grok must deliver through the Grok door, not agents/.")
     if canonical:
         return canonical
     text = str(value or "").strip()[:80]
-    if not text or key in {"agent", "agents", "bot", "other", "other-agent"}:
-        return "agent"
+    if not text or key in {"agent", "agents", "bot", "other", "other-agent", "default"}:
+        return "editor" if resolved_door == "grok" else "collector"
     return text
 
 
@@ -240,8 +237,8 @@ def normalize_spec(body: dict[str, Any]) -> dict[str, Any]:
             **common,
             "crew": False,
             "door": "grok",
-            "agent": normalize_agent(filled.get("editor") or "Grok", "grok"),
-            "editor": {"role": "edit", "door": "grok", "agent": "Grok"},
+            "agent": normalize_agent(filled.get("editor") or CREW_ROLES["edit"]["default_agent"], "grok"),
+            "editor": {"role": "edit", "door": "grok", "agent": normalize_agent(filled.get("editor") or CREW_ROLES["edit"]["default_agent"], "grok")},
             "source": {"owner": "operator", "rule": OWN_SOURCE_RULE, "box": "handoff-materials"},
         }
     return {
@@ -271,7 +268,7 @@ def _record(row: dict[str, Any] | None) -> dict[str, Any] | None:
         "title": spec.get("title") or "",
         "goal": spec.get("goal") or "",
         "door": spec.get("door") or "grok",
-        "agent": spec.get("agent") or ("Grok" if (spec.get("door") or "grok") == "grok" else "agent"),
+        "agent": spec.get("agent") or ("editor" if (spec.get("door") or "grok") == "grok" else "collector"),
         "crew": bool(spec.get("crew")),
         "source_mode": source_mode,
         "recipe_id": spec.get("recipe_id") or "",
@@ -432,7 +429,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     captions = "on" if spec.get("captions") else "off"
     upload = "do not upload" if not spec.get("upload") else "queue publish only after the operator confirms"
     door = normalize_door(spec.get("door") or record.get("door"))
-    agent = str(spec.get("agent") or ("Grok" if door == "grok" else "agent"))
+    agent = str(spec.get("agent") or ("editor" if door == "grok" else "collector"))
     requested = normalize_role(role) if role not in (None, "") else ""
     mode = source_mode_of(spec)
     recipe_text = _recipe_block(spec, language)
@@ -464,8 +461,8 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     if spec.get("crew"):
         collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
         editor = spec.get("editor") if isinstance(spec.get("editor"), dict) else {}
-        collector_name = str(collector.get("agent") or "Claude")
-        editor_name = str(editor.get("agent") or "Grok")
+        collector_name = str(collector.get("agent") or "collector")
+        editor_name = str(editor.get("agent") or "editor")
         collect_hints = _collect_hint_block(spec, language)
         attach_line_ko = (
             "운영자가 원본을 자료함에 일부 넣어 두었습니다. 맞는 클립만 보태세요. "
@@ -479,7 +476,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
         )
         collect_text = (
             f"이 글은 수집 역할입니다. 편집할 자료를 모으세요. 최종 컷은 만들지 마세요. "
-            f"당신은 {collector_name}입니다. Grok 문과 Runner는 쓰지 마세요.\n\n"
+            f"당신은 {collector_name}입니다. 편집 문(handoff-inbox/grok)과 Runner는 쓰지 마세요.\n\n"
             f"{common}\n"
             f"{collect_hints}"
             f"{attach_line_ko}"
@@ -492,7 +489,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             if language.startswith("ko")
             else (
                 f"This is the collector role. Gather source clips. Do not make the final cut. "
-                f"You are {collector_name}. Do not use the Grok door or Runner.\n\n"
+                f"You are {collector_name}. Do not use the editor door or Runner.\n\n"
                 f"{common}\n"
                 f"{collect_hints}"
                 f"{attach_line_en}"
@@ -515,7 +512,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             else "Cut the clips the collector gathered.\n"
         )
         edit_text = (
-            f"이 글은 편집 역할입니다. Grok만 이 컷을 만드세요. "
+            f"이 글은 편집 역할입니다. {editor_name}만 이 컷을 만드세요. "
             f"{edit_attach_ko}\n"
             f"{common}\n"
             f"자료는 local_studio/workspace/handoff-materials/{record['id']}/manifest.json 에 있습니다. "
@@ -523,11 +520,11 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             f"규격은 보낼함 local_studio/workspace/handoff-outbox/grok/{record['id']}/ 에 있습니다. "
             f"git이면 outbox/grok/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"끝난 패키지는 local_studio/workspace/handoff-inbox/grok/ 또는 git 인계의 grok/ 아래에 두세요. "
-            f"bundle.project.door는 grok, created_by는 grok, edit_spec_id는 {record['id']}. "
+            f"bundle.project.door는 grok, created_by는 {editor_name}, edit_spec_id는 {record['id']}. "
             f"agents/ 폴더에는 넣지 마세요. 127.0.0.1에는 접속하지 마세요."
             if language.startswith("ko")
             else (
-                f"This is the editor role. Only Grok should make this cut. "
+                f"This is the editor role. Only {editor_name} should make this cut. "
                 f"{edit_attach_en}\n"
                 f"{common}\n"
                 f"Materials are at local_studio/workspace/handoff-materials/{record['id']}/manifest.json "
@@ -536,7 +533,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"On git read spec.json under outbox/grok/{record['id']}/.\n"
                 f"Put the finished package in local_studio/workspace/handoff-inbox/grok/ "
                 f"or under grok/ on the git handoff repo. "
-                f"Set bundle.project.door to grok, created_by to grok, edit_spec_id to {record['id']}. "
+                f"Set bundle.project.door to grok, created_by to {editor_name}, edit_spec_id to {record['id']}. "
                 f"Do not use the agents/ folder. Do not connect to 127.0.0.1."
             )
         )
@@ -575,83 +572,83 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
         }
     if mode == "own":
         text = (
-            f"이 글은 Grok 전용 문입니다. Grok만 이 규격을 이행하세요. "
-            f"다른 에이전트는 다른 에이전트 문을 쓰세요.\n\n"
+            f"이 글은 편집 문입니다. {agent}만 이 규격을 이행하세요. "
+            f"수집 역할은 다른 문을 쓰세요.\n\n"
             f"{common}\n"
             f"원본은 운영자가 자료함에 둡니다. 그 클립만 자르세요. 새 소스를 찾지 마세요.\n"
             f"자료는 local_studio/workspace/handoff-materials/{record['id']}/manifest.json 에 있습니다.\n"
             f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/grok/{record['id']}/ 에 있습니다. "
             f"git이면 outbox/grok/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"같은 PC면 `python local_studio/grok_crew.py` 와 Bot Check로 체크인하세요. "
-            f"데스크톱 Runner 페어링은 Grok 문에서만 씁니다.\n"
+            f"데스크톱 Runner 페어링은 편집 문에서만 씁니다.\n"
             f"끝난 패키지는 local_studio/workspace/handoff-inbox/grok/ 또는 git 인계의 grok/ 아래에 두세요. "
-            f"bundle.project.door는 grok, created_by는 grok, edit_spec_id는 {record['id']}. "
+            f"bundle.project.door는 grok, created_by는 {agent}, edit_spec_id는 {record['id']}. "
             f"agents/ 폴더에는 넣지 마세요. 127.0.0.1에는 접속하지 마세요."
             if language.startswith("ko")
             else (
-                f"This is the Grok-only door. Only Grok should fulfill this spec. "
-                f"Claude, Codex, ChatGPT, and other agents must use the other-agent door.\n\n"
+                f"This is the editor door. Only {agent} should fulfill this spec. "
+                f"A collector must use the other-agent door.\n\n"
                 f"{common}\n"
                 f"The operator put the footage in the materials box. Cut those clips. Do not hunt a new source.\n"
                 f"Materials are at local_studio/workspace/handoff-materials/{record['id']}/manifest.json.\n"
                 f"This spec is in the outbox at local_studio/workspace/handoff-outbox/grok/{record['id']}/. "
                 f"On git read spec.json under outbox/grok/{record['id']}/.\n"
                 f"On the same PC use `python local_studio/grok_crew.py` and Bot Check. "
-                f"Desktop Runner pairing is only for this Grok door.\n"
+                f"Desktop Runner pairing is only for this editor door.\n"
                 f"Put the finished package in local_studio/workspace/handoff-inbox/grok/ "
                 f"or under grok/ on the git handoff repo. "
-                f"Set bundle.project.door to grok, created_by to grok, edit_spec_id to {record['id']}. "
+                f"Set bundle.project.door to grok, created_by to {agent}, edit_spec_id to {record['id']}. "
                 f"Do not use the agents/ folder. Do not connect to 127.0.0.1."
             )
         )
-        return {"spec": record, "text": text, "channel": "grok-door", "door": "grok", "agent": "Grok", "role": "edit"}
+        return {"spec": record, "text": text, "channel": "grok-door", "door": "grok", "agent": agent, "role": "edit"}
     if door == "grok":
         text = (
-            f"이 글은 Grok 전용 문입니다. Grok만 이 규격을 이행하세요. "
-            f"Claude, Codex, ChatGPT 같은 다른 에이전트는 다른 에이전트 문을 쓰세요.\n\n"
+            f"이 글은 편집 문입니다. {agent}만 이 규격을 이행하세요. "
+            f"수집 역할은 다른 문을 쓰세요.\n\n"
             f"{common}\n"
             f"원본은 운영자가 주지 않습니다. 당신이 소스와 컷을 만드세요.\n"
             f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/grok/{record['id']}/ 에 있습니다. "
             f"git이면 outbox/grok/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"같은 PC면 `python local_studio/grok_crew.py` 와 Bot Check로 체크인하세요. "
-            f"데스크톱 Runner 페어링은 Grok 문에서만 씁니다.\n"
+            f"데스크톱 Runner 페어링은 편집 문에서만 씁니다.\n"
             f"끝난 패키지는 local_studio/workspace/handoff-inbox/grok/ 또는 git 인계의 grok/ 아래에 두세요. "
-            f"bundle.project.door는 grok, created_by는 grok, edit_spec_id는 {record['id']}. "
+            f"bundle.project.door는 grok, created_by는 {agent}, edit_spec_id는 {record['id']}. "
             f"agents/ 폴더에는 넣지 마세요. 127.0.0.1에는 접속하지 마세요."
             if language.startswith("ko")
             else (
-                f"This is the Grok-only door. Only Grok should fulfill this spec. "
-                f"Claude, Codex, ChatGPT, and other agents must use the other-agent door.\n\n"
+                f"This is the editor door. Only {agent} should fulfill this spec. "
+                f"A collector must use the other-agent door.\n\n"
                 f"{common}\n"
                 f"The operator will not attach footage. You supply the source and the cut.\n"
                 f"This spec is in the outbox at local_studio/workspace/handoff-outbox/grok/{record['id']}/. "
                 f"On git read spec.json under outbox/grok/{record['id']}/.\n"
                 f"On the same PC use `python local_studio/grok_crew.py` and Bot Check. "
-                f"Desktop Runner pairing is only for this Grok door.\n"
+                f"Desktop Runner pairing is only for this editor door.\n"
                 f"Put the finished package in local_studio/workspace/handoff-inbox/grok/ "
                 f"or under grok/ on the git handoff repo. "
-                f"Set bundle.project.door to grok, created_by to grok, edit_spec_id to {record['id']}. "
+                f"Set bundle.project.door to grok, created_by to {agent}, edit_spec_id to {record['id']}. "
                 f"Do not use the agents/ folder. Do not connect to 127.0.0.1."
             )
         )
     else:
         text = (
-            f"이 글은 다른 에이전트 전용 문입니다. Grok이 아닙니다. "
-            f"Grok 문, Runner 페어링, handoff-inbox/grok/ 는 쓰지 마세요. "
-            f"당신은 {agent}이거나 Claude, Codex, ChatGPT, Gemini, Cursor 같은 다른 에이전트입니다.\n\n"
+            f"이 글은 수집·다른 에이전트 문입니다. 편집 문이 아닙니다. "
+            f"편집 문, Runner 페어링, handoff-inbox/grok/ 는 쓰지 마세요. "
+            f"당신은 {agent}입니다.\n\n"
             f"{common}\n"
             f"원본은 운영자가 주지 않습니다. 당신이 소스와 컷을 만드세요.\n"
             f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/agents/{record['id']}/ 에 있습니다. "
             f"git이면 outbox/agents/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
             f"같은 PC면 `python local_studio/grok_crew.py spec brief --id {record['id']}` 로 이 글을 읽고 CLI로 작업하세요.\n"
             f"끝난 패키지는 local_studio/workspace/handoff-inbox/agents/ 또는 git 인계의 agents/ 아래에 두세요. "
-            f"bundle.project.door는 agent, created_by는 당신 이름, edit_spec_id는 {record['id']}. "
+            f"bundle.project.door는 agent, created_by는 {agent}, edit_spec_id는 {record['id']}. "
             f"127.0.0.1에는 접속하지 마세요. 규칙: local_studio/handoff-guide.json."
             if language.startswith("ko")
             else (
-                f"This is the other-agent door. You are not Grok. "
-                f"Do not use the Grok door, Runner pairing, or handoff-inbox/grok/. "
-                f"You are {agent}, or Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent.\n\n"
+                f"This is the other-agent door. You are not the editor on this spec. "
+                f"Do not use the editor door, Runner pairing, or handoff-inbox/grok/. "
+                f"You are {agent}.\n\n"
                 f"{common}\n"
                 f"The operator will not attach footage. You supply the source and the cut.\n"
                 f"This spec is in the outbox at local_studio/workspace/handoff-outbox/agents/{record['id']}/. "
@@ -660,8 +657,76 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"`python local_studio/grok_crew.py spec brief --id {record['id']}` and use the CLI.\n"
                 f"Put the finished package in local_studio/workspace/handoff-inbox/agents/ "
                 f"or under agents/ on the git handoff repo. "
-                f"Set bundle.project.door to agent, created_by to your name, edit_spec_id to {record['id']}. "
+                f"Set bundle.project.door to agent, created_by to {agent}, edit_spec_id to {record['id']}. "
                 f"Do not connect to 127.0.0.1. Rules: local_studio/handoff-guide.json."
             )
         )
     return {"spec": record, "text": text, "channel": f"{door}-door", "door": door, "agent": agent}
+
+
+def _purpose_role(purpose: str) -> str:
+    text = str(purpose or "").strip().lower().replace("-", "_")
+    if any(hint in text for hint in COLLECT_PURPOSE_HINTS):
+        return "collect"
+    if any(hint in text for hint in EDIT_PURPOSE_HINTS):
+        return "edit"
+    return ""
+
+
+def crew_roster() -> dict[str, Any]:
+    """Connected bots, named by check-in — not by assuming Grok or Claude."""
+    now = datetime.now(timezone.utc)
+    with db() as conn:
+        sessions = conn.execute("SELECT * FROM bot_sessions ORDER BY last_seen DESC LIMIT 40").fetchall()
+        entries = conn.execute(
+            """SELECT e.bot_id, e.display_name, e.purpose, e.joined_at
+               FROM bot_entries e
+               INNER JOIN (
+                   SELECT bot_id, MAX(joined_at) AS joined_at FROM bot_entries GROUP BY bot_id
+               ) latest ON e.bot_id = latest.bot_id AND e.joined_at = latest.joined_at"""
+        ).fetchall()
+    purpose_by_bot = {str(row["bot_id"]): str(row["purpose"] or "") for row in entries}
+    bots: list[dict[str, Any]] = []
+    for row in sessions:
+        bot = row_dict(row) or {}
+        try:
+            seen = datetime.fromisoformat(str(bot.get("last_seen") or now.isoformat()))
+            seconds = max(0, int((now - seen).total_seconds()))
+        except ValueError:
+            seconds = 10**9
+        detail = bot.get("last_detail_json")
+        if isinstance(detail, str):
+            try:
+                detail = json.loads(detail)
+            except json.JSONDecodeError:
+                detail = {}
+        purpose = str((detail or {}).get("purpose") or purpose_by_bot.get(str(bot.get("bot_id") or "")) or "")
+        bots.append({
+            "bot_id": bot.get("bot_id"),
+            "display_name": str(bot.get("display_name") or bot.get("bot_id") or "").strip(),
+            "presence": "active" if seconds <= 300 else "idle",
+            "seconds_since_checkin": seconds,
+            "purpose": purpose,
+            "role_hint": _purpose_role(purpose),
+        })
+    active = [item for item in bots if item["presence"] == "active"]
+    pool = active or bots
+
+    def pick(role: str, taken: str = "") -> dict[str, Any] | None:
+        hinted = [item for item in pool if item.get("role_hint") == role and item.get("display_name") != taken]
+        if hinted:
+            return hinted[0]
+        open_bots = [item for item in pool if not item.get("role_hint") and item.get("display_name") != taken]
+        if open_bots:
+            return open_bots[0]
+        leftover = [item for item in pool if item.get("display_name") != taken]
+        return leftover[0] if leftover else None
+
+    editor = pick("edit")
+    collector = pick("collect", str((editor or {}).get("display_name") or ""))
+    return {
+        "schema": "grok-crew.crew-roster/v1",
+        "bots": bots,
+        "suggested_editor": str((editor or {}).get("display_name") or ""),
+        "suggested_collector": str((collector or {}).get("display_name") or ""),
+    }

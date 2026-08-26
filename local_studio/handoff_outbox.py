@@ -70,7 +70,7 @@ def _package(record: dict[str, Any], brief_text: str, *, door: str, agent: str, 
             "inbox": f"local_studio/workspace/handoff-inbox/{folder}/",
             "git_prefix": f"{folder}/",
             "bundle_project_door": door,
-            "created_by": "grok" if door == "grok" else agent,
+            "created_by": agent,
         }
         never = [
             "Do not connect to 127.0.0.1.",
@@ -104,7 +104,7 @@ def write_outbox(
         raise ValueError("Edit spec is missing.")
     resolved_door = normalize_door(door or record.get("door") or (record.get("spec") or {}).get("door"))
     printed = spec_brief(record["id"], role=role)
-    agent = str(printed.get("agent") or record.get("agent") or ("Grok" if resolved_door == "grok" else "agent"))
+    agent = str(printed.get("agent") or record.get("agent") or ("editor" if resolved_door == "grok" else "collector"))
     folder = outbox_folder(record["id"], resolved_door)
     folder.mkdir(parents=True, exist_ok=True)
     payload = _package(record, printed["text"], door=resolved_door, agent=agent, role=str(printed.get("role") or role or ""))

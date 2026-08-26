@@ -18,6 +18,7 @@ def test_crew_spec_writes_both_outboxes(studio):
         "language": "en",
         "crew": True,
         "collector": "Claude",
+        "editor": "Grok",
     })
     assert record["crew"] is True
     assert record["status"] == "waiting_for_collector"
