@@ -6871,172 +6871,166 @@ select {
 .desktop-simple-invite textarea { min-height: 10rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; }
 .desktop-simple-help { margin: 8px 0 0; padding-left: 18px; color: var(--desktop-muted); font-size: 12px; line-height: 1.55; text-align: left; }
 .desktop-simple-help a { color: var(--desktop-blue, #245a72); text-decoration: underline; }
-.desktop-handoff-board { display: grid; gap: 12px; }
-.desktop-handoff-board.is-compact { gap: 8px; }
+.desktop-handoff-board { display: grid; gap: 8px; }
 .desktop-handoff-folder {
-  display: grid;
   border: 1px solid var(--desktop-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .02);
 }
-.desktop-handoff-folder-head {
+.desktop-handoff-folder > summary { list-style: none; }
+.desktop-handoff-folder > summary::-webkit-details-marker { display: none; }
+.desktop-handoff-summary {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: start;
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--desktop-line-soft);
+  grid-template-columns: 12px 22px minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 7px 10px;
+  cursor: pointer;
 }
-.desktop-handoff-folder-head > span {
+.desktop-handoff-mark {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--desktop-muted);
+}
+.desktop-handoff-folder[open] .desktop-handoff-mark {
+  transform: rotate(90deg);
+  border-color: transparent transparent transparent var(--desktop-blue);
+}
+.desktop-handoff-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   background: #eeeefe;
   color: var(--desktop-blue);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
 }
-.desktop-handoff-folder.is-materials .desktop-handoff-folder-head > span {
-  background: #e8f6ee;
-  color: var(--desktop-green);
-}
-.desktop-handoff-folder-head b { display: block; font-size: 13px; letter-spacing: -.02em; }
-.desktop-handoff-folder-head small {
+.desktop-handoff-folder.is-materials .desktop-handoff-icon { background: #e8f6ee; color: var(--desktop-green); }
+.desktop-handoff-summary b { display: block; font-size: 12px; letter-spacing: -.02em; }
+.desktop-handoff-summary small {
   display: block;
   overflow: hidden;
-  margin-top: 3px;
+  margin-top: 1px;
   color: var(--desktop-muted);
-  font-size: 11px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.desktop-handoff-folder-head p { margin: 4px 0 0; color: var(--desktop-text); font-size: 12px; }
-.desktop-handoff-folder-head .desktop-secondary { align-self: center; }
-.desktop-handoff-notes {
-  margin: 0;
-  padding: 10px 13px 0;
-  color: var(--desktop-muted);
-  font-size: 12px;
-  line-height: 1.45;
+.desktop-handoff-toggle {
+  color: var(--desktop-blue);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 650;
+  white-space: nowrap;
 }
-.desktop-handoff-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 8px;
-  padding: 12px;
-}
-.desktop-handoff-tile {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  padding: 0;
-  border: 1px solid var(--desktop-line);
-  border-radius: 10px;
-  background: #fbfbfd;
-  text-align: left;
+.desktop-handoff-toggle .is-open { display: none; }
+.desktop-handoff-folder[open] .desktop-handoff-toggle .is-closed { display: none; }
+.desktop-handoff-folder[open] .desktop-handoff-toggle .is-open { display: inline; }
+.desktop-handoff-peeks { display: flex; gap: 4px; }
+.desktop-handoff-peeks i {
+  display: block;
+  width: 36px;
+  height: 22px;
   overflow: hidden;
-}
-.desktop-handoff-tile:hover { border-color: #c8c4f4; background: #f7f6ff; }
-.desktop-handoff-tile.is-selected {
-  border-color: var(--desktop-blue);
-  box-shadow: 0 0 0 2px #e4e2ff;
-  background: #f7f6ff;
-}
-.desktop-handoff-thumb {
-  position: relative;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16 / 9;
+  border-radius: 4px;
   background: #0d0e11;
-  color: #cfd0d6;
-  font-size: 18px;
+  font-style: normal;
 }
-.desktop-handoff-thumb video,
-.desktop-handoff-thumb img {
+.desktop-handoff-peeks video,
+.desktop-handoff-peeks img,
+.desktop-handoff-mini video,
+.desktop-handoff-mini img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background: #0d0e11;
 }
-.desktop-handoff-thumb i {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
-  color: var(--desktop-text);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 750;
-}
-.desktop-handoff-caption { display: grid; gap: 2px; padding: 7px 8px 8px; }
-.desktop-handoff-caption b {
-  display: block;
-  overflow: hidden;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.desktop-handoff-caption small,
-.desktop-handoff-caption em {
-  display: block;
-  overflow: hidden;
+.desktop-handoff-summary .desktop-secondary { min-height: 26px; padding: 4px 8px; font-size: 10px; }
+.desktop-handoff-body { display: grid; gap: 8px; padding: 0 10px 10px; border-top: 1px solid var(--desktop-line-soft); }
+.desktop-handoff-path,
+.desktop-handoff-notes,
+.desktop-handoff-hint {
+  margin: 8px 0 0;
   color: var(--desktop-muted);
-  font-size: 10px;
-  font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.4;
 }
-.desktop-handoff-caption em.is-warn { color: var(--desktop-amber); }
-.desktop-handoff-preview { display: grid; gap: 8px; padding: 0 12px 12px; }
+.desktop-handoff-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.desktop-handoff-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px;
+  border: 1px solid var(--desktop-line);
+  border-radius: 8px;
+  background: #fbfbfd;
+  text-align: left;
+}
+.desktop-handoff-row:hover { border-color: #c8c4f4; background: #f7f6ff; }
+.desktop-handoff-row.is-selected { border-color: var(--desktop-blue); background: #f7f6ff; }
+.desktop-handoff-mini {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #0d0e11;
+  color: #cfd0d6;
+}
+.desktop-handoff-row b { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-handoff-row small { display: block; overflow: hidden; color: var(--desktop-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-handoff-row em { color: var(--desktop-blue); font-size: 10px; font-style: normal; font-weight: 650; white-space: nowrap; }
+.desktop-handoff-preview { display: grid; gap: 6px; }
 .desktop-handoff-preview video,
 .desktop-handoff-preview img,
 .desktop-handoff-preview audio {
   display: block;
   width: 100%;
-  max-height: 240px;
+  max-height: 200px;
   border-radius: 8px;
   background: #0d0e11;
 }
-.desktop-handoff-preview p { margin: 0; color: var(--desktop-muted); font-size: 11px; line-height: 1.45; }
+.desktop-handoff-preview p { margin: 0; color: var(--desktop-muted); font-size: 11px; }
 .desktop-handoff-state {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 14px 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 10px;
   border: 1px solid var(--desktop-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: white;
 }
 .desktop-handoff-state > span:not(.desktop-spinner) {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border: 1px solid var(--desktop-line);
   border-radius: 50%;
   color: var(--desktop-blue);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 10px;
 }
 .desktop-handoff-state.is-error > span { color: var(--desktop-red); border-color: #efd0cd; background: #fff5f4; }
-.desktop-handoff-state b { display: block; font-size: 13px; }
-.desktop-handoff-state p { margin: 4px 0 0; color: var(--desktop-muted); font-size: 12px; line-height: 1.45; }
+.desktop-handoff-state p { margin: 0; color: var(--desktop-muted); font-size: 12px; }
 .desktop-setup-grid .desktop-handoff-board { grid-column: 1 / -1; }
-.desktop-editor .desktop-handoff-board { margin-bottom: 10px; }
-.desktop-handoff-board.is-compact .desktop-handoff-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); padding: 10px; }
+.desktop-editor .desktop-handoff-board { margin-bottom: 8px; }
 .desktop-handoff-board.is-compact .desktop-handoff-preview video,
-.desktop-handoff-board.is-compact .desktop-handoff-preview img { max-height: 180px; }
+.desktop-handoff-board.is-compact .desktop-handoff-preview img { max-height: 160px; }
 @media (max-width: 600px) {
-  .desktop-handoff-folder-head { grid-template-columns: 28px minmax(0, 1fr); }
-  .desktop-handoff-folder-head .desktop-secondary { grid-column: 2; justify-self: start; }
-  .desktop-handoff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .desktop-handoff-summary { grid-template-columns: 12px 22px minmax(0, 1fr) auto; }
+  .desktop-handoff-peeks,
+  .desktop-handoff-summary .desktop-secondary { display: none; }
+  .desktop-handoff-row { grid-template-columns: 48px minmax(0, 1fr); }
+  .desktop-handoff-row em { display: none; }
 }
 .desktop-spec-desk { width: min(1080px, 100%); margin: 0 auto; padding: 24px 16px 36px; display: grid; gap: 18px; overflow: auto; }
 .desktop-spec-hero { display: grid; gap: 10px; text-align: center; justify-items: center; }

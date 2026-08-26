@@ -5,6 +5,7 @@ All notable changes to Grok Crew are documented here.
 ## Unreleased
 
 - Desktop shows the saved folder after a bot drop: media under `inputs/handoff/` and clips in `handoff-materials/`, with previews. Listing stays inside those two roots.
+- The folder board stays collapsed to one row until the operator opens it, then a compact list and on-demand preview.
 
 ## 1.0.0 - 2026-08-26
 
