@@ -13,6 +13,7 @@ import type { TimelinePatch } from './timeline/operations';
 import { buildTimelineHistoryAction, emptyTimelineHistory } from './timeline/history';
 import type { TimelineHistoryAction, TimelineHistoryResult, TimelineHistoryState } from './timeline/history';
 import type { Timeline, TrackType } from './timeline/types';
+import { remoteDeskVisible, remoteNeedsAttention } from './desktop-remote';
 
 type UpdateStatus = {
   status: string;
@@ -180,7 +181,8 @@ export default function DesktopWorkspace() {
   const [versions, setVersions] = useState<Version[]>([]);
   const [history, setHistory] = useState<TimelineHistoryState>(() => emptyTimelineHistory());
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
-  const [activePanel, setActivePanel] = useState<'setup' | 'edit' | 'export'>('setup');
+  const [activePanel, setActivePanel] = useState<'setup' | 'edit' | 'export'>('edit');
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const [method, setMethod] = useState({ ...defaultMethod });
   const [publishPolicy, setPublishPolicy] = useState({ ...defaultPublish });
   const [executionPolicy, setExecutionPolicy] = useState<'auto_edit_render' | 'review_before_render'>('auto_edit_render');
@@ -291,6 +293,20 @@ export default function DesktopWorkspace() {
   const latestEvent = latestJob ? workspace.runner_events.find((item) => item.control_job_id === latestJob.id) : undefined;
   const inputRequest = latestJob?.status === 'needs_input' && latestEvent?.stage === 'needs_input' ? latestEvent.detail_json as unknown as NeedsInput : undefined;
   const runner = latestEvent ? workspace.runners.find((item) => item.runner_id === latestEvent.runner_id) : workspace.runners[0];
+  const runnerPaired = workspace.runners.length > 0;
+  const showRemoteDesk = remoteDeskVisible({
+    runners: workspace.runners.length,
+    githubAuthenticated: Boolean(github.authenticated),
+    relayConnected: Boolean(github.relay_connected),
+    jobStatus: latestJob?.status,
+    hasInputRequest: Boolean(inputRequest),
+    userOpened: remoteOpen,
+  });
+  const remoteAttention = remoteNeedsAttention({
+    jobStatus: latestJob?.status,
+    hasInputRequest: Boolean(inputRequest),
+  });
+  const hideInspectorColumn = !project || !timeline;
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
   const primaryVideoAsset = timeline?.assets.find((asset) => asset.kind === 'video');
@@ -387,12 +403,13 @@ export default function DesktopWorkspace() {
     try {
       const result = await api('/api/v2/first-run/sample', { method: 'POST' }) as { project: Project; reused?: boolean };
       setSelectedProjectId(result.project.id);
+      setActivePanel('edit');
       setCreateOpen(false);
       setDrawer('none');
       await refreshWorkspace(true);
       setMessage(result.reused
         ? t('이미 열려 있는 샘플 프로젝트입니다.', 'The sample project is already open.', '示例项目已经打开。', 'サンプルプロジェクトはすでに開いています。')
-        : t('샘플 프로젝트를 열었습니다. 설정에서 바로 편집할 수 있습니다.', 'Opened the sample project. You can edit it from Setup.', '已打开示例项目。可从设置立即编辑。', 'サンプルプロジェクトを開きました。設定からすぐ編集できます。'));
+        : t('샘플 프로젝트를 열었습니다. 프로그램 모니터와 타임라인에서 바로 자를 수 있습니다.', 'Opened the sample project. Cut it from the program monitor and timeline.', '已打开示例项目。可在节目监视器和时间线上直接剪辑。', 'サンプルプロジェクトを開きました。プログラムモニターとタイムラインですぐ切れます。'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t('샘플을 열지 못했습니다.', 'Could not open the sample.', '无法打开示例。', 'サンプルを開けませんでした。'));
     } finally {
@@ -407,8 +424,8 @@ export default function DesktopWorkspace() {
         title: newProject.title, source_path: newProject.source_path, output_path: newProject.output_path,
         timeline: { clips: [{ in: 0, out: 10, keep: true, caption: '' }], render_settings: { fps: 30, quality: 'balanced', platform: 'reels_tiktok_shorts', captions_enabled: true } }, caption: '',
       }) }) as { project: Project };
-      setSelectedProjectId(result.project.id); setCreateOpen(false); setDrawer('none'); setNewProject({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
-      await refreshWorkspace(true); setMessage(t('프로젝트를 만들었습니다. 설정을 선택해 주세요.', 'Project created. Choose its settings.', '项目已创建，请选择设置。', 'プロジェクトを作成しました。設定を選んでください。'));
+      setSelectedProjectId(result.project.id); setActivePanel('edit'); setCreateOpen(false); setDrawer('none'); setNewProject({ title: '', source_path: '', output_path: 'outputs/final-video.mp4' });
+      await refreshWorkspace(true); setMessage(t('프로젝트를 만들었습니다. 편집 화면에서 바로 자를 수 있습니다.', 'Project created. Cut it from the editor.', '项目已创建，可在编辑画面直接剪辑。', 'プロジェクトを作成しました。編集画面ですぐ切れます。'));
     } catch (error) { setMessage(error instanceof Error ? error.message : t('프로젝트 생성에 실패했습니다.', 'Project creation failed.', '项目创建失败。', 'プロジェクト作成に失敗しました。')); } finally { setBusy(false); }
   };
 
@@ -449,6 +466,7 @@ export default function DesktopWorkspace() {
 
   const startGrok = async () => {
     if (!project || !timeline) { setMessage(t('먼저 프로젝트를 만드세요.', 'Create a project first.', '请先创建项目。', '先にプロジェクトを作成してください。')); return; }
+    setRemoteOpen(true);
     setBusy(true);
     try {
       const nextTimeline = await saveSettings(); const revision = nextTimeline?.revision ?? timeline.revision;
@@ -663,6 +681,7 @@ export default function DesktopWorkspace() {
     }
   };
   const relayAction = async (action: 'pair' | 'desktop' | 'request' | 'result' | 'git-connect' | 'git-push' | 'git-pull') => {
+    setRemoteOpen(true);
     if (!window.grokCrew) { setMessage(t('Runner 연결은 데스크톱 앱에서 사용할 수 있습니다.', 'Runner pairing is available in the desktop app.', 'Runner 配对仅在桌面应用中可用。', 'Runner ペアリングはデスクトップアプリで利用できます。')); return; }
     try {
       if (action === 'pair') await window.grokCrew.pairRunner();
@@ -768,16 +787,16 @@ export default function DesktopWorkspace() {
           {update.releaseUrl && window.grokCrew?.openRelease
             ? <button type="button" className={`desktop-chip ${update.status === 'up_to_date' || update.status === 'dev_fallback' ? 'ready' : 'wait'}`} title={update.message} onClick={() => void window.grokCrew?.openRelease?.(update.releaseUrl)}>{update.status === 'available_external' || update.status === 'available' ? t(`업데이트 ${update.latestVersion}`, `Update ${update.latestVersion}`, `更新 ${update.latestVersion}`, `更新 ${update.latestVersion}`) : t(`개발 ${update.currentVersion}`, `Dev ${update.currentVersion}`, `开发 ${update.currentVersion}`, `開発 ${update.currentVersion}`)}</button>
             : <span className={`desktop-chip ${update.status === 'up_to_date' || update.status === 'dev_fallback' ? 'ready' : 'wait'}`} title={update.message}>{t(`로컬 ${update.currentVersion}`, `Local ${update.currentVersion}`, `本地 ${update.currentVersion}`, `ローカル ${update.currentVersion}`)}</span>}
-          {launch ? <span className={`desktop-chip ${Object.values(launch.local_gates).every(Boolean) ? 'ready' : 'wait'}`} title={Object.values(launch.external_gates).map((gate) => gate.detail).join(' ')}>{t('로컬 1.0 게이트', 'Local 1.0 gates', '本地 1.0 关卡', 'ローカル 1.0 ゲート')}</span> : <span className="desktop-chip desktop-chip-skeleton" aria-hidden="true">{t('게이트 확인', 'Checking gates', '正在检查关卡', 'ゲート確認')}</span>}
-          <span className={`desktop-connection ${runner ? 'connected' : ''}`}>● {runner ? t('Runner 페어링됨', 'Runner paired', 'Runner 已配对', 'Runner ペアリング済み') : t('Runner 대기', 'Waiting for Runner', '等待 Runner', 'Runner 待機')}</span>
+          {showRemoteDesk && launch ? <span className={`desktop-chip ${Object.values(launch.local_gates).every(Boolean) ? 'ready' : 'wait'}`} title={Object.values(launch.external_gates).map((gate) => gate.detail).join(' ')}>{t('로컬 1.0 게이트', 'Local 1.0 gates', '本地 1.0 关卡', 'ローカル 1.0 ゲート')}</span> : null}
+          <span className={`desktop-connection ${runnerPaired ? 'connected' : ''}`}>● {runnerPaired ? t('Runner 페어링됨', 'Runner paired', 'Runner 已配对', 'Runner ペアリング済み') : t('로컬 편집', 'Local edit', '本地编辑', 'ローカル編集')}</span>
           <button type="button" className="desktop-chrome-btn desktop-projects-toggle" aria-expanded={drawer === 'projects'} onClick={() => setDrawer((value) => value === 'projects' ? 'none' : 'projects')}>{t('프로젝트', 'Projects', '项目', 'プロジェクト')}</button>
-          <button type="button" className="desktop-chrome-btn desktop-status-toggle" aria-expanded={drawer === 'status'} onClick={() => setDrawer((value) => value === 'status' ? 'none' : 'status')}>{t('상태', 'Status', '状态', '状態')}</button>
+          <button type="button" className="desktop-chrome-btn desktop-status-toggle" aria-expanded={drawer === 'status'} onClick={() => { setRemoteOpen(true); setDrawer((value) => value === 'status' ? 'none' : 'status'); }}>{t('상태', 'Status', '状态', '状態')}</button>
           <LanguageSwitcher />
         </div>
       </header>
       {drawer !== 'none' ? <button type="button" className="desktop-drawer-backdrop" aria-label={t('패널 닫기', 'Close panel', '关闭面板', 'パネルを閉じる')} onClick={() => setDrawer('none')} /> : null}
 
-      <div className="desktop-body">
+      <div className={`desktop-body${hideInspectorColumn ? ' local-first' : ''}`}>
         <aside className={`desktop-sidebar ${drawer === 'projects' ? 'open' : ''}`}>
           <div className="desktop-side-head"><b>{t('프로젝트', 'Projects', '项目', 'プロジェクト')}</b><button type="button" aria-label={t('새 프로젝트', 'New project', '新建项目', '新規プロジェクト')} onClick={() => setCreateOpen((value) => !value)}>＋</button></div>
           {createOpen && <section className="desktop-create-card">{sampleAvailable ? <button type="button" className="desktop-primary" disabled={busy} onClick={() => void openSampleProject()}>{t('샘플로 시작', 'Start with the sample', '从示例开始', 'サンプルで始める')}</button> : null}<input value={newProject.title} onChange={(event) => setNewProject({ ...newProject, title: event.target.value })} placeholder={t('프로젝트 이름', 'Project name', '项目名称', 'プロジェクト名')} /><select value={newProject.source_path} onChange={(event) => setNewProject({ ...newProject, source_path: event.target.value })}><option value="">{t('원본 선택', 'Choose source', '选择素材', '素材を選択')}</option>{workspace.media.filter((item) => item.kind === 'video' && item.area === 'inputs').map((item) => <option value={item.path} key={item.path}>{item.name}</option>)}</select><button className="desktop-secondary" disabled={busy} onClick={() => void importMedia()}>{t('내 컴퓨터에서 가져오기', 'Import from computer', '从电脑导入', 'コンピュータから読み込む')}</button><input value={newProject.output_path} onChange={(event) => setNewProject({ ...newProject, output_path: event.target.value })} /><button className="desktop-primary" disabled={busy} onClick={() => void createProject()}>{t('만들기', 'Create', '创建', '作成')}</button></section>}
@@ -818,7 +837,7 @@ export default function DesktopWorkspace() {
           {studioState === 'error' && project ? <div className="desktop-banner error" role="alert"><div><b>{t('Local Studio에 연결하지 못했습니다', 'Could not reach Local Studio', '无法连接 Local Studio', 'Local Studio に接続できません')}</b><p>{t('사이드카가 꺼져 있으면 프로젝트와 렌더를 읽을 수 없습니다.', 'The sidecar is offline, so projects and renders cannot load.', '侧车离线时无法读取项目和渲染。', 'サイドカーが停止しているとプロジェクトとレンダーを読めません。')}</p></div><button type="button" className="desktop-secondary" onClick={() => void refreshWorkspace()}>{t('다시 연결', 'Reconnect', '重新连接', '再接続')}</button></div> : null}
           {studioState === 'loading' && !project ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('작업 공간을 불러오는 중', 'Loading the workspace', '正在加载工作区', 'ワークスペースを読み込み中')}</h1><p>{t('Local Studio의 프로젝트와 게시 영수증을 확인합니다.', 'Checking Local Studio projects and publish receipts.', '正在检查本地工作室项目和发布回执。', 'Local Studio のプロジェクトと公開レシートを確認しています。')}</p></div>
           : studioState === 'error' && !project ? <div className="desktop-empty"><span>!</span><h1>{t('데스크톱이 로컬 서비스에 닿지 않습니다', 'The desktop cannot reach the local service', '桌面无法连接本地服务', 'デスクトップがローカルサービスに届きません')}</h1><p>{t('npm run local 또는 데스크톱 앱을 실행한 뒤 다시 연결하세요.', 'Start npm run local or the desktop app, then reconnect.', '请先运行 npm run local 或桌面应用，然后重试。', 'npm run local かデスクトップアプリを起動してから再接続してください。')}</p><button type="button" className="desktop-primary" onClick={() => void refreshWorkspace()}>{t('다시 시도', 'Try again', '重试', '再試行')}</button></div>
-          : !project || !timeline ? <div className="desktop-empty"><span>✦</span><h1>{t('첫 영상부터 이 PC에서', 'Start the first video on this PC', '在这台电脑开始第一个视频', '最初の動画をこのPCで')}</h1><p>{t('계정이나 두 번째 터미널은 필요 없습니다. 번들 샘플을 열거나 내 영상을 고르면 설정·편집·내보내기가 같은 화면에 열립니다.', 'No account or second terminal. Open the bundled sample or pick your footage to use setup, edit, and export on one desk.', '无需账号或第二个终端。打开内置示例或选择自己的素材后，设置、编辑和导出会在同一屏幕打开。', 'アカウントも2つ目のターミナルも不要です。同梱サンプルを開くか自分の映像を選ぶと、設定・編集・書き出しが同じ画面で開きます。')}</p><div className="desktop-empty-actions">{sampleAvailable ? <button type="button" className="desktop-primary" disabled={busy} onClick={() => void openSampleProject()}>{t('샘플로 시작', 'Start with the sample', '从示例开始', 'サンプルで始める')}</button> : null}<button type="button" className="desktop-secondary" onClick={() => { setCreateOpen(true); setDrawer('projects'); }}>{t('내 영상으로 시작', 'Start with my footage', '用我的素材开始', '自分の映像で始める')}</button></div></div> : <>
+          : !project || !timeline ? <div className="desktop-empty"><span>✦</span><h1>{t('첫 영상부터 이 PC에서', 'Start the first video on this PC', '在这台电脑开始第一个视频', '最初の動画をこのPCで')}</h1><p>{t('계정이나 Runner 페어링은 필요 없습니다. 샘플이나 내 영상을 열면 프로그램 모니터와 타임라인이 바로 열립니다.', 'No account or Runner pairing. Open the sample or your footage to land on the program monitor and timeline.', '无需账号或 Runner 配对。打开示例或自己的素材后会直接进入节目监视器和时间线。', 'アカウントも Runner ペアリングも不要です。サンプルか自分の映像を開くとプログラムモニターとタイムラインがすぐ開きます。')}</p><div className="desktop-empty-actions">{sampleAvailable ? <button type="button" className="desktop-primary" disabled={busy} onClick={() => void openSampleProject()}>{t('샘플로 시작', 'Start with the sample', '从示例开始', 'サンプルで始める')}</button> : null}<button type="button" className="desktop-secondary" onClick={() => { setCreateOpen(true); setDrawer('projects'); }}>{t('내 영상으로 시작', 'Start with my footage', '用我的素材开始', '自分の映像で始める')}</button></div></div> : <>
             <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips"><span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
               <section className="desktop-card desktop-source-card">
@@ -907,8 +926,9 @@ export default function DesktopWorkspace() {
         </section>
 
         <aside className={`desktop-inspector ${drawer === 'status' ? 'open' : ''}`}>
+          {showRemoteDesk ? (
           <section className="desktop-inspector-section">
-            <div className="desktop-inspector-head"><b>{t('Grok 상태', 'Grok status', 'Grok 状态', 'Grok 状態')}</b><span className={`desktop-status-dot ${statusTone(latestJob?.status ?? 'waiting')}`} /></div>
+            <div className="desktop-inspector-head"><b>{t('Grok 상태', 'Grok status', 'Grok 状态', 'Grok 状態')}</b><div className="desktop-inspector-head-tools">{remoteOpen && !runnerPaired && !github.authenticated && !github.relay_connected && !remoteAttention ? <button type="button" className="desktop-inspector-fold" onClick={() => setRemoteOpen(false)}>{t('접기', 'Hide', '收起', '閉じる')}</button> : null}<span className={`desktop-status-dot ${statusTone(latestJob?.status ?? 'waiting')}`} /></div></div>
             <div className="desktop-agent-card"><span className="desktop-agent-avatar">G</span><div><b>{runner?.display_name ?? 'Grok Runner'}</b><small>{latestEvent ? `${t('원격', 'Remote', '远程', 'リモート')}: ${latestEvent.stage.replaceAll('_', ' ')}` : t('원격 확인 대기', 'Awaiting verified remote activity', '等待远程确认', 'リモート確認待ち')}</small></div></div>
             {latestJob && <div className="desktop-local-state"><span>{t('로컬 앱', 'Local app', '本地应用', 'ローカルアプリ')}</span><b>{latestJob.status.replaceAll('_', ' ')}</b><small>attempt {latestJob.attempt ?? 1}{latestJob.render_job_id ? ` · render ${latestJob.render_job_id.slice(0, 8)}` : ''}</small></div>}
             {latestEvent ? <div className="desktop-verified"><b>{latestEvent.status}</b><span>{t('마지막 확인', 'Last verified', '最后确认', '最終確認')} {new Date(latestEvent.verified_at).toLocaleString()}</span></div> : <p className="desktop-muted">{t('확인된 원격 활동이 아직 없습니다. 상태를 추측하지 않습니다.', 'No verified remote activity yet. Presence is never guessed.', '暂无已确认的远程活动。', '確認済みのリモート活動はまだありません。')}</p>}
@@ -920,6 +940,13 @@ export default function DesktopWorkspace() {
             {latestJob && ['paused', 'pause_requested'].includes(latestJob.status) && <div className="desktop-control-actions"><button disabled={busy} onClick={() => void controlRunnerJob('resume')}>{t('같은 세션 재개', 'Resume session', '恢复会话', 'セッション再開')}</button><button className="desktop-danger" disabled={busy} onClick={() => void controlRunnerJob('cancel')}>{t('작업 취소', 'Cancel job', '取消任务', 'ジョブをキャンセル')}</button></div>}
             {latestJob && ['failed', 'cancelled'].includes(latestJob.status) && <button className="desktop-secondary" disabled={busy} onClick={() => void controlRunnerJob('retry')}>{t('안전하게 재시도', 'Safe retry', '安全重试', '安全に再試行')}</button>}
           </section>
+          ) : (
+          <section className="desktop-inspector-section desktop-remote-collapsed">
+            <div className="desktop-inspector-head"><b>{t('원격 봇', 'Remote bot', '远程机器人', 'リモートボット')}</b></div>
+            <p>{t('로컬에서 바로 자를 수 있습니다. Runner와 GitHub는 Grok에 넘길 때만 연결하세요.', 'Cut locally first. Connect a Runner and GitHub only when you hand work to Grok.', '可以先在本地剪辑。仅在交给 Grok 时再连接 Runner 和 GitHub。', 'まずはローカルで切れます。Grok に渡すときだけ Runner と GitHub を接続してください。')}</p>
+            <button type="button" className="desktop-secondary" onClick={() => setRemoteOpen(true)}>{t('Runner·GitHub 열기', 'Open Runner & GitHub', '打开 Runner 和 GitHub', 'Runner と GitHub を開く')}</button>
+          </section>
+          )}
           <section className="desktop-inspector-section desktop-elements">
             <div className="desktop-inspector-head"><b>{t('편집 요소', 'Edit elements', '编辑元素', '編集要素')}</b></div>
             <label><span>B-roll</span>

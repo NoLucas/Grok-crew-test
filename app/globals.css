@@ -6792,6 +6792,8 @@ select {
 .desktop-title-actions .language-switcher { display: flex; align-items: center; gap: 6px; color: var(--desktop-muted); font-size: 9px; }
 .desktop-title-actions .language-switcher select { padding: 5px 8px; border: 1px solid var(--desktop-line); background: white; font-size: 9px; }
 .desktop-body { display: grid; grid-template-columns: 245px minmax(520px, 1fr) 290px; min-height: 0; }
+.desktop-body.local-first { grid-template-columns: 245px minmax(520px, 1fr); }
+.desktop-body.local-first .desktop-inspector { display: none; }
 .desktop-sidebar,
 .desktop-inspector { min-height: 0; overflow: auto; background: var(--desktop-panel-2); }
 .desktop-sidebar { padding: 14px 10px; border-right: 1px solid var(--desktop-line); }
@@ -6992,6 +6994,14 @@ select {
 .desktop-mixer form > button { grid-column: 1 / -1; min-height: 28px; border: 1px solid var(--desktop-blue); border-radius: 7px; background: #fff; color: var(--desktop-blue); font-size: 8px; font-weight: 700; }
 .desktop-inspector-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .desktop-inspector-head b { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.desktop-inspector-head-tools { display: flex; align-items: center; gap: 8px; }
+.desktop-inspector-fold {
+  min-height: 22px; padding: 2px 7px; border: 1px solid var(--desktop-line); border-radius: 6px;
+  background: #fff; color: var(--desktop-muted); font-size: 8px; font-weight: 700;
+}
+.desktop-remote-collapsed { display: grid; gap: 8px; }
+.desktop-remote-collapsed p { margin: 0; color: var(--desktop-muted); font-size: 11px; line-height: 1.45; }
+.desktop-remote-collapsed .desktop-secondary { justify-self: start; }
 .desktop-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #a1a3aa; box-shadow: 0 0 0 3px #e5e5e8; }
 .desktop-status-dot.active { background: var(--desktop-blue); box-shadow: 0 0 0 3px #e4e2ff; }
 .desktop-status-dot.done { background: var(--desktop-green); box-shadow: 0 0 0 3px #dff3e9; }
@@ -7217,7 +7227,9 @@ select {
 .desktop-start b { font-size: 13px; }
 @media (max-width: 1050px) {
   .desktop-body { grid-template-columns: 205px minmax(460px, 1fr); }
+  .desktop-body.local-first { grid-template-columns: 205px minmax(460px, 1fr); }
   .desktop-inspector { display: none; }
+  .desktop-body.local-first .desktop-inspector.open,
   .desktop-inspector.open {
     display: block; position: fixed; top: 0; right: 0; bottom: 0; z-index: 26;
     width: min(320px, 88vw); background: var(--desktop-panel-2); box-shadow: -12px 0 32px rgba(20, 21, 24, .12);

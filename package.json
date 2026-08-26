@@ -33,7 +33,7 @@
     "desktop:pack": "npm run build && npm run sidecar:build && electron-builder --dir",
     "desktop:dist": "npm run build && npm run sidecar:build && electron-builder",
     "runner:test": "node scripts/test-relay.mjs",
-    "timeline:test": "node --experimental-strip-types --test --test-concurrency=1 app/timeline/*.test.mjs desktop/ipc-guard.test.mjs desktop/update-service.test.mjs",
+    "timeline:test": "node --experimental-strip-types --test --test-concurrency=1 app/timeline/*.test.mjs app/desktop-remote.test.mjs desktop/ipc-guard.test.mjs desktop/update-service.test.mjs",
     "launch:verify": "node scripts/launch-verify.mjs",
     "sample": "node scripts/run-sample-project.mjs",
     "build": "vinext build",

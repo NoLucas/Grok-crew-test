@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Desktop first screen stays local-first: Runner/GitHub controls stay collapsed until pairing, a live job, or the operator opens them. Opening a project lands on Edit (program monitor + timeline) instead of Setup.
 - Program monitor HTTP preview now defaults to a draft composite: max 540px wide, JPEG, cheaper audio RMS, and ready proxies when they exist. `GET .../preview?quality=full` and Python `preview_at()` stay 1:1 with the final MoviePy render. Opening a Desktop project starts a background proxy for the primary video when one is missing.
 - First-run no longer needs a second terminal: Desktop can open the bundled sample project in one click (`POST /api/v2/first-run/sample`). `npm run local` and `npm run desktop` share the same Python + sample bootstrap, and later starts skip `pip` when `requirements.txt` is unchanged.
 

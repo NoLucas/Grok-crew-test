@@ -13,7 +13,7 @@
 
 ## Desktop control workspace
 
-The default workspace is the Desktop at [`/`](http://localhost:3000/). It is the same surface in the browser (`npm run local`) and in Electron (`npm run desktop`): project/version navigation, a program monitor, a multitrack timeline, local analysis/rendering, publish receipts, rollback, and signed encrypted Runner handoffs. Legacy pages such as `/production` still run, but they are planning or older consoles—open Desktop for everyday editing.
+The default workspace is the Desktop at [`/`](http://localhost:3000/). It is the same surface in the browser (`npm run local`) and in Electron (`npm run desktop`): project/version navigation, a program monitor, a multitrack timeline, local analysis/rendering, publish receipts, rollback, and signed encrypted Runner handoffs. The first screen stays on local editing; Runner and GitHub stay collapsed until you pair them. Legacy pages such as `/production` still run, but they are planning or older consoles—open Desktop for everyday editing.
 
 ```sh
 npm install
