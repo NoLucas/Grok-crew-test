@@ -60,7 +60,8 @@ GitHub OAuth 앱을 등록한 배포에서는 Electron 프로세스에 `GROK_CRE
 
 - 기존 `/api/*`, CLI, Production 및 레거시 화면은 유지됩니다. 새 기능은 `/api/v2/*`를 사용합니다.
 - 현재 렌더러는 다중 영상·이미지·오디오·자막·오버레이 트랙, 기본 transform/opacity/volume/speed를 처리합니다.
-- ripple/roll/slip/slide, 프록시, 고급 키프레임 곡선, tracking, stabilization, scopes, multicam, OTIO 같은 Professional NLE 단계 기능은 스키마가 수용할 수 있도록 설계했지만 아직 모두 구현된 것은 아닙니다.
+- P1 직접 편집·트랙·이력·프록시·키프레임·전환/자막·오디오 믹서·렌더 골든·Electron E2E가 연결되어 있습니다. 프로그램 모니터는 플레이헤드의 합성 프레임을 최종 MoviePy 렌더와 같은 경로로 만듭니다.
+- P2 고급 편집의 첫 슬라이스도 포함됩니다: 마스크·블렌드·크로마 키, 스피드 램프·트래커 부착·안정화, nested sequence·multicam, LUT/컬러 휠/스코프, EQ·컴프레서, EDL/OTIO 교환과 렌더 큐. After Effects급 합성·플러그인 SDK·실시간 공동 편집은 1.0 범위 밖입니다.
 - GitHub 전용 비공개 저장소 생성/기존 clone 선택, 앱 내 token 로그인, 선택적 OAuth device flow와 `control` / `runner/<id>` watcher가 구현되어 있습니다. 공개 OAuth 앱 등록과 macOS 서명/notarization은 외부 자격 증명이 필요한 출시 게이트입니다.
 
 ## 검증

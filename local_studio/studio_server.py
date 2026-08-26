@@ -48,6 +48,8 @@ from proxy import (
     source_asset,
     update_proxy,
 )
+from exchange import export_edl, export_otio, import_edl, import_otio
+from preview import preview_at
 from render import render_moviepy
 
 
@@ -783,6 +785,97 @@ def start_job(job_id: str, *, wait: bool) -> dict[str, Any]:
     if wait:
         return future.result()
     return get_job(job_id) or job
+
+
+def project_preview(project_id: str, at: float, *, include_image: bool = True) -> dict[str, Any]:
+    from desktop_domain import get_timeline
+
+    payload = get_timeline(project_id)
+    preview = preview_at(payload["timeline"], at, include_image=include_image)
+    preview.pop("frame", None)
+    preview["project_id"] = project_id
+    return preview
+
+
+def project_scopes(project_id: str, at: float) -> dict[str, Any]:
+    from desktop_domain import get_timeline
+    from render import sample_timeline_frame
+
+    payload = get_timeline(project_id)
+    sampled = sample_timeline_frame(payload["timeline"], at)
+    return {
+        "project_id": project_id,
+        "at": sampled["at"],
+        "revision": payload["timeline"].get("revision"),
+        "scopes": sampled["scopes"],
+        "caption": sampled.get("caption", ""),
+    }
+
+
+def project_exchange(project_id: str, fmt: str) -> dict[str, Any]:
+    from desktop_domain import get_timeline
+
+    payload = get_timeline(project_id)
+    timeline = payload["timeline"]
+    project = get_project(project_id) or {}
+    title = str(project.get("title") or "Grok Crew")
+    if fmt == "edl":
+        return {"format": "edl", "text": export_edl(timeline, title)}
+    if fmt == "otio":
+        return {"format": "otio", "otio": export_otio(timeline, title)}
+    raise ValueError("Exchange format must be edl or otio.")
+
+
+def import_exchange(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    from desktop_domain import apply_timeline_patch, get_timeline
+
+    current = get_timeline(project_id)
+    timeline = current["timeline"]
+    fps = int(timeline["settings"].get("fps", 30))
+    if body.get("edl"):
+        imported = import_edl(str(body["edl"]), fps)
+    elif body.get("otio"):
+        if not isinstance(body.get("otio"), dict):
+            raise ValueError("otio must be an object.")
+        imported = import_otio(body["otio"])
+    else:
+        raise ValueError("Provide edl text or an otio object.")
+    existing_ids = {str(asset.get("id")) for asset in timeline.get("assets", [])}
+    operations: list[dict[str, Any]] = []
+    for asset in imported.get("assets", []):
+        if asset.get("id") not in existing_ids:
+            operations.append({"op": "add_asset", "asset": asset})
+    target = next((track for track in timeline["tracks"] if track.get("type") == "video"), None)
+    if target is None:
+        raise ValueError("A video track is required before importing an edit list.")
+    for clip in list(target.get("clips", [])):
+        operations.append({"op": "remove_clip", "clip_id": clip["id"]})
+    incoming = next((track for track in imported.get("tracks", []) if track.get("type") == "video"), {"clips": []})
+    for clip in incoming.get("clips", []):
+        if clip.get("asset_id") not in existing_ids and clip.get("asset_id") != "source":
+            clip["asset_id"] = next(iter(existing_ids), clip.get("asset_id"))
+        elif "source" in existing_ids:
+            clip["asset_id"] = "source"
+        operations.append({"op": "add_clip", "track_id": target["id"], "clip": clip})
+    if not operations:
+        raise ValueError("The exchange file did not contain any clips.")
+    return apply_timeline_patch(project_id, {
+        "schema": "grok-crew.timeline-patch/v1",
+        "base_revision": timeline["revision"],
+        "origin": "human",
+        "operations": operations,
+    })
+
+
+def render_queue(project_id: str) -> list[dict[str, Any]]:
+    return [job for job in list_jobs(project_id) if job.get("kind") == "render"]
+
+
+def enqueue_render(project_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    job = create_job(project_id, "render", body or {}, True)
+    if (body or {}).get("run_immediately", True):
+        job = start_job(job["id"], wait=bool((body or {}).get("wait", False)))
+    return {"job": job, "queue": render_queue(project_id)}
 
 
 def main() -> None:

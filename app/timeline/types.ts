@@ -11,11 +11,28 @@ export type TimelineKeyframe = {
   id: string;
   at: number;
   value: number;
-  interpolation: 'linear' | 'hold';
+  interpolation: 'linear' | 'hold' | 'ease_in' | 'ease_out' | 'ease_in_out';
 };
 export type TimelineTransition = {
   type: 'fade' | 'crossfade' | 'dip_black';
   duration: number;
+};
+export type TimelineCompositing = {
+  blend_mode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'add';
+  mask?: { shape?: 'none' | 'rectangle' | 'ellipse'; feather?: number; invert?: boolean };
+  chroma_key?: { enabled?: boolean; color?: string; similarity?: number; spill?: number };
+};
+export type TimelineColor = {
+  lut?: string;
+  lift?: number[];
+  gamma?: number[];
+  gain?: number[];
+  saturation?: number;
+};
+export type TimelineMotion = {
+  stabilize?: boolean;
+  tracker?: { attach?: 'none' | 'position'; points?: Array<{ id: string; at: number; x: number; y: number }> };
+  speed_ramp?: { enabled?: boolean; ease?: 'linear' | 'ease_in' | 'ease_out' | 'ease_in_out' };
 };
 
 export type TimelineClip = {
@@ -27,12 +44,16 @@ export type TimelineClip = {
   source_out?: number;
   locked: boolean;
   group_id?: string | null;
+  camera?: string;
   transition_in?: TimelineTransition;
   transition_out?: TimelineTransition;
   text?: string;
   transform?: Record<string, number>;
   audio?: Record<string, number | boolean>;
   keyframes?: Partial<Record<KeyframeProperty, TimelineKeyframe[]>>;
+  compositing?: TimelineCompositing;
+  color?: TimelineColor;
+  motion?: TimelineMotion;
 };
 
 export type TimelineTrack = {
@@ -47,6 +68,11 @@ export type TimelineTrack = {
   role?: 'dialogue' | 'music' | 'effects';
   ducking?: boolean;
   duck_level?: number;
+  audio_fx?: {
+    eq?: { low?: number; mid?: number; high?: number };
+    compressor?: { enabled?: boolean; threshold?: number; ratio?: number; attack?: number; release?: number };
+  };
+  multicam_group?: string;
   clips: TimelineClip[];
 };
 

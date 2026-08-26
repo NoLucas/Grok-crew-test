@@ -6847,7 +6847,15 @@ select {
 .desktop-monitor-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .desktop-monitor-actions span { color: #a7a9b0; font-variant-numeric: tabular-nums; }
 .desktop-monitor-head button.active { border-color: #655cf6; background: #3a3586; color: #fff; }
-.desktop-monitor video { width: 100%; height: 100%; min-height: 0; object-fit: contain; background: #050506; }
+.desktop-monitor video,
+.desktop-program-frame { width: 100%; height: 100%; min-height: 0; object-fit: contain; background: #050506; }
+.desktop-program-empty { display: grid; place-items: center; min-height: 200px; padding: 16px; color: #a7a9b0; text-align: center; }
+.desktop-scopes { display: flex; align-items: flex-end; gap: 2px; height: 48px; padding: 0 12px 8px; }
+.desktop-scopes i { flex: 1; background: #2F6FED; border-radius: 1px 1px 0 0; }
+.desktop-look,
+.desktop-eq { display: grid; gap: 8px; }
+.desktop-eq { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.desktop-exchange { width: 100%; min-height: 120px; margin-top: 8px; }
 .desktop-monitor-foot { border-top: 1px solid #292b31; }
 .desktop-export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 14px; }
 .desktop-publish-row { display: grid; grid-template-columns: 1fr minmax(130px, 160px) 58px; gap: 8px; align-items: center; padding: 11px 13px; border-bottom: 1px solid var(--desktop-line-soft); }

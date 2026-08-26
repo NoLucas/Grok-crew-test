@@ -8,6 +8,14 @@ import type {
   TimelineTrack,
 } from './types';
 
+function easeRatio(ratio: number, ease: TimelineKeyframe['interpolation']) {
+  const t = Math.max(0, Math.min(1, ratio));
+  if (ease === 'ease_in') return t * t;
+  if (ease === 'ease_out') return 1 - (1 - t) * (1 - t);
+  if (ease === 'ease_in_out') return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+  return t;
+}
+
 export const KEYFRAME_LIMITS: Record<KeyframeProperty, { min: number; max: number; step: number }> = {
   x: { min: -10000, max: 10000, step: 1 },
   y: { min: -10000, max: 10000, step: 1 },
@@ -57,7 +65,8 @@ export function keyframeValue(
   const right = points[rightIndex];
   if (left.interpolation === 'hold') return left.value;
   const ratio = (at - left.at) / Math.max(0.001, right.at - left.at);
-  return left.value + (right.value - left.value) * ratio;
+  const eased = easeRatio(ratio, left.interpolation);
+  return left.value + (right.value - left.value) * eased;
 }
 
 function cloneKeyframes(clip: TimelineClip) {

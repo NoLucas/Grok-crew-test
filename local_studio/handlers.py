@@ -48,8 +48,14 @@ from studio_server import (
     list_projects,
     new_project,
     project_operations,
+    enqueue_render,
+    import_exchange,
+    project_exchange,
+    project_preview,
     project_proxies,
+    project_scopes,
     quality_report,
+    render_queue,
     record_bot_heartbeat,
     request_job_cancel,
     request_proxy,
@@ -245,6 +251,32 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, {"proxies": project_proxies(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/analysis"):
                 value = get_analysis(path.split("/")[4]); self._json(200, {"analysis": value})
+            elif path.startswith("/api/v2/projects/") and path.endswith("/preview"):
+                query = urlparse(self.path).query
+                at = 0.0
+                include_image = True
+                for part in query.split("&"):
+                    if part.startswith("at="):
+                        at = float(part.split("=", 1)[1] or 0)
+                    if part == "image=0":
+                        include_image = False
+                self._json(200, {"preview": project_preview(path.split("/")[4], at, include_image=include_image)})
+            elif path.startswith("/api/v2/projects/") and path.endswith("/scopes"):
+                query = urlparse(self.path).query
+                at = 0.0
+                for part in query.split("&"):
+                    if part.startswith("at="):
+                        at = float(part.split("=", 1)[1] or 0)
+                self._json(200, project_scopes(path.split("/")[4], at))
+            elif path.startswith("/api/v2/projects/") and path.endswith("/exchange"):
+                query = urlparse(self.path).query
+                fmt = "edl"
+                for part in query.split("&"):
+                    if part.startswith("format="):
+                        fmt = part.split("=", 1)[1] or "edl"
+                self._json(200, project_exchange(path.split("/")[4], fmt))
+            elif path.startswith("/api/v2/projects/") and path.endswith("/render-queue"):
+                self._json(200, {"jobs": render_queue(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/timeline"):
                 self._json(200, get_timeline(path.split("/")[4]))
             elif path == "/api/jobs":
@@ -311,6 +343,10 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, apply_timeline_history_action(path.split("/")[4], body))
             elif path.startswith("/api/v2/projects/") and path.endswith("/proxies"):
                 self._json(201, request_proxy(path.split("/")[4], body))
+            elif path.startswith("/api/v2/projects/") and path.endswith("/exchange"):
+                self._json(201, import_exchange(path.split("/")[4], body))
+            elif path.startswith("/api/v2/projects/") and path.endswith("/render-queue"):
+                self._json(201, enqueue_render(path.split("/")[4], body))
             elif path.startswith("/api/v2/projects/") and path.endswith("/timeline/restore"):
                 self._json(201, restore_timeline_version(path.split("/")[4], int(body.get("revision", 0)), str(body.get("created_by", "operator"))))
             elif path.startswith("/api/v2/projects/") and path.endswith("/control-jobs"):

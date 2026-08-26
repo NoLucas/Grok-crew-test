@@ -6,6 +6,14 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- P1-08 program-monitor composite preview now samples the same MoviePy timeline used for final output, so playhead frames, captions, timing, and audio RMS can be compared 1:1 with the rendered MP4.
+- P2-01 compositing: per-clip blend modes, rectangle/ellipse masks with feather, and chroma key.
+- P2-02 motion: speed-ramp easing, attach-to-tracker points, and a lightweight stabilize pass.
+- P2-03 nested sequence assets and multicam camera switching.
+- P2-04 lift/gamma/gain/saturation grade, `.cube` LUT, and waveform/parade scopes on the program monitor.
+- P2-05 track EQ and compressor in the audio mixer.
+- P2-06 CMX EDL / OTIO-shaped exchange and a desktop render queue.
+
 - P1-02 track editing in the desktop timeline: persistent clip groups, track lock/mute/solo controls, marker add/remove, frame-based snapping, range and additive multi-selection, and atomic movement of a selected group.
 - P1-03 persistent undo/redo history: every action creates a new immutable revision, redo survives restart, a divergent edit clears the redo branch, and the desktop exposes buttons plus standard keyboard shortcuts.
 - P1-04 local proxy editing: generate and retry a lightweight H.264 proxy, monitor progress, switch preview between proxy and original, and keep final MoviePy renders pinned to the original asset.

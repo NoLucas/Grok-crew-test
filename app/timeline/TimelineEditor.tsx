@@ -94,6 +94,7 @@ export function TimelineEditor({
   onHistoryAction,
   onAddTrack,
   trackBusy,
+  onPlayheadChange,
 }: {
   timeline: Timeline;
   selectedClipIds: string[];
@@ -103,10 +104,22 @@ export function TimelineEditor({
   onHistoryAction: (action: TimelineHistoryAction) => void;
   onAddTrack: (type: TrackType) => void;
   trackBusy: boolean;
+  onPlayheadChange?: (at: number) => void;
 }) {
   const { t } = useLanguage();
   const [tool, setTool] = useState<EditTool>('select');
-  const [playhead, setPlayhead] = useState(0);
+  const [playhead, setPlayheadState] = useState(0);
+  const playheadListener = useRef(onPlayheadChange);
+  useEffect(() => {
+    playheadListener.current = onPlayheadChange;
+  }, [onPlayheadChange]);
+  const setPlayhead = useCallback((at: number | ((current: number) => number)) => {
+    setPlayheadState((current) => {
+      const next = typeof at === 'function' ? at(current) : at;
+      playheadListener.current?.(next);
+      return next;
+    });
+  }, []);
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const [snapTarget, setSnapTarget] = useState<number | null>(null);
   const session = useRef<DragSession | null>(null);
@@ -158,7 +171,7 @@ export function TimelineEditor({
           : roundTime(clip.timeline_start + clip.duration / 2),
       );
     },
-    [onSelectClips, selectedClipIds, timeline],
+    [onSelectClips, selectedClipIds, setPlayhead, timeline],
   );
 
   const run = useCallback(

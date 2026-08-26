@@ -10,7 +10,7 @@
         "id": { "type": "string", "minLength": 1 },
         "at": { "type": "number", "minimum": 0 },
         "value": { "type": "number" },
-        "interpolation": { "enum": ["linear", "hold"] }
+        "interpolation": { "enum": ["linear", "hold", "ease_in", "ease_out", "ease_in_out"] }
       },
       "additionalProperties": false
     },
@@ -55,7 +55,7 @@
         "required": ["id", "kind", "name"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "kind": { "enum": ["video", "image", "audio", "title", "generator"] },
+          "kind": { "enum": ["video", "image", "audio", "title", "generator", "sequence"] },
           "name": { "type": "string" },
           "text": { "type": "string" },
           "path": { "type": "string" },

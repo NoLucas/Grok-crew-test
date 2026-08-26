@@ -16,7 +16,12 @@ from typing import Any
 import config
 from config import utc_now
 from db import db, event, row_dict
+from audio_fx import normalize_audio_fx
+from color import normalize_color
+from compositing import normalize_compositing
 from keyframes import normalize_keyframes
+from motion import normalize_motion
+from sequence import normalize_sequence_asset
 
 TIMELINE_SCHEMA = "grok-crew.timeline/v2"
 PATCH_SCHEMA = "grok-crew.timeline-patch/v1"
@@ -26,7 +31,7 @@ RUNNER_EVENT_SCHEMA = "grok-crew.runner-event/v1"
 PUBLISH_POLICY_SCHEMA = "grok-crew.publish-policy/v1"
 
 TRACK_TYPES = {"video", "audio", "caption", "overlay", "adjustment"}
-ASSET_TYPES = {"video", "image", "audio", "title", "generator"}
+ASSET_TYPES = {"video", "image", "audio", "title", "generator", "sequence"}
 ORIGINS = {"human", "remote_bot", "local_system"}
 CONTROL_STATUSES = {
     "queued", "claimed", "analyzing", "planning", "needs_input",
@@ -158,6 +163,8 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
         if asset_id in asset_ids:
             raise ValueError(f"Duplicate asset id: {asset_id}")
         asset_ids.add(asset_id)
+        if asset.get("kind") == "sequence":
+            normalize_sequence_asset(asset)
     track_ids, clip_ids = set(), set()
     for track in tracks:
         if not isinstance(track, dict) or track.get("type") not in TRACK_TYPES or not isinstance(track.get("clips"), list):
@@ -183,6 +190,9 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
             raise ValueError("track.role must be dialogue, music, or effects.")
         track["ducking"] = bool(track.get("ducking", False))
         track["order"] = int(track.get("order", 0))
+        track["audio_fx"] = normalize_audio_fx(track.get("audio_fx"))
+        if track.get("multicam_group") not in (None, ""):
+            track["multicam_group"] = _safe_identifier(track.get("multicam_group"), "track.multicam_group")
         for clip in track["clips"]:
             if not isinstance(clip, dict):
                 raise ValueError("Every clip must be an object.")
@@ -201,6 +211,11 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
                 raise ValueError(f"Clip {clip_id} references an unknown asset.")
             clip["locked"] = bool(clip.get("locked"))
             clip["keyframes"] = normalize_keyframes(clip.get("keyframes", {}), clip["duration"])
+            clip["compositing"] = normalize_compositing(clip.get("compositing"))
+            clip["color"] = normalize_color(clip.get("color"))
+            clip["motion"] = normalize_motion(clip.get("motion"), clip["duration"])
+            if clip.get("camera") not in (None, ""):
+                clip["camera"] = _safe_identifier(clip.get("camera"), "clip.camera")
             for transition_field in ("transition_in", "transition_out"):
                 transition = clip.get(transition_field)
                 if transition is None:

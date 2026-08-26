@@ -107,6 +107,8 @@ describe('P1-05 keyframe interpolation', () => {
     assert.equal(keyframeValue(clip, 'x', 2), 50);
     assert.equal(keyframeValue(clip, 'opacity', 2), 0.2);
     assert.equal(keyframeValue(clip, 'scale', 2), 1);
+    clip.keyframes.x[0].interpolation = 'ease_in';
+    assert.ok(keyframeValue(clip, 'x', 2) < 50);
   });
 
   it('offers visual and audio properties only on compatible tracks', () => {

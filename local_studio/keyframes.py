@@ -19,7 +19,7 @@ KEYFRAME_LIMITS: dict[str, tuple[float, float]] = {
     "volume": (0, 4),
     "speed": (0.1, 8),
 }
-KEYFRAME_INTERPOLATIONS = {"linear", "hold"}
+KEYFRAME_INTERPOLATIONS = {"linear", "hold", "ease_in", "ease_out", "ease_in_out"}
 
 
 def _safe_id(value: Any) -> str:
@@ -69,7 +69,7 @@ def normalize_keyframes(value: Any, duration: float) -> dict[str, list[dict[str,
                 )
             interpolation = str(raw.get("interpolation", "linear"))
             if interpolation not in KEYFRAME_INTERPOLATIONS:
-                raise ValueError("keyframe.interpolation must be linear or hold.")
+                raise ValueError("keyframe.interpolation must be linear, hold, or an ease curve.")
             ids.add(point_id)
             times.add(rounded_at)
             points.append({
@@ -102,7 +102,9 @@ def keyframe_value(
         return float(left["value"])
     span = float(right["at"]) - float(left["at"])
     ratio = 0 if span <= 0 else (at - float(left["at"])) / span
-    return float(left["value"]) + (float(right["value"]) - float(left["value"])) * ratio
+    from motion import ease_ratio
+    eased = ease_ratio(ratio, str(left.get("interpolation", "linear")))
+    return float(left["value"]) + (float(right["value"]) - float(left["value"])) * eased
 
 
 def has_keyframes(keyframes: dict[str, list[dict[str, Any]]] | None, *properties: str) -> bool:

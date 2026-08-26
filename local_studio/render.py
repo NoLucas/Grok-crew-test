@@ -6,9 +6,14 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Callable
 
+from audio_fx import apply_audio_fx, normalize_audio_fx
+from color import apply_color, normalize_color, waveform_scope
+from compositing import apply_compositing, normalize_compositing
 from config import PLATFORM_PRESETS, caption_font, workspace_path
 from keyframes import has_keyframes, keyframe_value, speed_time_mapper
-from render_contract import timeline_render_contract
+from motion import apply_tracker_position, ease_ratio, normalize_motion, stabilize_layer
+from render_contract import snapshot_at, timeline_render_contract
+from sequence import prepare_timeline
 
 
 def _asset_path(value: str) -> Path:
@@ -110,6 +115,7 @@ def _render_timeline_v2(
     project: dict[str, Any],
     progress_cb: Callable[[int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
+    sample_at: float | None = None,
 ) -> dict[str, Any]:
     """Render the immutable multi-track timeline used by the desktop editor.
 
@@ -134,7 +140,7 @@ def _render_timeline_v2(
     except ImportError as exc:
         raise RuntimeError("MoviePy is not installed. Install local_studio/requirements.txt first.") from exc
 
-    timeline = project["timeline_json"]
+    timeline = prepare_timeline(project["timeline_json"])
     settings = timeline.get("settings") if isinstance(timeline.get("settings"), dict) else {}
     assets = {str(item.get("id")): item for item in timeline.get("assets", []) if isinstance(item, dict)}
     tracks = sorted(
@@ -173,8 +179,9 @@ def _render_timeline_v2(
     if duration <= 0:
         raise RuntimeError("Timeline duration must be positive.")
 
-    output = Path(project["output_path"])
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output = Path(project.get("output_path") or "outputs/preview.mp4")
+    if sample_at is None:
+        output.parent.mkdir(parents=True, exist_ok=True)
     font_path = caption_font()
     visual_layers: list[Any] = [ColorClip(size=(target_w, target_h), color=bg_rgb).with_duration(duration)]
     audio_layers: list[Any] = []
@@ -258,6 +265,7 @@ def _render_timeline_v2(
                 track_volume = max(0, min(float(track.get("volume", 1)), 4))
                 if track_volume != 1:
                     layer = layer.with_effects([afx.MultiplyVolume(track_volume)])
+                layer = apply_audio_fx(layer, normalize_audio_fx(track.get("audio_fx")))
                 layer = layer.with_start(start).with_duration(clip_duration)
                 if track.get("role", "dialogue") == "dialogue":
                     dialogue_audio_layers.append(layer)
@@ -339,7 +347,20 @@ def _render_timeline_v2(
                     )
                 else:
                     position = (x_value, y_value)
-                layer = layer.with_start(start).with_duration(clip_duration).with_position(position)
+                layer = apply_color(layer, normalize_color(clip_data.get("color")))
+                layer = apply_compositing(layer, normalize_compositing(clip_data.get("compositing")))
+                motion = normalize_motion(clip_data.get("motion"), clip_duration)
+                layer = stabilize_layer(layer, bool(motion.get("stabilize")))
+                if motion.get("speed_ramp", {}).get("enabled") and has_keyframes(keyframes, "speed"):
+                    ease = str(motion["speed_ramp"].get("ease", "linear"))
+                    mapper = speed_time_mapper(clip_duration, max(0.001, float(clip_data.get("source_out", clip_duration)) - float(clip_data.get("source_in", 0))), keyframes)
+                    layer = layer.time_transform(
+                        lambda at, inner=mapper, kind=ease: inner(clip_duration * ease_ratio(at / max(clip_duration, 0.001), kind)),
+                        apply_to=["mask", "audio"],
+                        keep_duration=True,
+                    )
+                layer = layer.with_start(start).with_duration(clip_duration)
+                layer = apply_tracker_position(layer, motion, position)
                 layer = _apply_transitions(layer, clip_data, vfx)
                 audio_config = clip_data.get("audio") if isinstance(clip_data.get("audio"), dict) else {}
                 if layer.audio and (audio_config.get("muted") or track.get("muted")):
@@ -350,6 +371,7 @@ def _render_timeline_v2(
                     track_volume = max(0, min(float(track.get("volume", 1)), 4))
                     if track_volume != 1:
                         clip_audio = clip_audio.with_effects([afx.MultiplyVolume(track_volume)])
+                    clip_audio = apply_audio_fx(clip_audio, normalize_audio_fx(track.get("audio_fx")))
                     if track.get("role", "dialogue") == "dialogue":
                         dialogue_audio_layers.append(clip_audio)
                     if track.get("role") == "music" and track.get("ducking"):
@@ -383,6 +405,29 @@ def _render_timeline_v2(
             owned_clips.append(combined)
             final = final.with_audio(combined)
         has_audio = bool(final.audio)
+        if sample_at is not None:
+            import numpy as np
+
+            time = min(max(float(sample_at), 0.0), max(duration - (1 / max(fps, 1)), 0.0))
+            frame = final.get_frame(time)
+            audio_rms = 0.0
+            if final.audio:
+                times = np.array([max(time + offset, 0.001) for offset in (0.011, 0.023, 0.037)])
+                samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=44_100)
+                audio_rms = float(np.sqrt(np.mean(np.square(samples))))
+            logical = snapshot_at(timeline, time)
+            return {
+                "at": time,
+                "width": target_w,
+                "height": target_h,
+                "fps": fps,
+                "frame": frame,
+                "audio_rms": audio_rms,
+                "caption": logical["caption"],
+                "active_clip_ids": logical["active_clip_ids"],
+                "render_contract": contract,
+                "scopes": waveform_scope(frame),
+            }
         if progress_cb:
             progress_cb(92)
         final.write_videofile(
@@ -456,6 +501,13 @@ def _apply_music_ducking(music, gain_at):
         return frame * gain if nchannels == 1 else frame * np.array([gain for _ in range(nchannels)]).T
 
     return music.transform(duck, keep_duration=True)
+
+
+def sample_timeline_frame(timeline: dict[str, Any], at: float) -> dict[str, Any]:
+    return _render_timeline_v2(
+        {"timeline_json": timeline, "output_path": "outputs/preview.mp4"},
+        sample_at=at,
+    )
 
 
 def render_moviepy(project: dict[str, Any], progress_cb: Callable[[int], None] | None = None, should_cancel: Callable[[], bool] | None = None) -> dict[str, Any]:

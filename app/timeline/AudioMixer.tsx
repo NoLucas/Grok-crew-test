@@ -33,6 +33,18 @@ export function AudioMixer({
               role: String(values.get('role')),
               ducking: values.get('ducking') === 'on',
               duck_level: Number(values.get('duck_level')),
+              audio_fx: {
+                eq: {
+                  low: Number(values.get('eq_low')),
+                  mid: Number(values.get('eq_mid')),
+                  high: Number(values.get('eq_high')),
+                },
+                compressor: {
+                  enabled: values.get('comp_on') === 'on',
+                  threshold: Number(values.get('comp_threshold')),
+                  ratio: Number(values.get('comp_ratio')),
+                },
+              },
             });
           }}
         >
@@ -56,6 +68,25 @@ export function AudioMixer({
           <label>
             {t('줄인 음량', 'Duck level', '降低后音量', 'ダック音量')}
             <input name="duck_level" type="number" min="0" max="1" step=".05" defaultValue={track.duck_level ?? .35} disabled={disabled || track.locked} />
+          </label>
+          <label>
+            EQ L/M/H
+            <div className="desktop-eq">
+              <input name="eq_low" type="number" min="-12" max="12" step="1" defaultValue={track.audio_fx?.eq?.low ?? 0} disabled={disabled || track.locked} />
+              <input name="eq_mid" type="number" min="-12" max="12" step="1" defaultValue={track.audio_fx?.eq?.mid ?? 0} disabled={disabled || track.locked} />
+              <input name="eq_high" type="number" min="-12" max="12" step="1" defaultValue={track.audio_fx?.eq?.high ?? 0} disabled={disabled || track.locked} />
+            </div>
+          </label>
+          <label className="desktop-mixer-check">
+            <input name="comp_on" type="checkbox" defaultChecked={Boolean(track.audio_fx?.compressor?.enabled)} disabled={disabled || track.locked} />
+            {t('컴프레서', 'Compressor', '压缩器', 'コンプレッサー')}
+          </label>
+          <label>
+            {t('임계값 / 비율', 'Threshold / ratio', '阈值 / 比率', 'しきい値 / 比率')}
+            <div className="desktop-eq">
+              <input name="comp_threshold" type="number" min="-60" max="0" step="1" defaultValue={track.audio_fx?.compressor?.threshold ?? -18} disabled={disabled || track.locked} />
+              <input name="comp_ratio" type="number" min="1" max="20" step="0.5" defaultValue={track.audio_fx?.compressor?.ratio ?? 3} disabled={disabled || track.locked} />
+            </div>
           </label>
           <button type="submit" disabled={disabled || track.locked}>
             {t('믹서 적용', 'Apply mix', '应用混音', 'ミックスを適用')}
