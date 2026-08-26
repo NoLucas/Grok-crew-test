@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Simple-path build order (`docs/SIMPLE_PATH.ko.md`): one Windows file, a short desk (title / drop / copy to one bot), auto-open the incoming cut. Bot zip and picture PDF stay behind that path (`docs/DOWNLOAD_SPLIT.ko.md`).
 - Download split plan (`docs/DOWNLOAD_SPLIT.ko.md`): Windows desk file for the person, a bot zip that is not an installer, and a picture PDF if Windows blocks the file. The download page does not ask for administrator first.
 - Crew role names follow the bot that checks in, or the name the operator types. Empty names default to `editor` / `collector`, not Grok or Claude. Claude may sit on the editor door; Grok may collect. Folder names stay `handoff-outbox/grok` and `handoff-outbox/agents`. Desktop reads `crew_roster` from `/api/v2/workspace`.
 - Style recipes, source mode, and licensed materials. Desktop picks `instagram_reel`, `tiktok_tight`, `youtube_short`, or `youtube_long` and fills length, aspect, hook, pacing, captions, look, and collect hints. Source mode is `own` (editor outbox only), `collect` (both outboxes), or `own_and_collect` (operator A-roll plus collector b-roll). Materials `manifest.json` stores `origin` and `license` (`operator` / `stock` / `public` / `unknown`); unknown licenses show on the desk. `GET /api/v2/style-recipes` lists the packs. This desk still does not scrape websites.
