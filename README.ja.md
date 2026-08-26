@@ -2,6 +2,8 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <strong>日本語</strong></p>
 
+**Windows で開く。** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) を受け取ってダブルクリックします。タイトルを書くか映像を置き、一行を一人のボットにコピーします。カットが届くと窓が開きます。
+
 **Grok Crew は、あなたのパソコンにあるショート動画デスクです。仕様は人が書き、ドアは二つです。編集ドアと、収集・他エージェントドア。**
 
 このパソコンに原版を置かなくても大丈夫です。長さ、字幕、残すセリフ、どのドアがやるかだけ決めます。**別のパソコン**のボットが映像とカットを作り、そのドアのフォルダにだけ渡します。この PC は受け取ります。Instagram・TikTok・YouTube は、したいときだけ投稿します。
@@ -22,7 +24,7 @@
 
 ## 画面に出るもの
 
-最初の画面で**スタイルレシピ**（Instagram リール、TikTok 速いカット、YouTube ショート、YouTube 本編）と、画面がどこから来るか（自分のファイル、収集、両方）を選びます。役割名はチェックインしたボットに従います。収集仕様はボット二人です。収集ボットは `handoff-outbox/agents` を読み、クリップとライセンスを `handoff-materials` に置きます。自分のファイルだけの仕様は編集送信箱だけ使います。編集ボットはそのクリップだけ切って `handoff-inbox/grok` に返します。このデスクはサイトを掻きません。文のコピーは予備です。**収集の例を見る** と **編集の届き方を見る** は同梱クリップで同じ到着を見せます。
+最初の画面は短いです。タイトル、映像を置く場所、**ボットにこの文をコピー**。その保存はボット一人です（`source_mode: bot`）。スタイルレシピと二人クルーは **もっと詳しく** の後ろです。編集ドアに届いたカットはボタンなしで開きます。このデスクはサイトを掻きません。
 
 そのあとは 3 つのタブです。
 
@@ -48,9 +50,13 @@ AI が**同じパソコン**ですでに動いているなら、普段の言葉�
 
 ## 開き方
 
+**Windows で開く** — [最新リリース](https://github.com/NoLucas/Grok-Crew/releases/latest)の `GrokCrew-Windows.exe` を受け取ってダブルクリックします。このアカウントだけに入ります。管理者パスワードは聞きません。
+
+Windows が PC を保護したと言ったら **詳細情報 → 実行**。
+
 すでに誰かが入れてくれているなら、Grok Crew の窓を開くか、ブラウザで [http://localhost:3000](http://localhost:3000/) です。
 
-自分で入れるなら [Node.js 22+](https://nodejs.org/) と [Python 3.10+](https://www.python.org/downloads/) が必要で、次を実行します。
+ソースから動かすなら [Node.js 22+](https://nodejs.org/) と [Python 3.10+](https://www.python.org/downloads/) が必要です。
 
 ```sh
 git clone https://github.com/NoLucas/Grok-Crew.git grok-crew
@@ -58,6 +64,6 @@ cd grok-crew
 npm run local
 ```
 
-ブラウザではなく窓で使うなら、一度 `npm install` してから `npm run desktop` です。初回は数分かかることがあります。止めるときは `Ctrl+C`。
+ソースから窓で使うなら、一度 `npm install` してから `npm run desktop` です。初回は数分かかることがあります。止めるときは `Ctrl+C`。
 
 このパソコンで自分の動画を作って公開できます。ソースは [BUSL-1.1](LICENSE) で公開されており、オープンソース製品ではありません。質問: [CONTRIBUTING.md](CONTRIBUTING.md)。

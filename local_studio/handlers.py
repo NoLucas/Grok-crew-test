@@ -71,7 +71,8 @@ from studio_server import (
     update_artifact,
 )
 from first_run import first_run_status, open_sample_project
-from edit_spec import create_spec, get_spec, list_specs, spec_brief
+from bot_pack import bot_pack_bytes
+from edit_spec import create_spec, get_spec, list_specs, spec_brief, spec_invite
 from handoff_inbox import handoff_status, pull_handoff
 from handoff_materials import materials_status, pull_materials, write_owned_materials
 from style_recipes import list_recipes
@@ -287,6 +288,10 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, outbox_status())
             elif path == "/api/v2/handoff/materials":
                 self._json(200, materials_status())
+            elif path.startswith("/api/v2/edit-specs/") and path.endswith("/invite"):
+                query = parse_qs(urlparse(self.path).query)
+                language = (query.get("lang") or query.get("language") or ["ko"])[0]
+                self._json(200, spec_invite(path.split("/")[4], language=str(language or "ko")))
             elif path.startswith("/api/v2/edit-specs/") and path.endswith("/brief"):
                 query = parse_qs(urlparse(self.path).query)
                 role = (query.get("role") or [None])[0]
@@ -366,6 +371,18 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, terminal_contract())
             elif path == "/downloads/grok-crew.py":
                 self._download(TERMINAL_CLI_PATH, "grok-crew.py")
+            elif path == "/downloads/grok-crew-bot.zip":
+                raw = bot_pack_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Content-Disposition", 'attachment; filename="GrokCrew-bot-pack.zip"')
+                origin = self.headers.get("Origin")
+                if origin and origin_is_allowed(origin):
+                    self.send_header("Access-Control-Allow-Origin", origin)
+                    self.send_header("Vary", "Origin")
+                self.end_headers()
+                self.wfile.write(raw)
             elif path == "/api/bot-entries":
                 self._json(200, {"entries": list_bot_entries()})
             elif path == "/api/edit-method":

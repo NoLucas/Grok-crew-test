@@ -2,6 +2,8 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <strong>한국어</strong> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
+**Windows에서 연다.** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest)를 받아 더블클릭하세요. 제목을 적거나 영상을 놓고, 한 줄을 봇에게 복사합니다. 컷이 오면 창이 열립니다.
+
 **Grok Crew는 내 컴퓨터의 숏폼 책상입니다. 규격은 사람이 적고, 문은 두 개입니다. 편집 문과 수집·다른 에이전트 문.**
 
 이 컴퓨터에 원본을 두지 않아도 됩니다. 길이와 자막, 남길 말, 어느 문이 할지 정하면 됩니다. **다른 컴퓨터**의 봇이 영상과 컷을 만들어 그 문 폴더로만 보냅니다. 이 PC는 받아서 보여 줍니다. Instagram·TikTok·YouTube는 원할 때만 올립니다.
@@ -22,7 +24,7 @@
 
 ## 화면에 보이는 것
 
-첫 화면에서 **스타일 레시피**(인스타 릴, 틱톡 빠른 컷, 유튜브 쇼츠, 유튜브 본편)와 화면이 어디서 오는지(내 파일, 수집, 둘 다)를 고릅니다. 역할 이름은 체크인한 봇을 따릅니다. 수집 규격은 봇 두 명입니다. 수집 봇은 `handoff-outbox/agents`를 읽고 클립과 라이선스를 `handoff-materials`에 둡니다. 내 파일 규격은 편집 보낼함만 씁니다. 편집 봇은 그 클립만 잘라 `handoff-inbox/grok`으로 돌려줍니다. 이 책상은 사이트를 긁지 않습니다. 글 복사는 예비입니다. **수집 예시 보기**와 **편집 예시 도착 보기**는 같은 도착을 번들 클립으로 보여 줍니다.
+첫 화면은 짧습니다. 제목, 영상 놓기, **봇에게 이 말 복사**. 그 저장은 봇 하나입니다(`source_mode: bot`). 스타일 레시피와 봇 둘 규격은 **더 자세히** 뒤에 있습니다. 편집 문으로 온 컷은 받기 버튼 없이 열립니다. 이 책상은 사이트를 긁지 않습니다.
 
 그다음은 세 탭입니다.
 
@@ -48,9 +50,13 @@
 
 ## 여는 방법
 
+**Windows에서 열기** — [최신 릴리스](https://github.com/NoLucas/Grok-Crew/releases/latest)에서 `GrokCrew-Windows.exe`를 받아 더블클릭하세요. 이 계정에만 들어갑니다. 관리자 비밀번호를 묻지 않습니다.
+
+Windows가 PC를 보호한다고 하면 **추가 정보 → 그래도 실행**.
+
 이미 누군가 설치해 두었다면 Grok Crew 창을 열면 됩니다. 또는 브라우저에서 [http://localhost:3000](http://localhost:3000/)입니다.
 
-직접 설치한다면 [Node.js 22 이상](https://nodejs.org/)과 [Python 3.10 이상](https://www.python.org/downloads/)이 필요하고, 아래를 실행합니다.
+소스로 직접 돌리려면 [Node.js 22 이상](https://nodejs.org/)과 [Python 3.10 이상](https://www.python.org/downloads/)이 필요합니다.
 
 ```sh
 git clone https://github.com/NoLucas/Grok-Crew.git grok-crew
@@ -58,6 +64,6 @@ cd grok-crew
 npm run local
 ```
 
-브라우저 대신 창으로 쓰려면 `npm install` 한 번 후 `npm run desktop`입니다. 첫 실행은 몇 분 걸릴 수 있습니다. 끄려면 `Ctrl+C`.
+소스에서 창으로 쓰려면 `npm install` 한 번 후 `npm run desktop`입니다. 첫 실행은 몇 분 걸릴 수 있습니다. 끄려면 `Ctrl+C`.
 
 이 컴퓨터에서 자신의 영상을 만들고 올리는 것은 가능합니다. 소스는 [BUSL-1.1](LICENSE)로 공개되어 있고, 오픈소스 제품은 아닙니다. 질문: [CONTRIBUTING.md](CONTRIBUTING.md).

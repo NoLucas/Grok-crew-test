@@ -730,3 +730,55 @@ def crew_roster() -> dict[str, Any]:
         "suggested_editor": str((editor or {}).get("display_name") or ""),
         "suggested_collector": str((collector or {}).get("display_name") or ""),
     }
+
+
+def spec_invite(spec_id: str, language: str = "ko") -> dict[str, Any]:
+    """Short paste for one bot. No git clone path. The person only copies."""
+    record = get_spec(spec_id)
+    if not record:
+        raise ValueError("Edit spec not found.")
+    spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
+    from handoff_inbox import door_inbox_dir
+    from style_recipes import RECIPES
+
+    inbox = str(door_inbox_dir("grok"))
+    title = str(spec.get("title") or record.get("title") or "").strip()
+    recipe_id = str(spec.get("recipe_id") or "instagram_reel")
+    duration = spec.get("duration_seconds") if isinstance(spec.get("duration_seconds"), dict) else {}
+    low = int(duration.get("min") or 21)
+    high = int(duration.get("max") or 30)
+    recipe_name = recipe_label(RECIPES.get(recipe_id) or {"id": recipe_id, "name": {}}, language)
+    lang = (language or "ko").strip().lower()
+    if lang.startswith("ko"):
+        text = (
+            f"이 컴퓨터의 Grok Crew 책상이 켜져 있습니다.\n"
+            f"제목: {title}\n"
+            f"형태: {recipe_name}, 세로, {low}–{high}초.\n"
+            f"원본과 첫 컷을 당신이 만듭니다. 운영자는 영상을 주지 않습니다.\n\n"
+            f"같은 컴퓨터에서 명령할 수 있으면:\n"
+            f"  python grok-crew.py entry --bot-id desk-bot --display-name \"당신의 이름\" --purpose edit_video\n"
+            f"  (스크립트는 http://127.0.0.1:7214/downloads/grok-crew.py)\n\n"
+            f"끝난 패키지는 이 폴더에 둡니다:\n"
+            f"  {inbox}\n"
+            f"127.0.0.1 말고는 붙지 마세요."
+        )
+    else:
+        text = (
+            f"Grok Crew is open on this computer.\n"
+            f"Title: {title}\n"
+            f"Shape: {recipe_name}, vertical, {low}–{high}s.\n"
+            f"You make the source and the first cut. The operator will not attach footage.\n\n"
+            f"If you can run a command on this computer:\n"
+            f"  python grok-crew.py entry --bot-id desk-bot --display-name \"your name\" --purpose edit_video\n"
+            f"  (script: http://127.0.0.1:7214/downloads/grok-crew.py)\n\n"
+            f"Put the finished package in this folder:\n"
+            f"  {inbox}\n"
+            f"Do not connect anywhere except 127.0.0.1."
+        )
+    return {
+        "schema": "grok-crew.spec-invite/v1",
+        "spec": record,
+        "text": text,
+        "inbox_dir": inbox,
+        "language": lang[:2],
+    }

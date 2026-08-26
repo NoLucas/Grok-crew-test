@@ -1,9 +1,12 @@
+import io
 import json
+import zipfile
 from urllib.request import Request, urlopen
 
 import pytest
 
-from edit_spec import create_spec, normalize_agent, resolve_sender, spec_brief
+import config
+from edit_spec import create_spec, normalize_agent, resolve_sender, spec_brief, spec_invite
 from handoff_inbox import apply_package_local, media_relpaths, pull_handoff, write_demo_package
 import first_run
 
@@ -284,3 +287,46 @@ def test_crew_roster_suggests_names_from_checkin_purpose(studio):
     })
     assert swapped["collector"]["agent"] == "Grok"
     assert swapped["editor"]["agent"] == "Claude"
+
+
+def test_simple_path_spec_is_one_bot(studio):
+    record = create_spec({
+        "title": "One bot reel",
+        "goal": "Source and cut",
+        "language": "en",
+        "source_mode": "bot",
+    })
+    assert record["source_mode"] == "bot"
+    assert record["crew"] is False
+    assert record["status"] == "waiting_for_bot"
+    assert record["door"] == "grok"
+    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "agents" / record["id"]).exists()
+    assert (config.WORKSPACE_DIR / "handoff-outbox" / "grok" / record["id"] / "spec.json").is_file()
+    invite = spec_invite(record["id"], "en")
+    assert "One bot reel" in invite["text"]
+    assert "handoff-inbox" in invite["text"]
+    assert "127.0.0.1:7214/downloads/grok-crew.py" in invite["text"]
+    assert "local_studio/grok_crew.py" not in invite["text"]
+    assert "git clone" not in invite["text"]
+    korean = spec_invite(record["id"], "ko")
+    assert "제목: One bot reel" in korean["text"]
+    assert "git clone" not in korean["text"]
+    assert "local_studio/grok_crew.py" not in korean["text"]
+
+
+def test_http_invite_and_bot_pack(live_server):
+    created = json.loads(urlopen(Request(
+        f"{live_server}/api/v2/edit-specs",
+        data=json.dumps({"title": "HTTP invite", "goal": "One paste", "language": "en", "source_mode": "bot"}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )).read().decode())
+    spec_id = created["edit_spec"]["id"]
+    invite = json.loads(urlopen(f"{live_server}/api/v2/edit-specs/{spec_id}/invite?lang=en").read().decode())
+    assert "HTTP invite" in invite["text"]
+    assert invite["inbox_dir"].endswith("/grok")
+    packed = urlopen(f"{live_server}/downloads/grok-crew-bot.zip").read()
+    assert packed[:2] == b"PK"
+    names = zipfile.ZipFile(io.BytesIO(packed)).namelist()
+    assert "지금_이렇게_하세요.txt" in names
+    assert "grok_crew.py" in names

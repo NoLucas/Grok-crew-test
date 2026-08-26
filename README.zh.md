@@ -2,6 +2,8 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <strong>简体中文</strong> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
+**在 Windows 打开。** 下载 [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) 并双击。写下标题或放进视频，把一行复制给一个机器人。剪辑到了窗口会自己打开。
+
 **Grok Crew 是装在你电脑上的短视频工作台。你只写规格。有两扇门：剪辑门，以及收集/其他代理门。**
 
 不必把原片放在这台电脑。写好时长、字幕、要留下的句子，以及由哪扇门来做。**另一台电脑**上的机器人会做好视频和剪辑，只交到那扇门。这台电脑负责接收。只有你愿意时才发到 Instagram、TikTok 或 YouTube。
@@ -22,7 +24,7 @@
 
 ## 你会看到什么
 
-首屏先选**风格配方**（Instagram Reel、TikTok 快剪、YouTube Shorts、YouTube 长视频）以及画面从哪来（自己的文件、收集、或两者）。角色名跟着签到的机器人变。收集规格仍是两个机器人：收集机器人读 `handoff-outbox/agents`，把片段和许可写进 `handoff-materials`。只用自己文件时只进剪辑发件箱。指定的剪辑机器人只剪那些片段，再交回 `handoff-inbox/grok`。这个工作台不抓网站。复制说明只是备用。**查看收集示例**和**查看剪辑示例**会用内置片段演示同一次到达。
+首屏很短：标题、放视频、**复制给机器人**。这次保存只有一个机器人（`source_mode: bot`）。风格配方和双机器人规格在**更详细**后面。剪辑门送来的成片会自己打开。这个工作台不抓网站。
 
 然后是三个标签：
 
@@ -48,9 +50,13 @@
 
 ## 怎么打开
 
+**在 Windows 打开** — 从[最新发布](https://github.com/NoLucas/Grok-Crew/releases/latest)下载 `GrokCrew-Windows.exe` 并双击。只装到当前账户，不询问管理员密码。
+
+若提示 Windows 已保护你的电脑：点 **更多信息 → 仍要运行**。
+
 如果已经有人为你装好了，打开 Grok Crew 窗口即可，或在浏览器打开 [http://localhost:3000](http://localhost:3000/)。
 
-如果要自己安装，需要 [Node.js 22+](https://nodejs.org/) 和 [Python 3.10+](https://www.python.org/downloads/)，然后：
+从源码运行需要 [Node.js 22+](https://nodejs.org/) 和 [Python 3.10+](https://www.python.org/downloads/)：
 
 ```sh
 git clone https://github.com/NoLucas/Grok-Crew.git grok-crew
@@ -58,6 +64,6 @@ cd grok-crew
 npm run local
 ```
 
-想用独立窗口而不是浏览器：先 `npm install` 一次，再 `npm run desktop`。第一次可能要几分钟。停止用 `Ctrl+C`。
+从源码开窗口：先 `npm install` 一次，再 `npm run desktop`。第一次可能要几分钟。停止用 `Ctrl+C`。
 
 你可以在这台电脑上制作并发布自己的视频。源码按 [BUSL-1.1](LICENSE) 公开，不是开源产品。提问：[CONTRIBUTING.md](CONTRIBUTING.md)。

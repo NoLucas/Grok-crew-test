@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Short first desk. With no project open, the middle of the screen is a title, a drop zone, and **Copy this for the bot**. That save is one bot (`source_mode: bot`). Incoming grok-door cuts open on their own. `GET /api/v2/edit-specs/{id}/invite` is the paste. `GET /downloads/grok-crew-bot.zip` is the hidden other method. The Windows NSIS build is one-click for this account (`GrokCrew-Windows.exe`).
 - Simple-path build order (`docs/SIMPLE_PATH.ko.md`): one Windows file, a short desk (title / drop / copy to one bot), auto-open the incoming cut. Bot zip and picture PDF stay behind that path (`docs/DOWNLOAD_SPLIT.ko.md`).
 - Download split plan (`docs/DOWNLOAD_SPLIT.ko.md`): Windows desk file for the person, a bot zip that is not an installer, and a picture PDF if Windows blocks the file. The download page does not ask for administrator first.
 - Crew role names follow the bot that checks in, or the name the operator types. Empty names default to `editor` / `collector`, not Grok or Claude. Claude may sit on the editor door; Grok may collect. Folder names stay `handoff-outbox/grok` and `handoff-outbox/agents`. Desktop reads `crew_roster` from `/api/v2/workspace`.

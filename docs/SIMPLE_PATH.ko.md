@@ -19,7 +19,7 @@
 | 샘플 한 번 열기 | “내 영상 놓기” 옆 작은 글 |
 | 사이드카를 exe에 넣는 설정 | 1판 설치가 창+서비스를 같이 띄움 |
 
-지금 기본이 긴 이유: 책상이 `source_mode: collect`와 `crew: true`를 보낸다. 레시피 네 장, 수집/편집 칸, 받기 버튼이 첫 화면에 있다.
+짧은 책장이 기본이다. `source_mode: bot`, 초대문 복사, 편집 문 자동 열기. 레시피 네 장·수집/편집 칸·받기 버튼은 **더 자세히** 뒤에만 있다.
 
 ## 창이 열렸을 때 화면
 
@@ -78,12 +78,12 @@
 
 할 일:
 
-- [ ] `app/desktop-simple-desk.tsx`를 만든다. 제목, 목표, 놓기, 복사, 접힌 스타일.
-- [ ] `desktop-workspace.tsx`에서 프로젝트 없을 때 `SpecDesk` 대신 이것을 연다.
-- [ ] 지금의 `SpecDesk`는 “더 자세히” 뒤에만 둔다. 지우지 않는다.
-- [ ] 기본 `recipe_id`는 `instagram_reel`. 기본은 `crew`를 보내지 않는다.
-- [ ] 복사 전에는 제목이 비면 저장하지 않는다. 목표는 비면 제목을 한 번 더 쓴다.
-- [ ] 모바일에서도 제목·복사·놓기가 세로로 쌓인다.
+- [x] `app/desktop-simple-desk.tsx`를 만든다. 제목, 목표, 놓기, 복사, 접힌 스타일.
+- [x] `desktop-workspace.tsx`에서 프로젝트 없을 때 `SpecDesk` 대신 이것을 연다.
+- [x] 지금의 `SpecDesk`는 “더 자세히” 뒤에만 둔다. 지우지 않는다.
+- [x] 기본 `recipe_id`는 `instagram_reel`. 기본은 `crew`를 보내지 않는다.
+- [x] 복사 전에는 제목이 비면 저장하지 않는다. 목표는 비면 제목을 한 번 더 쓴다.
+- [x] 모바일에서도 제목·복사·놓기가 세로로 쌓인다.
 
 건드리는 곳: `app/desktop-simple-desk.tsx`(신규), `app/desktop-workspace.tsx`, 짧은 CSS.
 
@@ -95,10 +95,10 @@
 
 할 일:
 
-- [ ] `edit_spec.py`에 `spec_invite(id, language)`를 둔다. 제목, 레시피 한 줄, 인박스 절대경로, 루프백 CLI 한 줄.
-- [ ] `GET /api/v2/edit-specs/{id}/invite`를 `handlers.py`에 붙인다.
-- [ ] 짧은 책상의 복사가 저장 뒤 이 글을 클립보드에 넣는다. 성공하면 “봇 창에 붙여 넣으세요.”
-- [ ] 테스트: 한 봇 규격을 만들고 초대문에 제목과 `handoff-inbox/grok`이 있는지. `local_studio/grok_crew.py` 클론 경로가 없는지.
+- [x] `edit_spec.py`에 `spec_invite(id, language)`를 둔다. 제목, 레시피 한 줄, 인박스 절대경로, 루프백 CLI 한 줄.
+- [x] `GET /api/v2/edit-specs/{id}/invite`를 `handlers.py`에 붙인다.
+- [x] 짧은 책상의 복사가 저장 뒤 이 글을 클립보드에 넣는다. 성공하면 “봇 창에 붙여 넣으세요.”
+- [x] 테스트: 한 봇 규격을 만들고 초대문에 제목과 `handoff-inbox/grok`이 있는지. `local_studio/grok_crew.py` 클론 경로가 없는지.
 
 건드리는 곳: `local_studio/edit_spec.py`, `handlers.py`, `tests/test_edit_spec.py`, 짧은 책상.
 
@@ -110,10 +110,10 @@ A판 UI가 실수로 `crew: true`를 보내면 다시 길어진다.
 
 할 일:
 
-- [ ] 짧은 책장 POST 본문에 `source_mode: "bot"`을 명시한다. `crew`는 넣지 않거나 false.
-- [ ] 파일을 고른 뒤에만 `source_mode: "own"`이거나, 아예 봇 없이 타임라인만 연다. 기본 경로는 후자다.
-- [ ] `normalize_spec` 기본은 이미 `bot`이다. 테스트를 잠근다: crew 없이 저장 → `waiting_for_bot`, 보낼함은 `handoff-outbox/grok`만.
-- [ ] 자세히 책장의 collect 기본은 유지한다. 짧은 책장이 덮지 않는다.
+- [x] 짧은 책장 POST 본문에 `source_mode: "bot"`을 명시한다. `crew`는 넣지 않거나 false.
+- [x] 파일을 고른 뒤에만 `source_mode: "own"`이거나, 아예 봇 없이 타임라인만 연다. 기본 경로는 후자다.
+- [x] `normalize_spec` 기본은 이미 `bot`이다. 테스트를 잠근다: crew 없이 저장 → `waiting_for_bot`, 보낼함은 `handoff-outbox/grok`만.
+- [x] 자세히 책장의 collect 기본은 유지한다. 짧은 책장이 덮지 않는다.
 
 완료: 짧은 책장으로 저장한 규격은 수집 보낼함이 비어 있다.
 
@@ -121,11 +121,11 @@ A판 UI가 실수로 `crew: true`를 보내면 다시 길어진다.
 
 할 일:
 
-- [ ] `desktop-workspace.tsx`의 5초 새로고침에서 `handoff.doors.grok.pending_count > 0`이면 `POST /api/v2/handoff/pull` `{ door: "grok" }`를 한 번 호출한다.
-- [ ] 가져온 `project.id`가 있으면 그 프로젝트를 연다. “○○이 넘긴 컷을 열었습니다.”
-- [ ] 같은 폴더를 5초마다 두 번 pull하지 않게, 진행 중 플래그를 둔다.
-- [ ] 짧은 책장에는 받기 버튼을 두지 않는다. 자세히 책장의 받기·예시는 그대로 둬도 된다.
-- [ ] 에이전트 문 자동 pull은 기본에 넣지 않는다. 한 봇 문만.
+- [x] `desktop-workspace.tsx`의 5초 새로고침에서 `handoff.doors.grok.pending_count > 0`이면 `POST /api/v2/handoff/pull` `{ door: "grok" }`를 한 번 호출한다.
+- [x] 가져온 `project.id`가 있으면 그 프로젝트를 연다. “○○이 넘긴 컷을 열었습니다.”
+- [x] 같은 폴더를 5초마다 두 번 pull하지 않게, 진행 중 플래그를 둔다.
+- [x] 짧은 책장에는 받기 버튼을 두지 않는다. 자세히 책장의 받기·예시는 그대로 둬도 된다.
+- [x] 에이전트 문 자동 pull은 기본에 넣지 않는다. 한 봇 문만.
 
 완료: 데모 패키지를 인박스에 두면 버튼 없이 타임라인이 열린다. `POST .../pull { demo: true }`를 개발 확인용으로 쓸 수 있다. 짧은 책장 버튼은 아니다.
 
@@ -137,9 +137,9 @@ A판 UI가 실수로 `crew: true`를 보내면 다시 길어진다.
 
 할 일:
 
-- [ ] README 네 언어 여는 방법: **Windows에서 열기**. `git clone` / `npm run local`은 “소스 받는 사람” 아래.
-- [ ] 릴리스 본문도 버튼 하나. 봇 zip·PDF는 쓰지 않거나 “다른 방법” 한 줄.
-- [ ] “관리자로 할까요” 문구가 어디에도 없는지 검색한다.
+- [x] README 네 언어 여는 방법: **Windows에서 열기**. `git clone` / `npm run local`은 “소스 받는 사람” 아래.
+- [x] 릴리스 본문도 버튼 하나. 봇 zip·PDF는 쓰지 않거나 “다른 방법” 한 줄.
+- [x] “관리자로 할까요” 문구가 어디에도 없는지 검색한다.
 
 완료: 첫 문장이 받아서 연다. 고를 파일이 둘이 아니다.
 
@@ -149,11 +149,11 @@ Linux 개발 기계에서는 최종 exe를 사용자에게 주지 못한다. 설
 
 할 일:
 
-- [ ] `package.json` `build.nsis`: `oneClick: true`, `perMachine: false`, 폴더 고르기 없음.
-- [ ] 공개 파일 이름 `GrokCrew-Windows.exe`.
-- [ ] 설치 후 바로 실행. 사이드카 `extraResources`는 유지.
-- [ ] 마법사 페이지(다음, 경로, 관리자)가 없어야 한다.
-- [ ] README 링크가 이 파일을 가리키게 E판과 맞춘다.
+- [x] `package.json` `build.nsis`: `oneClick: true`, `perMachine: false`, 폴더 고르기 없음.
+- [x] 공개 파일 이름 `GrokCrew-Windows.exe`.
+- [x] 설치 후 바로 실행. 사이드카 `extraResources`는 유지.
+- [x] 마법사 페이지(다음, 경로, 관리자)가 없어야 한다.
+- [x] README 링크가 이 파일을 가리키게 E판과 맞춘다.
 
 완료: 비밀번호 없이 더블클릭 → 짧은 책장. SmartScreen은 서명 전이면 남을 수 있다. 같은 페이지 그림 세 장으로만 설명한다. PDF 다운로드는 아직 만들지 않는다.
 
@@ -163,9 +163,9 @@ Linux 개발 기계에서는 최종 exe를 사용자에게 주지 못한다. 설
 
 `docs/DOWNLOAD_SPLIT.ko.md` 2~6판. 기본 경로가 A–F로 통과한 뒤에만.
 
-- 모든 계정 exe, 압축 실행 zip
-- 봇 zip + 책장 “다른 방법”에서 받기
-- 그림 PDF는 사이트 대신 쓰지 않는다. 다운로드 페이지에 그림 세 장이 있으면 PDF는 선택이다.
+- [x] 봇 zip: `GET /downloads/grok-crew-bot.zip`, `npm run dist:bot-pack`. 설치 파일이 아니다.
+- [x] 책장 **안 열리면**에 세 줄 + 봇 파일 링크. 필수 PDF 다운로드는 없다 (`docs/install-guide/열기.ko.md`).
+- 모든 계정 exe·압축 실행 zip은 문서의 예비다. 기본 버튼이 아니다. 이 Linux 기계에서 그 exe를 만들지 않는다.
 
 ## 파일 지도
 
@@ -219,4 +219,4 @@ A 없이 F만 하면 받은 사람이 다시 긴 책장을 본다. F 없이 A–
 
 ## 다음에 손댈 것
 
-**A판.** `desktop-simple-desk.tsx`를 만들고 프로젝트 없는 `/`에 붙인다. 복사는 우선 기존 brief를 넣어도 된다. B판에서 초대문으로 교체한다.
+A–G는 이 저장소에 들어 있다. 남는 일은 Windows 기계에서 `npm run desktop:dist`로 `GrokCrew-Windows.exe`를 만드는 것, 그리고 서명 전 SmartScreen 그림 세 장이다. 이 Linux 개발 기계에서는 사용자에게 줄 exe를 만들지 않는다.

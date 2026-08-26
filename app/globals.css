@@ -6849,6 +6849,24 @@ select {
 .desktop-empty .desktop-primary { margin-top: 6px; }
 .desktop-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 .desktop-empty-actions .desktop-primary { margin-top: 0; }
+.desktop-simple-wrap { width: min(1080px, 100%); margin: 0 auto; display: grid; gap: 12px; padding-top: 16px; }
+.desktop-simple-desk { width: min(640px, 100%); }
+.desktop-simple-drop {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 22px 16px;
+  border: 1px dashed var(--desktop-line);
+  border-radius: 14px;
+  background: #fbfbfd;
+  text-align: center;
+  cursor: pointer;
+}
+.desktop-simple-drop:disabled { opacity: .6; cursor: not-allowed; }
+.desktop-simple-drop b { font-size: 15px; letter-spacing: -.02em; }
+.desktop-simple-drop span { color: var(--desktop-muted); font-size: 12px; line-height: 1.45; }
+.desktop-simple-help { margin: 8px 0 0; padding-left: 18px; color: var(--desktop-muted); font-size: 12px; line-height: 1.55; text-align: left; }
+.desktop-simple-help a { color: var(--desktop-blue, #245a72); text-decoration: underline; }
 .desktop-spec-desk { width: min(1080px, 100%); margin: 0 auto; padding: 24px 16px 36px; display: grid; gap: 18px; overflow: auto; }
 .desktop-spec-hero { display: grid; gap: 10px; text-align: center; justify-items: center; }
 .desktop-spec-hero > span { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--desktop-line); border-radius: 50%; color: var(--desktop-blue); font-size: 22px; }
@@ -6984,6 +7002,14 @@ select {
   .desktop-spec-doors { grid-template-columns: 1fr; }
   .desktop-spec-row { grid-template-columns: 1fr; }
   .desktop-spec-recipe-grid, .desktop-spec-source-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .desktop-simple-desk { width: 100%; }
+  .desktop-simple-desk .desktop-spec-form,
+  .desktop-simple-desk .desktop-spec-actions,
+  .desktop-simple-desk .desktop-empty-actions { display: grid; gap: 10px; }
+  .desktop-simple-desk .desktop-spec-actions .desktop-primary,
+  .desktop-simple-desk .desktop-simple-drop { width: 100%; }
 }
 .desktop-spinner {
   width: 28px; height: 28px; border: 2px solid #dddde3; border-top-color: var(--desktop-blue);

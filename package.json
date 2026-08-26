@@ -32,6 +32,7 @@
     "sidecar:build": "python -m pip install -r local_studio/requirements-build.txt && python -m PyInstaller --clean --distpath build/sidecar --workpath build/pyinstaller local_studio/grok_crew_sidecar.spec",
     "desktop:pack": "npm run build && npm run sidecar:build && electron-builder --dir",
     "desktop:dist": "npm run build && npm run sidecar:build && electron-builder",
+    "dist:bot-pack": "node scripts/pack-bot-bundle.mjs",
     "runner:test": "node scripts/test-relay.mjs",
     "timeline:test": "node --experimental-strip-types --test --test-concurrency=1 app/timeline/*.test.mjs app/desktop-remote.test.mjs desktop/ipc-guard.test.mjs desktop/update-service.test.mjs",
     "launch:verify": "node scripts/launch-verify.mjs",
@@ -97,8 +98,13 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "GrokCrew-Windows.${ext}"
     },
     "mac": {
       "target": [

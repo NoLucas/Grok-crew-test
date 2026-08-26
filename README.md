@@ -2,6 +2,8 @@
 
 <p align="center"><strong>English</strong> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
+**Open on Windows.** Get [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) and double-click. Write a title or drop a video. Copy one line to one bot. The cut opens when it arrives.
+
 **Grok Crew is a short-form desk on your computer. You write the brief. There are two doors: the editor door, and the collector / other-agent door.**
 
 You do not have to drop a source file here. You say how it should feel — length, captions, what to keep — and which door should do the work. A bot on **another computer** makes the video and the edit, then hands the folder to that door only. This PC receives it and shows the timeline. You post to Instagram, TikTok, or YouTube only if you choose to.
@@ -22,7 +24,7 @@ You do not need an account to start.
 
 ## What you see
 
-The first screen lets you pick a **style recipe** (Instagram Reel, TikTok tight cut, YouTube Short, or YouTube long) and where the pictures come from (your files, a collector, or both). Role names follow the bots that check in. A collect spec still uses two bots: the collector reads `handoff-outbox/agents` and drops clips in `handoff-materials` with a license on each file. An own-files spec goes to the editor outbox only. The assigned editor cuts those clips and returns the package to `handoff-inbox/grok`. This desk does not scrape websites. Copying the briefs is a backup. **See a collector sample** and **See an editor sample** show the same arrival using a bundled clip.
+The first screen is short: a title, a drop zone, and **Copy this for the bot**. That save is one bot (`source_mode: bot`). Style recipes and a two-bot crew stay behind **More detail**. Incoming cuts on the editor door open on their own. This desk does not scrape websites.
 
 Then you work in three tabs:
 
@@ -48,9 +50,13 @@ A helper on another computer cannot open this desk. Your footage is not sent out
 
 ## How to open it
 
-If someone already set Grok Crew up for you, open the Grok Crew window — or a browser at [http://localhost:3000](http://localhost:3000/).
+**Open on Windows** — get `GrokCrew-Windows.exe` from the [latest release](https://github.com/NoLucas/Grok-Crew/releases/latest) and double-click it. It installs for this account only. It does not ask for an administrator password.
 
-If you are setting it up yourself, you need [Node.js 22+](https://nodejs.org/) and [Python 3.10+](https://www.python.org/downloads/), then:
+If Windows says it protected your PC: **More info → Run anyway**.
+
+If someone already set it up, open the Grok Crew window, or a browser at [http://localhost:3000](http://localhost:3000/).
+
+If you are building from source you need [Node.js 22+](https://nodejs.org/) and [Python 3.10+](https://www.python.org/downloads/):
 
 ```sh
 git clone https://github.com/NoLucas/Grok-Crew.git grok-crew
@@ -58,6 +64,6 @@ cd grok-crew
 npm run local
 ```
 
-A desktop window instead of the browser: `npm install` once, then `npm run desktop`. The first start can take a few minutes. Stop with `Ctrl+C`.
+A desktop window from source: `npm install` once, then `npm run desktop`. The first start can take a few minutes. Stop with `Ctrl+C`.
 
 You may use it on this computer to make and publish your own videos. The source is shared under [BUSL-1.1](LICENSE); it is not an open-source product. Questions: [CONTRIBUTING.md](CONTRIBUTING.md).

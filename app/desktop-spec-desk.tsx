@@ -440,7 +440,7 @@ export function SpecDesk({
       const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string; handoff_agent?: string }; agent?: string; door?: string }> : [];
       const projectId = imported[0]?.project?.id;
       if (projectId) {
-        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || editorName) });
+        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || inboundEditorName) });
         return;
       }
       setError(demo
