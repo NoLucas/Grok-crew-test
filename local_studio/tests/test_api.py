@@ -197,6 +197,13 @@ def test_disallowed_origin_is_rejected(live_server):
         assert "error" in json.loads(exc.read().decode("utf-8"))
 
 
+def test_loopback_preview_origin_can_read_workspace(live_server):
+    request = Request(f"{live_server}/api/v2/workspace", headers={"Origin": "http://127.0.0.1:43123"})
+    with urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    assert "projects" in payload
+
+
 def test_v2_publish_requires_approval_and_idempotency_key(live_server):
     project = create_project(live_server)
     try:

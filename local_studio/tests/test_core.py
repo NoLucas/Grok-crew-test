@@ -104,6 +104,14 @@ def test_parse_allowed_origins_accepts_comma_separated_override():
     assert origins == frozenset({"https://studio.example.com", "http://localhost:5173"})
 
 
+def test_loopback_preview_ports_are_allowed_without_env_override():
+    defaults = config.parse_allowed_origins("")
+    assert config.origin_is_allowed("http://127.0.0.1:43123", defaults) is True
+    assert config.origin_is_allowed("http://localhost:43127", defaults) is True
+    assert config.origin_is_allowed("http://evil.example", defaults) is False
+    assert config.origin_is_allowed("https://127.0.0.1.evil.example", defaults) is False
+
+
 # -- render._smooth_gain_targets: the music-ducking envelope follower (pure Python,
 # -- no MoviePy/numpy needed, so it stays covered even though the rest of render.py
 # -- requires ffmpeg and isn't unit tested here) -------------------------------------

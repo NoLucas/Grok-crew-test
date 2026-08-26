@@ -24,6 +24,7 @@ All notable changes to Grok Crew are documented here.
 - Desktop Export shows receipt status/retry, and the title bar reports local launch gates plus the current update policy.
 - `npm run launch:verify` prints the local/external launch report.
 - UI-01..UI-10 desktop quality: readable type scale, 8px spacing, first-project/version/receipt empty states, workspace loading and reconnect, focus-visible rings, narrow titlebar tabs, project/status drawers, and a visible command-bar message on small screens.
+- Loopback preview ports such as `127.0.0.1:43123` can call Local Studio. Remote website origins stay blocked.
 
 - P1-08 program-monitor composite preview now samples the same MoviePy timeline used for final output, so playhead frames, captions, timing, and audio RMS can be compared 1:1 with the rendered MP4.
 - P2-01 compositing: per-clip blend modes, rectangle/ellipse masks with feather, and chroma key.

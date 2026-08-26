@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlparse
 import config
 from analysis import analyze_project, get_analysis
 from config import (
-    ALLOWED_ORIGINS,
+    origin_is_allowed,
     BROWSER_PAGE_PATHS,
     CAPTION_LAYOUT_PRESETS,
     PLATFORM_PRESETS,
@@ -99,7 +99,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status); self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Content-Length", str(len(raw)))
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and origin_is_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin); self.send_header("Vary", "Origin")
         self.end_headers(); self.wfile.write(raw)
 
@@ -110,7 +110,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK); self.send_header("Content-Type", "text/x-python; charset=utf-8"); self.send_header("Content-Length", str(len(raw)))
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and origin_is_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin); self.send_header("Vary", "Origin")
         self.end_headers(); self.wfile.write(raw)
 
@@ -149,7 +149,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         if status == HTTPStatus.PARTIAL_CONTENT:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and origin_is_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin); self.send_header("Vary", "Origin")
         self.end_headers()
         with path.open("rb") as media:
@@ -181,7 +181,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "private, max-age=300")
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and origin_is_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin); self.send_header("Vary", "Origin")
         self.end_headers(); self.wfile.write(raw)
 
@@ -201,8 +201,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         return value
 
     def _origin_allowed(self) -> bool:
-        origin = self.headers.get("Origin")
-        return origin is None or origin in ALLOWED_ORIGINS
+        return origin_is_allowed(self.headers.get("Origin"))
 
     def _token_ok(self) -> bool:
         expected = os.getenv("LOCAL_STUDIO_TOKEN", "").strip()
@@ -220,7 +219,7 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(403, {"error": "Cross-origin requests are not allowed."}); return
         self.send_response(HTTPStatus.NO_CONTENT)
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and origin_is_allowed(origin):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")

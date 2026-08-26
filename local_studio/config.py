@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,21 @@ def parse_allowed_origins(raw: str) -> frozenset[str]:
     as before this was configurable."""
     origins = {origin.strip() for origin in raw.split(",") if origin.strip()}
     return frozenset(origins) if origins else frozenset({"http://localhost:3000", "http://127.0.0.1:3000"})
+
+
+_LOOPBACK_ORIGIN = re.compile(r"^https?://(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$")
+
+
+def origin_is_allowed(origin: str | None, allowed: frozenset[str] | None = None) -> bool:
+    """Same-origin (no Origin) and loopback preview ports can call the sidecar.
+
+    Remote websites stay blocked. Extra non-loopback origins still come from
+    LOCAL_STUDIO_ALLOWED_ORIGINS.
+    """
+    if origin is None or origin == "":
+        return True
+    allowlist = ALLOWED_ORIGINS if allowed is None else allowed
+    return origin in allowlist or bool(_LOOPBACK_ORIGIN.fullmatch(origin))
 
 
 ALLOWED_ORIGINS = parse_allowed_origins(os.getenv("LOCAL_STUDIO_ALLOWED_ORIGINS", ""))
