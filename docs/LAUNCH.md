@@ -10,6 +10,7 @@ Use this before the first public GitHub release.
 - [x] Add relevant GitHub topics. (Already set on GitHub: `ai-agents`, `ffmpeg`, `instagram-reels`, `local-first`, `python`, `self-hosted`, `short-form-video`, `typescript`, `video-editing`.)
 - [x] Create a `v0.1.0` release using the changelog notes. (Published 2026-08-23 as "First public demo".)
 - [x] Create a `v0.2.0` release using the changelog notes. (2026-08-24: the render/QA/security fixes and file-split work in this pass.)
+- [x] Write `v1.0.0` notes in `docs/RELEASE_NOTES.v1.0.md` and `CHANGELOG.md`. Publishing the GitHub release and tag stays operator-owned.
 - [x] Review `npm audit` before release. Do not use a forced dependency upgrade without rebuilding and testing the workspace. (2026-08-26: `npm audit` and `npm audit --omit=dev` report 0 vulnerabilities. `vinext` is installed and locked at `1.0.0-beta.8`, which is the latest published `1.0.0-beta.*`. The 2026-08-24 note about 13 findings and a deferred beta.3→beta.8 jump is stale. Do not run `npm audit fix --force`. Do not bump wrangler/miniflare or a future vinext 1.0.0 stable in this pass.)
 
 ## First experience

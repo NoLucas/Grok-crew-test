@@ -31,6 +31,10 @@ function localized(map: { ko?: string; en?: string; zh?: string; ja?: string } |
   return map[key] || map.en || fallback;
 }
 
+function studioDownloadBase() {
+  return typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214';
+}
+
 export function SimpleDesk({
   recipes = [],
   busy,
@@ -49,8 +53,11 @@ export function SimpleDesk({
   const [recipeId, setRecipeId] = useState('instagram_reel');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [clipboardBlocked, setClipboardBlocked] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [inviteText, setInviteText] = useState('');
+  const [dragging, setDragging] = useState(false);
 
   const cards = useMemo(() => {
     const byId = new Map(recipes.map((item) => [item.id, item]));
@@ -59,6 +66,7 @@ export function SimpleDesk({
 
   const selected = cards.find((item) => item.id === recipeId) || cards[0];
   const locked = busy || saving || !studioReady;
+  const titleEmpty = !title.trim();
 
   const copyInvite = async () => {
     const heading = title.trim();
@@ -69,6 +77,7 @@ export function SimpleDesk({
     setSaving(true);
     setError('');
     setNotice('');
+    setClipboardBlocked(false);
     try {
       const created = await request('/api/v2/edit-specs', {
         method: 'POST',
@@ -85,10 +94,18 @@ export function SimpleDesk({
       if (!record?.id) throw new Error(t('규격을 저장하지 못했습니다.', 'Could not save the spec.', '无法保存规格。', '仕様を保存できませんでした。'));
       const invite = await request(`/api/v2/edit-specs/${record.id}/invite?lang=${encodeURIComponent(language)}`);
       const text = String(invite.text || '');
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2500);
-      setNotice(t('봇 창에 붙여 넣으세요. 한 봇이 원본과 컷을 만듭니다.', 'Paste it in the bot. One bot makes the source and the cut.', '请粘贴到机器人窗口。一个机器人做原片和剪辑。', 'ボットの窓に貼ってください。一人のボットが素材とカットを作ります。'));
+      if (!text) throw new Error(t('초대문을 만들지 못했습니다.', 'Could not make the invite.', '无法生成邀请。', '招待文を作れませんでした。'));
+      setInviteText(text);
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 4000);
+        setNotice(t('복사했습니다. Cursor든 다른 봇이든 한 창에 붙이세요. 컷이 오면 이 창이 엽니다.', 'Copied. Paste it in Cursor or any other bot. This window opens when the cut arrives.', '已复制。请粘贴到 Cursor 或其他机器人。成片到达后此窗口会打开。', 'コピーしました。Cursor でも他のボットでも一つの窓に貼ってください。カットが届くとこの窓が開きます。'));
+      } catch {
+        setClipboardBlocked(true);
+        setNotice(t('아래 글을 직접 복사하세요. 클립보드를 쓰지 못했습니다.', 'Copy the text below. The clipboard was blocked.', '请手动复制下面的文字。无法使用剪贴板。', '下の文を自分でコピーしてください。クリップボードを使えませんでした。'));
+      }
       await onRefresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('복사하지 못했습니다.', 'Could not copy.', '无法复制。', 'コピーできませんでした。'));
@@ -99,6 +116,7 @@ export function SimpleDesk({
 
   const takeDropped = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
+    setDragging(false);
     const file = event.dataTransfer.files?.[0] as (File & { path?: string }) | undefined;
     if (file?.path && onPickedFile) {
       onPickedFile(file.path);
@@ -123,8 +141,14 @@ export function SimpleDesk({
       <div className="desktop-spec-hero">
         <span>✦</span>
         <h1>{t('제목을 적거나 영상을 놓으세요', 'Write a title or drop a video', '写下标题，或放进视频', 'タイトルを書くか、映像を置く')}</h1>
-        <p>{t('스타일은 인스타 릴입니다. 봇에게 한 줄을 복사하면 그 봇이 원본과 첫 컷을 만듭니다.', 'The style is an Instagram Reel. Copy one line to a bot. That bot makes the source and the first cut.', '默认是 Instagram Reel。复制一行给机器人，由它做原片和初剪。', 'スタイルは Instagram リール。一行をボットにコピーすると、そのボットが素材と初回カットを作る。')}</p>
+        <p>{t('스타일은 인스타 릴입니다. 한 줄을 복사하면 그 봇이 원본과 첫 컷을 만듭니다. 컷이 오면 창이 열립니다.', 'The style is an Instagram Reel. Copy one line. That bot makes the source and the first cut. The window opens when it arrives.', '默认是 Instagram Reel。复制一行，由那个机器人做原片和初剪。成片到达后窗口会打开。', 'スタイルは Instagram リール。一行をコピーすると、そのボットが素材と初回カットを作る。届くと窓が開く。')}</p>
       </div>
+
+      {!studioReady ? (
+        <p className="desktop-simple-banner" role="status">
+          {t('Local Studio에 연결하는 중이면 잠시 기다리세요. 안 되면 아래 다시 시도를 누르세요.', 'If Local Studio is connecting, wait a moment. If not, retry below.', '若正在连接 Local Studio，请稍候。不行就点下面的重试。', 'Local Studio に接続中なら少し待ってください。だめなら下の再試行を押してください。')}
+        </p>
+      ) : null}
 
       <form
         className="desktop-spec-form"
@@ -137,9 +161,14 @@ export function SimpleDesk({
           <span>{t('제목', 'Title', '标题', 'タイトル')}</span>
           <input
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              if (error) setError('');
+            }}
             placeholder={t('15초 훅 릴', '15s hook Reel', '15秒钩子 Reel', '15秒フックのリール')}
             required
+            aria-invalid={Boolean(error) && titleEmpty}
+            disabled={saving}
           />
         </label>
         <label className="desktop-spec-field desktop-spec-wide">
@@ -149,6 +178,7 @@ export function SimpleDesk({
             onChange={(event) => setGoal(event.target.value)}
             placeholder={t('비워 두면 제목과 같습니다.', 'Leave empty to use the title.', '留空则与标题相同。', '空ならタイトルと同じ。')}
             rows={3}
+            disabled={saving}
           />
         </label>
 
@@ -161,7 +191,7 @@ export function SimpleDesk({
         <details className="desktop-spec-advanced">
           <summary>{t('다른 스타일', 'Another style', '换风格', '他のスタイル')}</summary>
           <div className="desktop-spec-recipe-grid">
-            {cards.map((recipe) => (
+            {cards.length ? cards.map((recipe) => (
               <button
                 key={recipe.id}
                 type="button"
@@ -171,7 +201,9 @@ export function SimpleDesk({
               >
                 <b>{localized(recipe.name, language, recipe.id)}</b>
               </button>
-            ))}
+            )) : (
+              <p className="desktop-spec-meta">{t('스타일 목록을 아직 읽지 못했습니다.', 'Could not load styles yet.', '还没读到风格列表。', 'スタイル一覧をまだ読めません。')}</p>
+            )}
           </div>
         </details>
 
@@ -183,18 +215,27 @@ export function SimpleDesk({
                 ? t('복사됨. 봇 창에 붙여 넣으세요', 'Copied. Paste it in the bot.', '已复制。请粘贴到机器人。', 'コピー済み。ボットに貼ってください')
                 : t('봇에게 이 말 복사', 'Copy this for the bot', '复制给机器人', 'ボットにこの文をコピー')}
           </button>
+          {!studioReady ? (
+            <button type="button" className="desktop-secondary" onClick={() => void onRefresh()}>
+              {t('다시 연결', 'Reconnect', '重新连接', '再接続')}
+            </button>
+          ) : null}
         </div>
       </form>
 
       <button
         type="button"
-        className="desktop-simple-drop"
+        className={dragging ? 'desktop-simple-drop is-over' : 'desktop-simple-drop'}
         disabled={locked}
         onClick={() => void pickFile()}
-        onDragOver={(event) => event.preventDefault()}
+        onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
         onDrop={takeDropped}
       >
-        <b>{t('영상을 여기 놓거나 고르기', 'Drop a video here, or pick one', '把视频放这里，或选择', '映像をここに置くか選ぶ')}</b>
+        <b>{dragging
+          ? t('여기에 놓기', 'Drop it here', '放在这里', 'ここに置く')
+          : t('영상을 여기 놓거나 고르기', 'Drop a video here, or pick one', '把视频放这里，或选择', '映像をここに置くか選ぶ')}</b>
         <span>{t('내 파일이면 봇 없이 타임라인이 열립니다.', 'Your file opens on the timeline. No bot.', '自己的文件会直接打开时间线。不用机器人。', '自分のファイルならボットなしでタイムラインが開く。')}</span>
       </button>
 
@@ -209,8 +250,15 @@ export function SimpleDesk({
         </button>
       </div>
 
-      {notice ? <p className="desktop-spec-outbox" role="status">{notice}</p> : null}
+      {notice ? <p className={clipboardBlocked ? 'desktop-spec-error' : 'desktop-spec-outbox'} role="status">{notice}</p> : null}
       {error ? <p className="desktop-spec-error" role="alert">{error}</p> : null}
+
+      {inviteText ? (
+        <label className="desktop-spec-field desktop-simple-invite">
+          <span>{t('봇에게 줄 글', 'Text for the bot', '给机器人的文字', 'ボットに渡す文')}</span>
+          <textarea value={inviteText} readOnly rows={8} onFocus={(event) => event.currentTarget.select()} />
+        </label>
+      ) : null}
 
       <details className="desktop-spec-advanced">
         <summary>{t('안 열리면', 'If it will not open', '打不开时', '開かないとき')}</summary>
@@ -220,7 +268,7 @@ export function SimpleDesk({
           <li>{t('그래도 안 되면 압축 실행 파일을 풀어 Grok Crew.exe 를 엽니다. 관리자 비밀번호는 필요 없습니다.', 'If it still will not open, unzip the portable file and open Grok Crew.exe. No administrator password.', '还是不行就解压便携包，打开 Grok Crew.exe。不需要管理员密码。', 'まだ開かないなら圧縮ファイルを解いて Grok Crew.exe を開く。管理者パスワードは不要。')}</li>
         </ol>
         <p className="desktop-simple-help">
-          <a href={`${typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214'}/downloads/grok-crew-bot.zip`}>
+          <a href={`${studioDownloadBase()}/downloads/grok-crew-bot.zip`}>
             {t('다른 방법: 봇에게 줄 파일', 'Other: file for the bot', '其他：给机器人的文件', '別の方法：ボット用ファイル')}
           </a>
         </p>

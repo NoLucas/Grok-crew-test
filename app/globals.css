@@ -6863,8 +6863,11 @@ select {
   cursor: pointer;
 }
 .desktop-simple-drop:disabled { opacity: .6; cursor: not-allowed; }
+.desktop-simple-drop.is-over { border-color: var(--desktop-blue, #245a72); background: #f3f7f9; }
 .desktop-simple-drop b { font-size: 15px; letter-spacing: -.02em; }
 .desktop-simple-drop span { color: var(--desktop-muted); font-size: 12px; line-height: 1.45; }
+.desktop-simple-banner { margin: 0; padding: 10px 12px; border: 1px solid var(--desktop-line); border-radius: 10px; background: #f7f7f9; color: var(--desktop-muted); font-size: 13px; line-height: 1.5; }
+.desktop-simple-invite textarea { min-height: 10rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; }
 .desktop-simple-help { margin: 8px 0 0; padding-left: 18px; color: var(--desktop-muted); font-size: 12px; line-height: 1.55; text-align: left; }
 .desktop-simple-help a { color: var(--desktop-blue, #245a72); text-decoration: underline; }
 .desktop-spec-desk { width: min(1080px, 100%); margin: 0 auto; padding: 24px 16px 36px; display: grid; gap: 18px; overflow: auto; }

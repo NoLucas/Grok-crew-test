@@ -4,6 +4,12 @@ All notable changes to Grok Crew are documented here.
 
 ## Unreleased
 
+(empty)
+
+## 1.0.0 - 2026-08-26
+
+Local 1.0. Release notes: `docs/RELEASE_NOTES.v1.0.md`. GitHub tag stays operator-owned.
+
 ### Security
 
 - Git inbound packages that fail import stay on disk. The watcher no longer marks them processed or `git rm`s the folder, so a bad `handoff.json` cannot wipe a delivery.
@@ -41,9 +47,11 @@ All notable changes to Grok Crew are documented here.
 - `find_outbox_folder` still finds a leftover `grok/{id}` folder when `editor/.processed/{id}` already exists.
 - Desktop auto-pull retries after a failed first pull instead of treating the failure as done.
 - Simple desk bot-zip download uses `window.grokCrew.apiBase` so packaged Electron does not hardcode `:7214`.
+- Simple desk keeps the invite on screen after copy, falls back if the clipboard is blocked, and shows a drag-over drop zone.
 
 ### Added
 
+- Cursor agent path verified on this desk: same-PC `POST /api/bot-entry` with `display_name: Cursor`, invite copy, and an editor-inbox package. Notes in `docs/CURSOR_AGENT.ko.md`.
 - Door folders are now `handoff-outbox/editor`, `handoff-outbox/collector`, `handoff-inbox/editor`, and `handoff-inbox/collector`. Requests that still say `grok` or `agent` are accepted. Leftover `grok/` and `agents/` folders are still read.
 - Short first desk. With no project open, the middle of the screen is a title, a drop zone, and **Copy this for the bot**. That save is one bot (`source_mode: bot`). Incoming grok-door cuts open on their own. `GET /api/v2/edit-specs/{id}/invite` is the paste. `GET /downloads/grok-crew-bot.zip` is the hidden other method. The Windows NSIS build is one-click for this account (`GrokCrew-Windows.exe`).
 - Simple-path build order (`docs/SIMPLE_PATH.ko.md`): one Windows file, a short desk (title / drop / copy to one bot), auto-open the incoming cut. Bot zip and picture PDF stay behind that path (`docs/DOWNLOAD_SPLIT.ko.md`).

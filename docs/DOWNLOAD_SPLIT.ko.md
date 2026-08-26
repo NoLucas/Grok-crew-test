@@ -4,6 +4,8 @@
 
 날짜나 주 단위 일정은 적지 않는다. 순서와 완료 조건만 적는다. 짧은 기본을 코드로 만드는 순서는 `docs/SIMPLE_PATH.ko.md`다.
 
+**상태 (2026-08-26):** 0판 문장과 1판 NSIS 설정은 SIMPLE_PATH E/F로 코드에 들어 있다. 아래 옛 체크박스는 초안이다. 2판 이후(모든 계정 exe, 압축 zip, PDF)는 아직 예비다. 이 Linux 기계에서 exe를 만들지 않는다.
+
 ## 더 줄인 기본 (사람이 걷는 길)
 
 위 둘 나누기는 **뒤에 숨긴 준비물**이다. 사람이 걷는 기본은 더 짧다.
@@ -70,10 +72,10 @@
 
 할 일:
 
-- [ ] `README.md` / `README.ko.md` 여는 방법을 **받아서 연다**로 바꾼다. `git clone`은 “소스 받는 사람” 아래로 내린다.
-- [ ] GitHub Release 본문 초안은 버튼 하나(**Windows에서 열기**)다. 봇 zip은 본문 아래 “다른 방법”이다.
-- [ ] `docs/ANNOUNCEMENT.md` 한 줄도 “받아서 연다”에 맞춘다.
-- [ ] 사이트/릴리스에 **관리자로 할까요** 문구를 쓰지 않는지 검토한다.
+- [x] `README.md` / `README.ko.md` 여는 방법을 **받아서 연다**로 바꾼다. `git clone`은 “소스 받는 사람” 아래로 내린다. (SIMPLE_PATH E)
+- [x] GitHub Release 본문 초안은 버튼 하나(**Windows에서 열기**)다. 봇 zip은 본문 아래 “다른 방법”이다. (`docs/RELEASE_NOTES.v1.0.md`)
+- [x] `docs/ANNOUNCEMENT.md` 한 줄도 “받아서 연다”에 맞춘다.
+- [x] 사이트/릴리스에 **관리자로 할까요** 문구를 쓰지 않는지 검토한다.
 
 완료 조건:
 
@@ -88,8 +90,8 @@
 
 할 일:
 
-- [ ] electron-builder `nsis`를 계정 설치로 둔다. `perMachine: false`. 기본은 비밀번호를 올리지 않는다. 기본 경로는 마법사 페이지가 없다(`oneClick` 또는 받아서 바로 실행).
-- [ ] 산출물 파일명을 `GrokCrew-Windows.exe`로 고정하는 설정을 넣는다.
+- [x] electron-builder `nsis`를 계정 설치로 둔다. `perMachine: false`. 기본은 비밀번호를 올리지 않는다. 기본 경로는 마법사 페이지가 없다(`oneClick` 또는 받아서 바로 실행). (SIMPLE_PATH F)
+- [x] 산출물 파일명을 `GrokCrew-Windows.exe`로 고정하는 설정을 넣는다.
 - [ ] 설치 경로 기본은 사용자 폴더다. Program Files가 기본이 아니다.
 - [ ] `npm run desktop:dist`가 이 exe를 `release/`에 남기는지 확인한다.
 - [ ] 설치 후 더블클릭하면 책상 창과 Local Studio 사이드카가 같이 뜬다. 지금 sidecar 묶음(`extraResources`)을 유지한다.

@@ -203,7 +203,7 @@ A 없이 F만 하면 받은 사람이 다시 긴 책장을 본다. F 없이 A–
 - 초대문에 git clone, `handoff-outbox/collector`, purpose 선택지를 사람 문장으로 설명하기
 - 다운로드 페이지에 봇 zip을 기본 버튼으로 두기
 - Instagram 앱, Mac 공증, loopback을 인터넷에 열기
-- 문 폴더 이름 `grok/` · `agents/` 변경
+- 문 폴더를 다시 `grok/` · `agents/`로 되돌리기. 쓰기는 `editor/` · `collector/`만. leftover는 읽기만.
 
 ## 확인 한 줄
 
@@ -211,7 +211,7 @@ A 없이 F만 하면 받은 사람이 다시 긴 책장을 본다. F 없이 A–
 |---|---|
 | A | 첫 화면에 제목·놓기·복사만 있다 |
 | B | 복사 글에 제목과 받을함 경로가 있고, clone 경로가 없다 |
-| C | 생긴 규격이 `bot` / `waiting_for_bot` / grok 보낼함만 |
+| C | 생긴 규격이 `bot` / `waiting_for_bot` / editor 보낼함만 |
 | D | 인박스에 패키지를 두면 버튼 없이 프로젝트가 열린다 |
 | E | README 첫 설치가 파일 하나다 |
 | F | 더블클릭 → 짧은 책장. 비밀번호 없음 |
@@ -219,4 +219,6 @@ A 없이 F만 하면 받은 사람이 다시 긴 책장을 본다. F 없이 A–
 
 ## 다음에 손댈 것
 
-A–G는 이 저장소에 들어 있다. 남는 일은 Windows 기계에서 `npm run desktop:dist`로 `GrokCrew-Windows.exe`를 만드는 것, 그리고 서명 전 SmartScreen 그림 세 장이다. 이 Linux 개발 기계에서는 사용자에게 줄 exe를 만들지 않는다.
+A–G는 이 저장소에 들어 있다. Cursor 에이전트 연결은 `docs/CURSOR_AGENT.ko.md`에서 확인했다. 1.0 노트는 `docs/RELEASE_NOTES.v1.0.md`다.
+
+남는 일은 Windows 기계에서 `npm run desktop:dist`로 `GrokCrew-Windows.exe`를 만드는 것, 그리고 서명 전 SmartScreen 그림 세 장이다. 이 Linux 개발 기계에서는 사용자에게 줄 exe를 만들지 않는다. 태그·GitHub Release는 Maintainer가 올린다.

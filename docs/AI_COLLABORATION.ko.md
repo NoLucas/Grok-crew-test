@@ -1,8 +1,11 @@
-# Codex + Claude Code 협업 운영 규칙
+# 에이전트 협업 운영 규칙
 
-이 문서는 Grok Crew Desktop을 Codex와 Claude Code가 같은 제품 기준으로 개발하면서 계약
-중복, 파일 덮어쓰기, 검증 누락을 최소화하기 위한 실행 규칙입니다. 최종 제품 판단과 병합
-권한은 저장소 소유자인 사용자에게 있습니다.
+이 문서는 Grok Crew Desktop을 Codex, Claude Code, Cursor Cloud Agent가 같은 제품 기준으로
+개발하면서 계약 중복, 파일 덮어쓰기, 검증 누락을 최소화하기 위한 실행 규칙입니다. 최종
+제품 판단과 병합 권한은 저장소 소유자인 사용자에게 있습니다.
+
+Cursor가 **제품 봇**으로 붙는 경로(체크인·초대문·편집 인박스)는 `docs/CURSOR_AGENT.ko.md`입니다.
+이 문서는 저장소를 고치는 개발 에이전트 규칙입니다.
 
 ## 1. 역할과 최종 권한
 
@@ -11,15 +14,16 @@
 | 사용자 / Maintainer | 요구사항 우선순위, UI 직접 검수, 외부 자격 증명, PR 승인·병합, 태그·릴리스 | 에이전트의 미검증 결과를 자동 병합하지 않음 |
 | Codex / Integration Owner | 스키마·API·IPC 계약, SQLite migration, Electron main/preload, Python sidecar, 렌더·게시, 보안 경계, 통합 테스트, 릴리스 조립 | Claude 작업 브랜치의 사용자 변경을 임의로 덮어쓰지 않음 |
 | Claude Code / Feature Implementer | 작업 패킷에 지정된 UI 동작·컴포넌트·focused test, 재현 절차와 스크린샷 증거 | 허용 목록 밖 수정, 계약의 독자 변경, main 병합·태그·릴리스 |
+| Cursor Cloud Agent | Maintainer가 연 세션에서 지정한 슬라이스(문서, 데스크, 검증). 커밋은 현재 브랜치 | 태그·GitHub Release·PR 병합, OAuth/서명 값 지어내기 |
 
 한 PR에는 한 명의 구현 책임자만 둡니다. 다른 에이전트는 같은 파일을 동시에 수정하지 않고
 리뷰 의견 또는 후속 PR로 참여합니다.
 
 ## 2. 저장소와 브랜치 규칙
 
-- 유일한 push 대상은 `https://github.com/NoLucas/Grok-crew-test.git`입니다.
-- 이 clone의 `origin`은 다른 저장소를 가리킬 수 있으므로 push 명령에 사용하지 않습니다.
-- Codex 브랜치는 `codex/<workstream>`, Claude Code 브랜치는 `claude/<workstream>`을 사용합니다.
+- GitHub 공개 저장소는 `https://github.com/NoLucas/Grok-crew-test.git` (`github` remote)입니다.
+- Cursor Cloud Agent 세션의 `origin`은 Cursor git 호스트일 수 있습니다. 그때는 `origin`과 `github`를 같이 push한 뒤 upstream을 `origin`에 되돌립니다.
+- Codex 브랜치는 `codex/<workstream>`, Claude Code 브랜치는 `claude/<workstream>`, Cursor 세션은 요청이 없으면 현재 브랜치를 유지합니다.
 - 두 에이전트는 각각 별도 worktree 또는 clone에서 작업합니다. 같은 작업 폴더의 동시 편집은
   금지합니다.
 - 모든 작업 패킷은 기준 commit SHA를 고정합니다. 작업 시작 후 main이 바뀌면 구현을 계속

@@ -67,6 +67,8 @@ def test_role_names_are_editor_and_collector_agent():
     assert resolve_sender({"door": "grok", "created_by": "Orion"}) == ("editor", "Editor Agent")
     assert resolve_sender({"door": "editor", "created_by": "Nova"}) == ("editor", "Editor Agent")
     assert resolve_sender({"door": "collector", "created_by": "Orion"}) == ("collector", "Collector Agent")
+    assert resolve_sender({"door": "editor", "created_by": "Cursor"}) == ("editor", "Editor Agent")
+    assert normalize_agent("Cursor", "editor") == "Editor Agent"
 
 
 def test_media_relpaths_include_broll():
