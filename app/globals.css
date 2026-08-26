@@ -6800,7 +6800,8 @@ select {
 .desktop-inspector { border-left: 1px solid var(--desktop-line); }
 .desktop-side-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 9px; }
 .desktop-side-head b { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
-.desktop-side-head button { display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 1px solid var(--desktop-line); border-radius: 7px; background: white; }
+.desktop-side-head button { display: grid; place-items: center; min-width: 25px; height: 25px; padding: 0 8px; border: 1px solid var(--desktop-line); border-radius: 7px; background: white; font-size: 10px; }
+.desktop-side-head-actions button:last-child { width: 25px; padding: 0; }
 .desktop-side-head-actions { display: flex; align-items: center; gap: 6px; }
 .desktop-side-head-actions button:not([aria-label]) {
   width: auto;
@@ -6929,9 +6930,9 @@ select {
 }
 .desktop-handoff-tile {
   display: grid;
-  gap: 7px;
+  gap: 0;
   min-width: 0;
-  padding: 0 0 8px;
+  padding: 0;
   border: 1px solid var(--desktop-line);
   border-radius: 10px;
   background: #fbfbfd;
@@ -6945,6 +6946,7 @@ select {
   background: #f7f6ff;
 }
 .desktop-handoff-thumb {
+  position: relative;
   display: grid;
   place-items: center;
   aspect-ratio: 16 / 9;
@@ -6960,26 +6962,37 @@ select {
   object-fit: cover;
   background: #0d0e11;
 }
-.desktop-handoff-tile b {
+.desktop-handoff-thumb i {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: var(--desktop-text);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+}
+.desktop-handoff-caption { display: grid; gap: 2px; padding: 7px 8px 8px; }
+.desktop-handoff-caption b {
   display: block;
   overflow: hidden;
-  padding: 0 8px;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.desktop-handoff-tile small,
-.desktop-handoff-tile em {
+.desktop-handoff-caption small,
+.desktop-handoff-caption em {
   display: block;
   overflow: hidden;
-  padding: 0 8px;
   color: var(--desktop-muted);
   font-size: 10px;
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.desktop-handoff-tile em.is-warn { color: var(--desktop-amber); }
+.desktop-handoff-caption em.is-warn { color: var(--desktop-amber); }
 .desktop-handoff-preview { display: grid; gap: 8px; padding: 0 12px 12px; }
 .desktop-handoff-preview video,
 .desktop-handoff-preview img,

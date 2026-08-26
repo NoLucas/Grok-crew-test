@@ -162,6 +162,7 @@ export function HandoffFolderBoard({
                   type="button"
                   className={item.path === current?.path ? 'desktop-handoff-tile is-selected' : 'desktop-handoff-tile'}
                   aria-pressed={item.path === current?.path}
+                  title={item.name}
                   onClick={() => setSelected((value) => ({ ...value, [folder.id]: item.path }))}
                 >
                   <div className={`desktop-handoff-thumb is-${item.kind}`}>
@@ -174,17 +175,17 @@ export function HandoffFolderBoard({
                     ) : (
                       <span>{item.kind === 'audio' ? '♪' : '·'}</span>
                     )}
+                    <i>{roleLabel(item.role, t)}</i>
                   </div>
-                  <div>
+                  <div className="desktop-handoff-caption">
                     <b>{item.name}</b>
-                    <small>{roleLabel(item.role, t)} · {formatBytes(item.size_bytes)}</small>
-                    {item.note ? <em>{item.note}</em> : null}
+                    <small>{formatBytes(item.size_bytes)}{item.note ? ` · ${item.note}` : ''}</small>
                     {item.license === 'unknown' ? <em className="is-warn">{t('출처 불명', 'Unknown license', '来源不明', '出典不明')}</em> : null}
                   </div>
                 </button>
               ))}
             </div>
-            {current ? (
+            {!compact && current ? (
               <div className="desktop-handoff-preview">
                 {current.kind === 'video' ? <video controls preload="metadata" src={preview} /> : null}
                 {current.kind === 'audio' ? <audio controls preload="metadata" src={preview} /> : null}
@@ -193,7 +194,7 @@ export function HandoffFolderBoard({
                   <img src={preview} alt={current.name} />
                 ) : null}
                 <p>
-                  {t('클릭한 파일을 이 창에서 봅니다. 원본은 이 PC 폴더에 그대로 있습니다.', 'The clicked file plays here. The original stays in this PC folder.', '点击的文件在此窗口播放。原片仍留在这台电脑的文件夹里。', 'クリックしたファイルをここで見る。原本はこのPCのフォルダに残る。')}
+                  {t(`${current.name} · 원본은 이 PC 폴더에 그대로 있습니다.`, `${current.name} · the original stays in this PC folder.`, `${current.name} · 原片仍留在这台电脑的文件夹里。`, `${current.name} · 原本はこのPCのフォルダに残る。`)}
                 </p>
               </div>
             ) : null}
