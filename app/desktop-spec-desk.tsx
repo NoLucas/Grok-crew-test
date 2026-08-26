@@ -298,11 +298,16 @@ export function SpecDesk({
   const active = specs.find((item) => item.id === activeSpecId) || collecting[0] || editing[0] || received[0];
   const connectedBots = roster?.bots ?? [];
   const collectorName = visibleBotName(
-    active?.collector?.agent || active?.spec?.collector?.agent || draft.collector,
+    draft.collector || roster?.suggested_collector || '',
     'collect',
     t,
   );
   const editorName = visibleBotName(
+    draft.editor || roster?.suggested_editor || '',
+    'edit',
+    t,
+  );
+  const inboundEditorName = visibleBotName(
     active?.editor?.agent || active?.spec?.editor?.agent || draft.editor,
     'edit',
     t,
@@ -440,7 +445,7 @@ export function SpecDesk({
       }
       setError(demo
         ? t('예시 컷을 만들지 못했습니다.', 'Could not write the demo cut.', '无法写入示例剪辑。', 'デモカットを作れませんでした。')
-        : t(`아직 ${editorName}이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.`, `No ${editorName} cut yet. The editor returns it after materials arrive.`, `还没有 ${editorName} 的剪辑。素材到了之后交回。`, `${editorName} のカットはまだありません。素材のあと編集ボットが返します。`));
+        : t(`아직 ${inboundEditorName}이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.`, `No ${inboundEditorName} cut yet. The editor returns it after materials arrive.`, `还没有 ${inboundEditorName} 的剪辑。素材到了之后交回。`, `${inboundEditorName} のカットはまだありません。素材のあと編集ボットが返します。`));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('받지 못했습니다.', 'Could not receive the package.', '无法接收。', '受け取れませんでした。'));
     } finally {
