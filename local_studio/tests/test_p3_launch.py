@@ -37,15 +37,96 @@ def make_project(studio):
     })
 
 
-def test_launch_status_marks_signing_and_oauth_external(studio):
+_OAUTH_APP_ENV = (
+    "GROK_CREW_GITHUB_CLIENT_ID",
+    "INSTAGRAM_APP_ID",
+    "INSTAGRAM_APP_SECRET",
+    "TIKTOK_CLIENT_KEY",
+    "TIKTOK_CLIENT_SECRET",
+    "GOOGLE_OAUTH_CLIENT_ID",
+)
+_SIGNING_ENV = (
+    "CSC_LINK",
+    "CSC_KEY_PASSWORD",
+    "APPLE_ID",
+    "APPLE_APP_SPECIFIC_PASSWORD",
+    "APPLE_TEAM_ID",
+)
+_PUBLISH_TOKEN_ENV = (
+    "INSTAGRAM_ACCESS_TOKEN",
+    "TIKTOK_ACCESS_TOKEN",
+    "YOUTUBE_ACCESS_TOKEN",
+)
+
+
+def _clear_external_env(monkeypatch):
+    for name in (*_OAUTH_APP_ENV, *_SIGNING_ENV, *_PUBLISH_TOKEN_ENV):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_launch_status_marks_signing_and_oauth_external(studio, monkeypatch):
+    _clear_external_env(monkeypatch)
     status = launch_status()
     json.dumps(status)
     assert status["schema"] == "grok-crew.launch-status/v1"
     assert status["local_gates"]["publish_receipts"] is True
-    assert status["external_gates"]["oauth_apps"]["ready"] is False
+    oauth = status["external_gates"]["oauth_apps"]
+    signing = status["external_gates"]["code_signing"]
+    assert oauth["ready"] is False
+    assert signing["ready"] is False
+    assert status["external_gates"]["auto_update_install"]["ready"] is False
+    assert "external" in oauth["status"]
+    apps = oauth["apps"]
+    assert apps["github"]["configured"] is False
+    assert apps["github"]["status"] == "external"
+    assert apps["instagram"]["configured"] is False
+    assert apps["instagram"]["oauth_app"] is False
+    assert apps["instagram"]["publish_token"] is False
+    assert apps["tiktok"]["configured"] is False
+    assert apps["tiktok"]["oauth_app"] is False
+    assert apps["youtube"]["configured"] is False
+    assert apps["youtube"]["oauth_app"] is False
+    assert signing["builder_notarize"] is False
+    assert signing["env_present"]["CSC_LINK"] is False
+    assert signing["env_present"]["APPLE_TEAM_ID"] is False
+    assert "CSC_LINK" in signing["missing_env"]
+    assert "flips the builder flag" in signing["detail"]
+    assert "GROK_CREW_GITHUB_CLIENT_ID" in oauth["missing_env"]
+    assert all(isinstance(flag, bool) for flag in oauth["env_present"].values())
+    assert all(isinstance(flag, bool) for flag in signing["env_present"].values())
+
+
+def test_github_env_client_id_does_not_mark_oauth_apps_ready(studio, monkeypatch):
+    _clear_external_env(monkeypatch)
+    monkeypatch.setenv("GROK_CREW_GITHUB_CLIENT_ID", "operator-env-present")
+    status = launch_status()
+    oauth = status["external_gates"]["oauth_apps"]
+    assert oauth["apps"]["github"]["configured"] is True
+    assert oauth["apps"]["github"]["status"] == "env_client_id"
+    assert oauth["ready"] is False
     assert status["external_gates"]["code_signing"]["ready"] is False
     assert status["external_gates"]["auto_update_install"]["ready"] is False
-    assert "external" in status["external_gates"]["oauth_apps"]["status"]
+    assert "operator-env-present" not in json.dumps(status)
+
+
+def test_oauth_and_signing_env_never_mark_external_gates_ready(studio, monkeypatch):
+    _clear_external_env(monkeypatch)
+    for name in (*_OAUTH_APP_ENV, *_SIGNING_ENV, *_PUBLISH_TOKEN_ENV):
+        monkeypatch.setenv(name, "operator-env-present")
+    status = launch_status()
+    oauth = status["external_gates"]["oauth_apps"]
+    signing = status["external_gates"]["code_signing"]
+    assert oauth["apps"]["github"]["configured"] is True
+    assert oauth["apps"]["instagram"]["configured"] is True
+    assert oauth["apps"]["instagram"]["oauth_app"] is True
+    assert oauth["apps"]["tiktok"]["oauth_app"] is True
+    assert oauth["apps"]["youtube"]["oauth_app"] is True
+    assert oauth["ready"] is False
+    assert signing["ready"] is False
+    assert signing["env_present"]["CSC_LINK"] is True
+    assert signing["env_present"]["APPLE_ID"] is True
+    assert signing["builder_notarize"] is False
+    assert "operator-env-present" not in json.dumps(status)
 
 
 def test_http_launch_status_is_available(live_server):

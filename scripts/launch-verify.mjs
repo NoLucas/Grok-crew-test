@@ -35,9 +35,38 @@ console.log('Local gates:');
 for (const [name, ready] of local) {
   console.log(`  ${ready ? 'pass' : 'FAIL'}  ${name}`);
 }
+function printStructured(gate) {
+  const apps = gate.apps || gate.providers;
+  if (apps && typeof apps === 'object') {
+    for (const [app, info] of Object.entries(apps)) {
+      if (!info || typeof info !== 'object') continue;
+      const flags = [];
+      for (const [key, value] of Object.entries(info)) {
+        if (typeof value === 'boolean') flags.push(`${key}=${value}`);
+        else if (key === 'status' && typeof value === 'string') flags.push(`status=${value}`);
+      }
+      const detail = typeof info.detail === 'string' ? ` — ${info.detail}` : '';
+      console.log(`    ${app}: ${flags.join(' ')}${detail}`);
+    }
+  }
+  if (gate.env_present && typeof gate.env_present === 'object') {
+    const names = Object.entries(gate.env_present)
+      .map(([key, present]) => `${key}=${present ? 'present' : 'missing'}`)
+      .join(', ');
+    console.log(`    env: ${names}`);
+  }
+  if (Array.isArray(gate.missing_env) && gate.missing_env.length) {
+    console.log(`    missing_env: ${gate.missing_env.join(', ')}`);
+  }
+  if (typeof gate.builder_notarize === 'boolean') {
+    console.log(`    builder_notarize=${gate.builder_notarize}`);
+  }
+}
+
 console.log('External gates (not implemented in this repo):');
 for (const [name, gate] of external) {
   console.log(`  ${gate.ready ? 'ready' : 'external'}  ${name} — ${gate.detail}`);
+  printStructured(gate);
 }
 
 if (localFailed.length) {

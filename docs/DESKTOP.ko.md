@@ -50,7 +50,16 @@ Runner는 데스크톱 서명을 검증하고 X25519/HKDF/AES-256-GCM으로 요�
 
 Git relay는 데스크톱 전용 `control` 브랜치와 `runner/<id>` 브랜치를 사용합니다. `requests/<job>.request.json`과 `controls/<job>.control.json`은 모두 데스크톱이 서명·암호화합니다. Runner는 단계가 바뀔 때 서명된 event를 commit하고 데스크톱은 최대 5초 간격으로 새 event/result를 동기화합니다. 같은 job의 후속 선택은 새 blob hash와 증가한 attempt로 다시 처리되고, 데스크톱은 서명 검증과 sequence 검사를 통과한 새 결과만 한 번 적용합니다.
 
-GitHub OAuth 앱을 등록한 배포에서는 Electron 프로세스에 `GROK_CREW_GITHUB_CLIENT_ID`를 제공하면 device flow 버튼이 활성화됩니다. 등록 전 개발 프리뷰에서도 앱 내부 token 입력으로 연결할 수 있으며, 값은 renderer 상태에서 즉시 지우고 OS 보안 저장소에만 보관합니다. 새 저장소 생성은 GitHub REST API와 Git을 사용하므로 GitHub CLI는 필요하지 않습니다.
+GitHub OAuth 앱을 등록한 배포에서는 Electron 프로세스에 `GROK_CREW_GITHUB_CLIENT_ID`를 제공하면 device flow 버튼이 활성화됩니다. 등록 전 개발 프리뷰에서도 앱 내부 token 입력으로 연결할 수 있으며, 값은 renderer 상태에서 즉시 지우고 OS 보안 저장소에만 보관합니다. 새 저장소 생성은 GitHub REST API와 Git을 사용하므로 GitHub CLI는 필요하지 않습니다. `GROK_CREW_GITHUB_CLIENT_ID`가 있어도 `/api/v2/launch`의 `oauth_apps.ready`는 false입니다. 이 저장소가 앱을 등록했다는 뜻이 아닙니다.
+
+## 외부 자격 증명 (이 저장소에 없음)
+
+Instagram/TikTok/YouTube/GitHub OAuth 앱과 Apple 서명·notarization은 운영자가 각 콘솔에서 직접 등록합니다. 이 저장소는 앱·인증서·client ID를 만들지 않습니다. 단계와 공식 링크는 `docs/LAUNCH.md`의 **External credentials (not in this repo)** 를 따르세요.
+
+- 게시는 이미 `local_studio/.env`의 `INSTAGRAM_ACCESS_TOKEN`, `TIKTOK_ACCESS_TOKEN`, `YOUTUBE_ACCESS_TOKEN`으로 동작합니다. OAuth **앱**은 별도 게이트입니다.
+- 선택적 앱 식별자(값은 비운 채 이름만): `GROK_CREW_GITHUB_CLIENT_ID`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `GOOGLE_OAUTH_CLIENT_ID`. 주석대로 **operator registers the app; this repo does not**.
+- macOS: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`가 있고 운영자가 `package.json`의 `build.mac.notarize`를 직접 켜기 전까지 `notarize`는 false로 유지합니다. 이 저장소는 `"notarize": true`로 바꾸지 않습니다.
+- `npm run launch:verify`는 게이트와 `apps` / `env_present` 이름을 출력하며 비밀 값은 찍지 않습니다.
 
 ## 로컬 대본과 게시 자격 증명
 
