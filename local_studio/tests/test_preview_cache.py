@@ -76,8 +76,8 @@ def test_cache_hit_does_not_rebuild(monkeypatch):
     assert "build-1-owned" in closed
 
 
-def test_revision_change_evicts_and_rebuilds(monkeypatch):
-    cache = PreviewCompositeCache()
+def test_revision_change_keeps_previous_until_lru_evicts(monkeypatch):
+    cache = PreviewCompositeCache(max_entries=2)
     closed: list[str] = []
     builds = {"n": 0}
 
@@ -89,8 +89,31 @@ def test_revision_change_evicts_and_rebuilds(monkeypatch):
     cache.sample("proj", _empty_timeline(1), 0.1, {"quality": "draft"})
     cache.sample("proj", _empty_timeline(2), 0.1, {"quality": "draft"})
     assert builds["n"] == 2
-    assert "rev-1" in closed
-    assert "rev-1-owned" in closed
+    assert cache.size() == 2
+    assert "rev-1" not in closed
+    cache.sample("proj", _empty_timeline(1), 0.4, {"quality": "draft"})
+    assert builds["n"] == 2
+    cache.close()
+
+
+def test_lru_evicts_oldest_project(monkeypatch):
+    cache = PreviewCompositeCache(max_entries=2)
+    closed: list[str] = []
+    builds = {"n": 0}
+
+    def compose(*args, **kwargs):
+        builds["n"] += 1
+        return _fake_compose(closed, f"slot-{builds['n']}")(*args, **kwargs)
+
+    monkeypatch.setattr(render, "_compose_timeline_v2", compose)
+    cache.sample("alpha", _empty_timeline(1), 0.1, {"quality": "draft"})
+    cache.sample("beta", _empty_timeline(1), 0.1, {"quality": "draft"})
+    cache.sample("gamma", _empty_timeline(1), 0.1, {"quality": "draft"})
+    assert builds["n"] == 3
+    assert cache.size() == 2
+    assert "slot-1" in closed
+    cache.sample("beta", _empty_timeline(1), 0.2, {"quality": "draft"})
+    assert builds["n"] == 3
     cache.close()
 
 
@@ -129,7 +152,7 @@ def test_close_swallows_errors_and_is_idempotent():
         def close(self):
             flags.append("fine")
 
-    cache._entry = {
+    cache._entries[("p", 1, "draft", ())] = {
         "key": ("p", 1, "draft", ()),
         "owned_clips": [Fine(), Boom()],
         "final": Boom(),

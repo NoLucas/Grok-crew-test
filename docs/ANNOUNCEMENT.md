@@ -1,39 +1,42 @@
-# Grok Crew announcement kit
+# Announcement draft
 
-Keep the message focused on the editing problem and the first local result; do not promise cloud access or automated publishing without local credentials.
+Operator-owned. This repo does not post to social networks, Discord, or Hacker News.
+Copy what you need. Do not invent a launch date or user count.
 
-## GitHub release title
+## The problem
 
-`Grok Crew v0.1.0 — local-first video editing workspace for people and same-PC bots`
+Short-form editing with an AI bot usually loses context. A cut map lives in one chat, the export job in another, and the Instagram/TikTok/YouTube step in a third. When a render fails or a caption changes, there is no single local record of what was approved.
 
-## English launch post
+## The first win
 
-I built Grok Crew because short-form video agents kept losing context between the brief, cut decisions, render job, and delivery step.
+On one PC: drop a source clip → cut on a Timeline v2 desk → render an MP4 locally → optionally publish with an access token. The same MoviePy timeline drives the program monitor and the final file. Draft preview can use proxies; the final render always uses the original.
 
-Grok Crew keeps that workflow on one computer: rough footage → transcript cut map → bot edit method → local MP4 → queued or optional auto-upload delivery.
+```
+local source → timeline / cut map → local MP4 → optional upload
+```
 
-It includes a local bot CLI, visible bot check-ins, media preflight, render QA, project memory, A/B edits, and a browser workspace. No cloud backend or provider API key is required for local editing.
+## The local-first boundary
 
-Try it: `https://github.com/NoLucas/Grok-Crew`
+Grok Crew binds Local Studio to `127.0.0.1`. Remote website origins cannot call the API. Instagram, TikTok, and YouTube publish today with **your** access tokens. Official OAuth apps, Apple code signing, notarization, and unsigned in-place auto-update stay **outside this repository** — this project does not register those apps or ship certificates.
 
-I would especially value feedback on the cut-map workflow, local render reliability, and which short-form editing task should be made effortless next.
+GitHub token login works without an OAuth app. Device flow needs an operator-owned GitHub OAuth app.
 
-## Korean launch post
+## One feedback ask
 
-짧은 영상 편집 봇은 브리프, 컷 결정, 렌더 작업, 전달 단계가 흩어지면 이전 맥락을 잃기 쉽습니다. 그래서 이 흐름을 한 PC 안에 모은 Grok Crew를 만들었습니다.
+Please try the local cut → render path on a 15–60s talking-head clip and tell us which of these broke first:
 
-소스 영상 → 대본 컷 맵 → 봇 편집 방식 → 로컬 MP4 → 대기열 또는 선택적 자동 업로드까지 이어집니다. 로컬 봇 CLI, 실제 체크인 확인, 미디어 사전 검사, 렌더 QA, 프로젝트 기억장, A/B 편집, 브라우저 작업 공간을 포함합니다.
+1. Caption timing on the program monitor vs the rendered MP4
+2. Cut-map / timeline revision when you undo or restore
+3. Local render reliability (queue, cancel, Compact/Balanced/High)
 
-로컬 편집에는 클라우드 백엔드나 제공자 API 키가 필요하지 않습니다.
+Open an issue on [NoLucas/Grok-crew-test](https://github.com/NoLucas/Grok-crew-test) with OS, a short screen recording, and whether you used Desktop (`npm run desktop`) or the browser workspace (`npm run local`).
 
-저장소: `https://github.com/NoLucas/Grok-Crew`
+## Short posts
 
-컷 맵 작업 흐름, 로컬 렌더 안정성, 다음에 가장 쉽게 만들면 좋을 편집 작업에 대한 피드백을 기다립니다.
+**English**
 
-## Community post structure
+> Grok Crew is a local-first short-form desk: source → timeline → MP4 on your PC, then optional token publish. Bots keep an approved record instead of scattering cuts across chats. OAuth apps and Apple signing stay operator-owned. Try a 15–60s talking-head render and tell us if captions, revisions, or local render broke first. https://github.com/NoLucas/Grok-crew-test
 
-1. Start with the specific pain: bot-assisted edits lose their decisions between tools.
-2. Show the first win in one sentence: rough footage to a local MP4 with a visible bot trail.
-3. Include the screenshot from `public/readme/production-workspace.png`.
-4. Link the repository and ask for one narrow piece of feedback.
-5. Reply with reproducible results, not generic promotion.
+**한국어**
+
+> Grok Crew는 로컬 우선 숏폼 편집 책상입니다. 이 PC에서 원본 → 타임라인 → MP4, 필요하면 토큰으로 게시합니다. 봇 작업은 채팅에 흩어지지 않고 승인된 기록으로 남습니다. OAuth 앱과 Apple 서명은 저장소 밖입니다. 15–60초 토킹헤드를 렌더해 보시고, 자막·리비전·로컬 렌더 중 무엇이 먼저 깨지는지 알려 주세요. https://github.com/NoLucas/Grok-crew-test

@@ -1025,22 +1025,48 @@ def control_control_job(control_job_id: str, command: str, reason: str | None = 
             raise ValueError("Only a paused job can be resumed.")
         if command == "retry" and status not in {"failed", "conflict", "cancelled"}:
             raise ValueError("Only a failed, conflicted, or cancelled job can be retried.")
-        next_status = {"cancel": "cancel_requested", "pause": "pause_requested", "resume": "queued", "retry": "queued"}[command]
-        next_attempt = int(current.get("attempt") or 1) + (1 if command in {"resume", "retry"} else 0)
-        next_sequence = int(current.get("control_sequence") or 0) + 1
-        now = utc_now()
-        conn.execute("""UPDATE control_jobs SET status = ?, attempt = ?, control_sequence = ?,
-            error_text = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE error_text END,
-            conflict_json = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE conflict_json END,
-            completed_at = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE completed_at END,
-            updated_at = ? WHERE id = ?""",
-            (next_status, next_attempt, next_sequence, command, command, command, now, control_job_id))
-        updated = conn.execute("SELECT * FROM control_jobs WHERE id = ?", (control_job_id,)).fetchone()
+        unclaimed = not str(current.get("runner_id") or "").strip()
+        if command == "cancel" and unclaimed and status in {"queued", "cancel_requested"}:
+            now = utc_now()
+            next_sequence = int(current.get("control_sequence") or 0) + 1
+            next_attempt = int(current.get("attempt") or 1)
+            conn.execute(
+                """UPDATE control_jobs SET status = 'cancelled', control_sequence = ?,
+                completed_at = ?, updated_at = ? WHERE id = ?""",
+                (next_sequence, now, now, control_job_id),
+            )
+            updated = conn.execute("SELECT * FROM control_jobs WHERE id = ?", (control_job_id,)).fetchone()
+        else:
+            next_status = {"cancel": "cancel_requested", "pause": "pause_requested", "resume": "queued", "retry": "queued"}[command]
+            next_attempt = int(current.get("attempt") or 1) + (1 if command in {"resume", "retry"} else 0)
+            next_sequence = int(current.get("control_sequence") or 0) + 1
+            now = utc_now()
+            conn.execute("""UPDATE control_jobs SET status = ?, attempt = ?, control_sequence = ?,
+                error_text = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE error_text END,
+                conflict_json = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE conflict_json END,
+                completed_at = CASE WHEN ? IN ('resume', 'retry') THEN NULL ELSE completed_at END,
+                updated_at = ? WHERE id = ?""",
+                (next_status, next_attempt, next_sequence, command, command, command, now, control_job_id))
+            updated = conn.execute("SELECT * FROM control_jobs WHERE id = ?", (control_job_id,)).fetchone()
     event(current.get("project_id"), None, "control_job_commanded", {
         "control_job_id": control_job_id, "command": command, "sequence": next_sequence,
         "attempt": next_attempt, "reason": str(reason or "")[:500], "origin": "human",
     })
     return row_dict(updated) or {}
+
+
+def cancel_unclaimed_control_jobs(project_id: str | None = None) -> dict[str, Any]:
+    """Cancel queued jobs that never got a Runner so they stop holding the remote desk."""
+    jobs = list_control_jobs(project_id)
+    cancelled: list[dict[str, Any]] = []
+    for job in jobs:
+        status = str(job.get("status") or "")
+        if status not in {"queued", "cancel_requested"}:
+            continue
+        if str(job.get("runner_id") or "").strip():
+            continue
+        cancelled.append(control_control_job(str(job["id"]), "cancel", "unclaimed"))
+    return {"cancelled": cancelled, "count": len(cancelled)}
 
 
 def resolve_control_conflict(control_job_id: str, action: str) -> dict[str, Any]:

@@ -13,7 +13,7 @@ import type { TimelinePatch } from './timeline/operations';
 import { buildTimelineHistoryAction, emptyTimelineHistory } from './timeline/history';
 import type { TimelineHistoryAction, TimelineHistoryResult, TimelineHistoryState } from './timeline/history';
 import type { Timeline, TrackType } from './timeline/types';
-import { remoteDeskVisible, remoteNeedsAttention } from './desktop-remote';
+import { isUnclaimedHold, remoteDeskVisible, remoteNeedsAttention } from './desktop-remote';
 
 type UpdateStatus = {
   status: string;
@@ -305,7 +305,9 @@ export default function DesktopWorkspace() {
   const remoteAttention = remoteNeedsAttention({
     jobStatus: latestJob?.status,
     hasInputRequest: Boolean(inputRequest),
+    runners: workspace.runners.length,
   });
+  const unclaimedJobs = projectJobs.filter((job) => isUnclaimedHold(job.status) && !job.runner_id);
   const hideInspectorColumn = !project || !timeline;
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
@@ -319,6 +321,10 @@ export default function DesktopWorkspace() {
     ? proxies.find((proxy) => proxy.asset_id === primaryVideoAsset.id)
     : undefined;
   const busyProxies = proxies.filter((proxy) => ['queued', 'running'].includes(proxy.status));
+  const readyProxyCount = videoAssets.filter((asset) => {
+    const proxy = proxies.find((item) => item.asset_id === asset.id);
+    return proxy?.status === 'ready' && Boolean(proxy.proxy_path);
+  }).length;
   const proxyProgress = busyProxies.length
     ? Math.round(busyProxies.reduce((sum, proxy) => sum + (proxy.progress ?? 0), 0) / busyProxies.length)
     : (proxyJob?.progress ?? activeProxy?.progress ?? 0);
@@ -523,76 +529,6 @@ export default function DesktopWorkspace() {
       setMessage(error instanceof Error ? error.message : t('교환 파일을 만들지 못했습니다.', 'Could not export the edit list.', '无法导出交换文件。', '交換ファイルを書き出せませんでした。'));
     }
   };
-  const generateProxy = useCallback(async (force = false, quiet = false) => {
-    if (!project || !primaryVideoAsset || proxyBusy) return;
-    setProxyBusy(true);
-    if (!quiet) {
-      setMessage(t('저해상도 프록시를 만들고 있습니다.', 'Generating a low-resolution proxy.', '正在生成低分辨率代理文件。', '低解像度プロキシを生成しています。'));
-    }
-    try {
-      const response = await api(`/api/v2/projects/${project.id}/proxies`, {
-        method: 'POST',
-        body: JSON.stringify({
-          asset_id: primaryVideoAsset.id,
-          force,
-          run_immediately: true,
-        }),
-      }) as { proxy: MediaProxy; job: LocalJob | null; reused: boolean };
-      setProxies((current) => [
-        response.proxy,
-        ...current.filter((proxy) => proxy.asset_id !== response.proxy.asset_id),
-      ]);
-      setProxyJob(response.job);
-      if (!response.job) {
-        setUseProxy(true);
-        if (!quiet) {
-          setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
-        }
-        return;
-      }
-      const pollProxyJob = async (jobId: string, attempt = 0): Promise<LocalJob> => {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        const polled = await api(`/api/jobs/${jobId}`) as { job: LocalJob };
-        const job = polled.job;
-        setProxyJob(job);
-        setProxies((current) => current.map((proxy) =>
-          proxy.asset_id === primaryVideoAsset.id
-            ? { ...proxy, status: job.status === 'succeeded' ? 'ready' : job.status, progress: job.progress, error_text: job.error_text }
-            : proxy,
-        ));
-        if (attempt < 600 && ['queued', 'running'].includes(job.status)) {
-          return pollProxyJob(jobId, attempt + 1);
-        }
-        return job;
-      };
-      const job = await pollProxyJob(response.job.id);
-      await refreshProject(project.id);
-      if (job.status === 'succeeded') {
-        setUseProxy(true);
-        setMessage(t(
-          quiet
-            ? '미리보기 프록시가 준비되었습니다. 최종 렌더는 원본을 사용합니다.'
-            : '프록시가 준비되었습니다. 미리보기만 가벼운 파일을 사용하고 최종 렌더는 원본을 사용합니다.',
-          quiet
-            ? 'Preview proxy ready. Final render still uses the original.'
-            : 'Proxy ready. Preview uses the lighter file; final render still uses the original.',
-          quiet
-            ? '预览代理已就绪。最终渲染仍使用原片。'
-            : '代理文件已就绪。预览使用轻量文件，最终渲染仍使用原片。',
-          quiet
-            ? 'プレビュー用プロキシの準備ができました。最終レンダーは元素材を使います。'
-            : 'プロキシの準備ができました。プレビューのみ軽量ファイルを使い、最終レンダーは元素材を使います。',
-        ));
-      } else {
-        setMessage(job.error_text || t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
-      if (project) await refreshProject(project.id);
-    } finally {
-      setProxyBusy(false);
-    }
-  }, [api, primaryVideoAsset, project, proxyBusy, refreshProject, t]);
   const ensureAllProxies = useCallback(async (force = false, quiet = false) => {
     if (!project || proxyBusy) return;
     if (!videoAssets.length) return;
@@ -821,15 +757,44 @@ export default function DesktopWorkspace() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'GitHub login failed.'); }
     finally { setBusy(false); }
   };
-  const controlRunnerJob = async (command: 'cancel' | 'pause' | 'resume' | 'retry') => {
-    if (!window.grokCrew || !latestJob) return;
+  const controlRunnerJob = async (command: 'cancel' | 'pause' | 'resume' | 'retry', job = latestJob) => {
+    if (!job) return;
     setBusy(true);
     try {
-      await window.grokCrew.controlRunnerJob(latestJob.id, command);
+      const unclaimed = isUnclaimedHold(job.status) && !job.runner_id;
+      if (window.grokCrew && !unclaimed) {
+        await window.grokCrew.controlRunnerJob(job.id, command);
+        setMessage(t(`원격 ${command} 명령을 서명해 control 브랜치로 보냈습니다.`, `Signed remote ${command} command sent to the control branch.`, `已将签名的远程 ${command} 命令发送到 control 分支。`, `署名済みのリモート ${command} コマンドを control ブランチへ送信しました。`));
+      } else {
+        await api(`/api/v2/control-jobs/${job.id}/${command}`, { method: 'POST', body: JSON.stringify({ reason: unclaimed ? 'unclaimed' : command }) });
+        setMessage(command === 'cancel'
+          ? t('대기 중인 Grok 작업을 취소했습니다.', 'Cancelled the waiting Grok job.', '已取消等待中的 Grok 任务。', '待機中の Grok ジョブをキャンセルしました。')
+          : t(`작업을 ${command}했습니다.`, `Job ${command} sent.`, `已${command}任务。`, `ジョブを ${command} しました。`));
+      }
       await refreshWorkspace(true);
-      setMessage(t(`원격 ${command} 명령을 서명해 control 브랜치로 보냈습니다.`, `Signed remote ${command} command sent to the control branch.`, `已将签名的远程 ${command} 命令发送到 control 分支。`, `署名済みのリモート ${command} コマンドを control ブランチへ送信しました。`));
     } catch (error) { setMessage(error instanceof Error ? error.message : `Could not ${command} the Runner job.`); }
     finally { setBusy(false); }
+  };
+  const cancelUnclaimedJobs = async () => {
+    if (!unclaimedJobs.length) return;
+    setBusy(true);
+    try {
+      const result = await api('/api/v2/control-jobs/cancel-unclaimed', {
+        method: 'POST',
+        body: JSON.stringify({ project_id: selectedProjectId || undefined }),
+      }) as { count?: number };
+      await refreshWorkspace(true);
+      setMessage(t(
+        `대기 중이던 Grok 작업 ${result.count ?? unclaimedJobs.length}개를 취소했습니다. Runner 없이 남아 있던 항목입니다.`,
+        `Cancelled ${result.count ?? unclaimedJobs.length} waiting Grok job(s) that never reached a Runner.`,
+        `已取消 ${result.count ?? unclaimedJobs.length} 个未到达 Runner 的等待任务。`,
+        `Runner に届いていなかった待機ジョブ ${result.count ?? unclaimedJobs.length} 件をキャンセルしました。`,
+      ));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t('작업을 취소하지 못했습니다.', 'Could not cancel the jobs.', '无法取消任务。', 'ジョブをキャンセルできませんでした。'));
+    } finally {
+      setBusy(false);
+    }
   };
   const resolveConflict = async (action: 'discard' | 'retry_current') => {
     if (!window.grokCrew || !latestJob) return;
@@ -1005,18 +970,21 @@ export default function DesktopWorkspace() {
                 onToggleOutput={() => setPreviewOutput((value) => !value)}
                 actions={(
                   <>
-                    {primaryVideoAsset && !proxyReady && !proxyBusy ? (
-                      <button onClick={() => void generateProxy(activeProxy?.status === 'failed')}>
-                        {activeProxy?.status === 'failed'
-                          ? t('프록시 다시 만들기', 'Retry proxy', '重试代理文件', 'プロキシ再試行')
-                          : t('프록시 만들기', 'Generate proxy', '生成代理文件', 'プロキシ作成')}
+                    {videoAssets.length ? (
+                      <span>
+                        {t('프록시', 'Proxy', '代理', 'プロキシ')} {readyProxyCount}/{videoAssets.length}
+                        {proxyBusy ? ` · ${proxyProgress}%` : ''}
+                      </span>
+                    ) : null}
+                    {videoAssets.length && !proxyBusy && readyProxyCount < videoAssets.length ? (
+                      <button onClick={() => void ensureAllProxies(proxies.some((proxy) => proxy.status === 'failed'))}>
+                        {proxies.some((proxy) => proxy.status === 'failed')
+                          ? t('실패한 프록시 다시', 'Retry failed proxies', '重试失败代理', '失敗プロキシ再試行')
+                          : t('모든 프록시', 'All proxies', '全部代理', '全プロキシ')}
                       </button>
                     ) : null}
                     {proxyBusy ? (
-                      <>
-                        <span>{t('프록시 생성', 'Proxy', '代理文件', 'プロキシ')} {proxyProgress}%</span>
-                        <button onClick={() => void cancelProxy()}>{t('취소', 'Cancel', '取消', 'キャンセル')}</button>
-                      </>
+                      <button onClick={() => void cancelProxy()}>{t('취소', 'Cancel', '取消', 'キャンセル')}</button>
                     ) : null}
                     {proxyReady && !previewOutput ? (
                       <button
@@ -1057,9 +1025,51 @@ export default function DesktopWorkspace() {
           <section className="desktop-inspector-section desktop-remote-collapsed">
             <div className="desktop-inspector-head"><b>{t('원격 봇', 'Remote bot', '远程机器人', 'リモートボット')}</b></div>
             <p>{t('로컬에서 바로 자를 수 있습니다. Runner와 GitHub는 Grok에 넘길 때만 연결하세요.', 'Cut locally first. Connect a Runner and GitHub only when you hand work to Grok.', '可以先在本地剪辑。仅在交给 Grok 时再连接 Runner 和 GitHub。', 'まずはローカルで切れます。Grok に渡すときだけ Runner と GitHub を接続してください。')}</p>
-            <button type="button" className="desktop-secondary" onClick={() => setRemoteOpen(true)}>{t('Runner·GitHub 열기', 'Open Runner & GitHub', '打开 Runner 和 GitHub', 'Runner と GitHub を開く')}</button>
+            {unclaimedJobs.length ? (
+              <div className="desktop-unclaimed-jobs">
+                <b>{t(`대기 중인 Grok 작업 ${unclaimedJobs.length}개`, `${unclaimedJobs.length} waiting Grok job(s)`, `${unclaimedJobs.length} 个等待中的 Grok 任务`, `待機中の Grok ジョブ ${unclaimedJobs.length} 件`)}</b>
+                <p>{t('Runner가 없어 전송되지 않았습니다. 로컬 편집을 가리려면 취소하세요.', 'No Runner picked these up. Cancel them to keep the local desk clear.', '没有 Runner 接收这些任务。取消后可保持本地编辑界面清爽。', 'Runner が受け取っていません。キャンセルするとローカル編集のままです。')}</p>
+                <div className="desktop-unclaimed-actions">
+                  <button type="button" className="desktop-danger" disabled={busy} onClick={() => void cancelUnclaimedJobs()}>{t('대기 작업 취소', 'Cancel waiting jobs', '取消等待任务', '待機ジョブをキャンセル')}</button>
+                  <button type="button" className="desktop-secondary" onClick={() => setRemoteOpen(true)}>{t('Runner·GitHub 열기', 'Open Runner & GitHub', '打开 Runner 和 GitHub', 'Runner と GitHub を開く')}</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="desktop-secondary" onClick={() => setRemoteOpen(true)}>{t('Runner·GitHub 열기', 'Open Runner & GitHub', '打开 Runner 和 GitHub', 'Runner と GitHub を開く')}</button>
+            )}
           </section>
           )}
+          <section className="desktop-inspector-section desktop-proxy-list">
+            <div className="desktop-inspector-head">
+              <b>{t('미리보기 프록시', 'Preview proxies', '预览代理', 'プレビュープロキシ')}</b>
+              {videoAssets.length ? <span>{readyProxyCount}/{videoAssets.length}</span> : null}
+            </div>
+            <p className="desktop-proxy-hint">{t('초안 모니터만 프록시를 씁니다. 최종 렌더는 원본입니다.', 'Draft monitor only. Final render still uses the original.', '仅草稿监视器使用代理。最终渲染仍用原片。', '草案モニターのみ。最終レンダーは元素材です。')}</p>
+            {videoAssets.length ? (
+              <ul>
+                {videoAssets.map((asset, index) => {
+                  const proxy = proxies.find((item) => item.asset_id === asset.id);
+                  const status = proxy?.status ?? 'missing';
+                  const percent = ['queued', 'running'].includes(status) ? Math.max(0, Math.min(100, proxy?.progress ?? 0)) : status === 'ready' ? 100 : 0;
+                  return (
+                    <li key={asset.id} className={`desktop-proxy-row ${status}`}>
+                      <div>
+                        <b>{asset.name || asset.id}</b>
+                        <small>{index === 0 ? t('프라이머리', 'Primary', '主素材', 'プライマリ') : 'B-roll'} · {status === 'missing' ? t('없음', 'none', '无', 'なし') : status}{['queued', 'running'].includes(status) ? ` ${percent}%` : ''}</small>
+                      </div>
+                      <i style={{ width: `${percent}%` }} />
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="desktop-muted">{t('영상 에셋이 없습니다.', 'No video assets yet.', '还没有视频素材。', '動画アセットはまだありません。')}</p>
+            )}
+            <div className="desktop-proxy-actions">
+              <button type="button" disabled={!videoAssets.length || proxyBusy} onClick={() => void ensureAllProxies(false)}>{t('없는 프록시 만들기', 'Build missing proxies', '生成缺失代理', '未作成プロキシを作る')}</button>
+              {proxyBusy ? <button type="button" onClick={() => void cancelProxy()}>{t('생성 취소', 'Cancel build', '取消生成', '生成をキャンセル')}</button> : null}
+            </div>
+          </section>
           <section className="desktop-inspector-section desktop-elements">
             <div className="desktop-inspector-head"><b>{t('편집 요소', 'Edit elements', '编辑元素', '編集要素')}</b></div>
             <label><span>B-roll</span>

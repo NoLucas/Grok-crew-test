@@ -10,7 +10,7 @@ Use this before the first public GitHub release.
 - [x] Add relevant GitHub topics. (Already set on GitHub: `ai-agents`, `ffmpeg`, `instagram-reels`, `local-first`, `python`, `self-hosted`, `short-form-video`, `typescript`, `video-editing`.)
 - [x] Create a `v0.1.0` release using the changelog notes. (Published 2026-08-23 as "First public demo".)
 - [x] Create a `v0.2.0` release using the changelog notes. (2026-08-24: the render/QA/security fixes and file-split work in this pass.)
-- [x] Review `npm audit` before release. Do not use a forced dependency upgrade without rebuilding and testing the workspace. (2026-08-24: 13 findings, 1 low / 12 high, all in dev-only build tooling -- Cloudflare Workers preview stack (`wrangler`/`miniflare`/`ws`/`undici`/`sharp`), `next`, `vite`, `vinext`, `react-server-dom-webpack`, `postcss`, `esbuild`. None are semver-major fixes, but the `vinext` fix bumps `1.0.0-beta.3` → `1.0.0-beta.8`, which is exactly the kind of beta jump this project deliberately exact-pins against without testing first -- so this needs a deliberate, tested upgrade pass, not `npm audit fix`, and not folded into an unrelated change.)
+- [x] Review `npm audit` before release. Do not use a forced dependency upgrade without rebuilding and testing the workspace. (2026-08-26: `npm audit` and `npm audit --omit=dev` report 0 vulnerabilities. `vinext` is installed and locked at `1.0.0-beta.8`, which is the latest published `1.0.0-beta.*`. The 2026-08-24 note about 13 findings and a deferred beta.3→beta.8 jump is stale. Do not run `npm audit fix --force`. Do not bump wrangler/miniflare or a future vinext 1.0.0 stable in this pass.)
 
 ## First experience
 
@@ -21,16 +21,15 @@ Use this before the first public GitHub release.
 
 ## Announcement
 
-- [ ] Share the problem: short-form bot editing loses its context across prompts, export jobs, and delivery steps.
-- [ ] Show the first win: local source → cut map → MP4 → optional upload.
-- [ ] Explain the local-first boundary and optional Instagram setup honestly.
-- [ ] Ask for one specific kind of feedback, such as caption workflow, cut-map design, or local render reliability.
+Ready-to-post copy is in `docs/ANNOUNCEMENT.md`. This repository does not post it for you.
+
+- [x] Draft the problem, first win, local-first boundary, and one feedback ask (`docs/ANNOUNCEMENT.md`).
+- [ ] Publish that draft on the channel you actually use (social, Discord, HN, or a GitHub Release note).
 
 ## Community follow-through
 
-- [ ] Reply to early issues with a reproduction status or next action.
-- [ ] Tag duplicate requests and turn repeated feedback into a small roadmap item.
-- [ ] Keep pull requests focused and update the changelog for user-visible behavior.
+- [x] Checked [NoLucas/Grok-crew-test](https://github.com/NoLucas/Grok-crew-test) issues on 2026-08-26: **0 open issues**, so there is nothing to reply to or mark duplicate.
+- [x] User-visible behavior is recorded in `CHANGELOG.md` Unreleased. Keep new PRs focused the same way.
 
 ## External credentials (not in this repo)
 

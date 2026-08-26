@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 
 register('./timeline/ts-resolver.helper.mjs', import.meta.url);
 
-const { remoteDeskVisible, remoteNeedsAttention } = await import('./desktop-remote.ts');
+const { remoteDeskVisible, remoteNeedsAttention, isUnclaimedHold } = await import('./desktop-remote.ts');
 
 const quiet = {
   runners: 0,
@@ -34,6 +34,15 @@ describe('remote desk visibility', () => {
     assert.equal(remoteDeskVisible({ ...quiet, jobStatus: 'failed' }), true);
     assert.equal(remoteDeskVisible({ ...quiet, hasInputRequest: true }), true);
     assert.equal(remoteNeedsAttention({ jobStatus: 'needs_input', hasInputRequest: false }), true);
+  });
+
+  it('does not open for leftover queued jobs until a Runner is paired', () => {
+    assert.equal(isUnclaimedHold('queued'), true);
+    assert.equal(isUnclaimedHold('cancel_requested'), true);
+    assert.equal(remoteDeskVisible({ ...quiet, jobStatus: 'queued' }), false);
+    assert.equal(remoteNeedsAttention({ jobStatus: 'queued', hasInputRequest: false }), false);
+    assert.equal(remoteDeskVisible({ ...quiet, jobStatus: 'queued', runners: 1 }), true);
+    assert.equal(remoteNeedsAttention({ jobStatus: 'queued', hasInputRequest: false, runners: 1 }), true);
   });
 
   it('ignores finished jobs so a later local edit stays quiet', () => {

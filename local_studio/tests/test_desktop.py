@@ -15,6 +15,7 @@ from desktop_domain import (
     RUNNER_EVENT_SCHEMA,
     answer_control_job,
     apply_timeline_patch,
+    cancel_unclaimed_control_jobs,
     control_control_job,
     create_control_job,
     ensure_timeline_version,
@@ -134,6 +135,21 @@ def test_control_job_pairing_and_verified_event_progression(studio):
     with db() as conn:
         status = conn.execute("SELECT status FROM control_jobs WHERE id = ?", (job["id"],)).fetchone()[0]
     assert status == "analyzing"
+
+
+def test_unclaimed_queued_cancel_marks_cancelled(studio):
+    project = make_project(studio)
+    ensure_timeline_version(project["id"])
+    first = create_control_job(project["id"], {"execution_policy": "auto_edit_render"})
+    second = create_control_job(project["id"], {"execution_policy": "review_before_render"})
+    cancelled = control_control_job(first["id"], "cancel", "unclaimed")
+    assert cancelled["status"] == "cancelled"
+    batch = cancel_unclaimed_control_jobs(project["id"])
+    assert batch["count"] == 1
+    assert batch["cancelled"][0]["id"] == second["id"]
+    assert batch["cancelled"][0]["status"] == "cancelled"
+    again = cancel_unclaimed_control_jobs(project["id"])
+    assert again["count"] == 0
 
 
 def test_human_answer_resumes_control_job_without_bot_heartbeat(studio):

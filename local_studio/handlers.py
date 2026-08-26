@@ -76,6 +76,7 @@ from desktop_domain import (
     answer_control_job,
     apply_timeline_history_action,
     apply_timeline_patch,
+    cancel_unclaimed_control_jobs,
     control_control_job,
     create_control_job,
     ensure_timeline_version,
@@ -416,6 +417,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, {"job": job, "platform": platform})
             elif path.startswith("/api/v2/projects/") and path.endswith("/publish-receipts/retry"):
                 self._json(200, retry_project_publish(path.split("/")[4], body))
+            elif path == "/api/v2/control-jobs/cancel-unclaimed":
+                self._json(200, cancel_unclaimed_control_jobs(str(body.get("project_id") or "").strip() or None))
             elif path.startswith("/api/v2/control-jobs/") and path.endswith("/control"):
                 self._json(200, {"control_job": control_control_job(path.split("/")[4], str(body.get("command", "")), body.get("reason"))})
             elif path.startswith("/api/v2/control-jobs/") and path.endswith("/cancel"):

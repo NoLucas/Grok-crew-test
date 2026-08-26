@@ -7002,6 +7002,24 @@ select {
 .desktop-remote-collapsed { display: grid; gap: 8px; }
 .desktop-remote-collapsed p { margin: 0; color: var(--desktop-muted); font-size: 11px; line-height: 1.45; }
 .desktop-remote-collapsed .desktop-secondary { justify-self: start; }
+.desktop-unclaimed-jobs { display: grid; gap: 6px; padding: 9px; border: 1px solid #f0d2a0; border-radius: 8px; background: #fff8e8; }
+.desktop-unclaimed-jobs b { font-size: 9px; }
+.desktop-unclaimed-jobs p { color: #8a6a2f !important; font-size: 8px !important; }
+.desktop-unclaimed-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.desktop-unclaimed-actions button { min-height: 26px; padding: 4px 8px; border-radius: 6px; font-size: 8px; font-weight: 700; }
+.desktop-proxy-list { display: grid; gap: 8px; }
+.desktop-proxy-hint { margin: 0; color: var(--desktop-muted); font-size: 8px; line-height: 1.4; }
+.desktop-proxy-list ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.desktop-proxy-row { position: relative; display: grid; gap: 3px; overflow: hidden; padding: 7px 8px; border: 1px solid var(--desktop-line); border-radius: 7px; background: #fbfbfa; }
+.desktop-proxy-row div { display: grid; gap: 2px; min-width: 0; }
+.desktop-proxy-row b { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-proxy-row small { color: var(--desktop-muted); font-size: 7px; text-transform: lowercase; }
+.desktop-proxy-row i { position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: var(--desktop-blue); }
+.desktop-proxy-row.ready i { background: var(--desktop-green); }
+.desktop-proxy-row.failed i { width: 100% !important; background: var(--desktop-red); }
+.desktop-proxy-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.desktop-proxy-actions button { min-height: 26px; padding: 4px 8px; border: 1px solid var(--desktop-line); border-radius: 6px; background: #fff; color: var(--desktop-ink); font-size: 8px; font-weight: 700; }
+.desktop-proxy-actions button:disabled { color: #999; }
 .desktop-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #a1a3aa; box-shadow: 0 0 0 3px #e5e5e8; }
 .desktop-status-dot.active { background: var(--desktop-blue); box-shadow: 0 0 0 3px #e4e2ff; }
 .desktop-status-dot.done { background: var(--desktop-green); box-shadow: 0 0 0 3px #dff3e9; }
