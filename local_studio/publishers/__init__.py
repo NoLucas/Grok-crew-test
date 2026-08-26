@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
 import uuid
 from typing import Any
 
@@ -26,6 +27,14 @@ _PREFIXED_SECRET_RE = re.compile(
 _BARE_SECRET_RE = re.compile(
     r"(?i)(ya29\.[A-Za-z0-9._-]+|gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9]+)"
 )
+_JSON_SECRET_RE = re.compile(
+    r"""(?ix)
+    ((["'])(?:access_token|refresh_token|client_secret|id_token|api[_-]?key|token)\2\s*:\s*(["']))
+    (?:\\.|(?!\3).)*
+    \3
+    """
+)
+_RETRYABLE_STATUSES = frozenset({"failed", "interrupted"})
 _RETRY_PAYLOAD_KEYS = frozenset(
     {
         "render_path",
@@ -47,8 +56,9 @@ _RETRY_PAYLOAD_KEYS = frozenset(
 
 
 def sanitize_publish_error(value: str) -> str:
-    text = _PREFIXED_SECRET_RE.sub(r"\1[redacted]", str(value)[:500])
-    return _BARE_SECRET_RE.sub("[redacted]", text)
+    text = _JSON_SECRET_RE.sub(r"\1[redacted]\3", str(value)[:2000])
+    text = _PREFIXED_SECRET_RE.sub(r"\1[redacted]", text)
+    return _BARE_SECRET_RE.sub("[redacted]", text)[:500]
 
 
 def publisher_credentials() -> dict[str, dict[str, Any]]:
@@ -89,8 +99,11 @@ def reconcile_publish_receipts() -> int:
     now = utc_now()
     with db() as conn:
         changed = conn.execute(
-            "UPDATE publish_receipts SET status = 'failed', error_text = ?, updated_at = ? WHERE status = 'running'",
-            ("Interrupted by an unclean Local Studio shutdown.", now),
+            "UPDATE publish_receipts SET status = 'interrupted', error_text = ?, updated_at = ? WHERE status = 'running'",
+            (
+                "Interrupted by an unclean Local Studio shutdown. Retry may publish a second copy if the platform already accepted the first upload.",
+                now,
+            ),
         )
         return int(changed.rowcount or 0)
 
@@ -105,10 +118,15 @@ def retry_publish(project: dict[str, Any], receipt_id: str, payload: dict[str, A
         return {**(receipt.get("result_json") or {}), "deduplicated": True, "idempotency_key": receipt["idempotency_key"]}
     if receipt["status"] == "running":
         raise ValueError("This publish receipt is already running.")
+    if receipt["status"] not in _RETRYABLE_STATUSES:
+        raise ValueError("Publish receipt cannot be retried from its current status.")
     incoming = payload if isinstance(payload, dict) else {}
     retry_payload = {key: incoming[key] for key in _RETRY_PAYLOAD_KEYS if key in incoming}
     retry_payload["idempotency_key"] = receipt["idempotency_key"]
-    return publish(receipt["platform"], project, retry_payload)
+    result = publish(receipt["platform"], project, retry_payload)
+    if receipt["status"] == "interrupted":
+        return {**result, "possible_duplicate": True}
+    return result
 
 
 def publish(platform: str, project: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
@@ -118,18 +136,39 @@ def publish(platform: str, project: dict[str, Any], payload: dict[str, Any]) -> 
     key = str(payload.get("idempotency_key", "")).strip()[:160]
     if not key:
         raise ValueError("idempotency_key is required for publishing.")
-    with db() as conn:
-        existing = conn.execute("SELECT * FROM publish_receipts WHERE platform = ? AND idempotency_key = ?", (platform, key)).fetchone()
-    receipt = row_dict(existing)
-    if receipt and receipt["status"] == "succeeded":
-        return {**(receipt.get("result_json") or {}), "deduplicated": True, "idempotency_key": key}
     now = utc_now()
     with db() as conn:
-        conn.execute("""INSERT INTO publish_receipts
-            (id, platform, idempotency_key, project_id, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'running', ?, ?)
-            ON CONFLICT(platform, idempotency_key) DO UPDATE SET status = 'running', error_text = NULL, updated_at = excluded.updated_at""",
-            (str(uuid.uuid4()), platform, key, project["id"], now, now))
+        existing = conn.execute("SELECT * FROM publish_receipts WHERE platform = ? AND idempotency_key = ?", (platform, key)).fetchone()
+        receipt = row_dict(existing)
+        if receipt and receipt["status"] == "succeeded":
+            return {**(receipt.get("result_json") or {}), "deduplicated": True, "idempotency_key": key}
+        if receipt and receipt["status"] == "running":
+            raise ValueError("This publish receipt is already running.")
+        if receipt:
+            claimed = conn.execute(
+                """UPDATE publish_receipts SET status = 'running', error_text = NULL, updated_at = ?
+                   WHERE platform = ? AND idempotency_key = ? AND status IN ('failed', 'interrupted')""",
+                (now, platform, key),
+            )
+            if int(claimed.rowcount or 0) != 1:
+                raise ValueError("This publish receipt is already running.")
+        else:
+            try:
+                conn.execute(
+                    """INSERT INTO publish_receipts
+                    (id, platform, idempotency_key, project_id, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'running', ?, ?)""",
+                    (str(uuid.uuid4()), platform, key, project["id"], now, now),
+                )
+            except sqlite3.IntegrityError:
+                existing = conn.execute(
+                    "SELECT * FROM publish_receipts WHERE platform = ? AND idempotency_key = ?",
+                    (platform, key),
+                ).fetchone()
+                receipt = row_dict(existing)
+                if receipt and receipt["status"] == "succeeded":
+                    return {**(receipt.get("result_json") or {}), "deduplicated": True, "idempotency_key": key}
+                raise ValueError("This publish receipt is already running.") from None
     try:
         result = publisher.publish(project, payload)
         with db() as conn:

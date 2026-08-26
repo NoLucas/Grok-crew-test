@@ -1,6 +1,8 @@
 """HTTP-level tests against a real StudioHandler on an ephemeral loopback port."""
+import http.client
 import json
 from urllib.error import HTTPError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 import config
@@ -208,6 +210,19 @@ def test_disallowed_origin_is_rejected(live_server):
     except HTTPError as exc:
         assert exc.code == 403
         assert "error" in json.loads(exc.read().decode("utf-8"))
+
+
+def test_empty_origin_header_is_rejected(live_server):
+    parsed = urlparse(live_server)
+    conn = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=10)
+    conn.putrequest("GET", "/health")
+    conn.putheader("Origin", "")
+    conn.endheaders()
+    response = conn.getresponse()
+    body = json.loads(response.read().decode("utf-8"))
+    conn.close()
+    assert response.status == 403
+    assert "error" in body
 
 
 def test_loopback_preview_origin_can_read_workspace(live_server):

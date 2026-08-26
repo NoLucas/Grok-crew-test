@@ -110,6 +110,10 @@ def test_loopback_preview_ports_are_allowed_without_env_override():
     assert config.origin_is_allowed("http://localhost:43127", defaults) is True
     assert config.origin_is_allowed("http://evil.example", defaults) is False
     assert config.origin_is_allowed("https://127.0.0.1.evil.example", defaults) is False
+    assert config.origin_is_allowed(None, defaults) is True
+    assert config.origin_is_allowed("", defaults) is False
+    assert config.origin_is_allowed("   ", defaults) is False
+    assert config.origin_is_allowed("null", defaults) is False
 
 
 # -- render._smooth_gain_targets: the music-ducking envelope follower (pure Python,

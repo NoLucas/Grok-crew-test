@@ -50,13 +50,16 @@ _LOOPBACK_ORIGIN = re.compile(r"^https?://(127\.0\.0\.1|localhost|\[::1\])(:\d+)
 
 
 def origin_is_allowed(origin: str | None, allowed: frozenset[str] | None = None) -> bool:
-    """Same-origin (no Origin) and loopback preview ports can call the sidecar.
+    """Same-origin (missing Origin) and loopback preview ports can call the sidecar.
 
-    Remote websites stay blocked. Extra non-loopback origins still come from
-    LOCAL_STUDIO_ALLOWED_ORIGINS.
+    A present but empty Origin is not trusted. Remote websites stay blocked.
+    Extra non-loopback origins still come from LOCAL_STUDIO_ALLOWED_ORIGINS.
     """
-    if origin is None or origin == "":
+    if origin is None:
         return True
+    origin = origin.strip()
+    if not origin:
+        return False
     allowlist = ALLOWED_ORIGINS if allowed is None else allowed
     return origin in allowlist or bool(_LOOPBACK_ORIGIN.fullmatch(origin))
 
@@ -123,7 +126,7 @@ def workspace_relative(path: Path | str) -> str:
     """Return a workspace-relative path, or just the filename if the path is outside."""
     resolved = Path(path).expanduser().resolve()
     try:
-        return str(resolved.relative_to(WORKSPACE_DIR.resolve()))
+        return resolved.relative_to(WORKSPACE_DIR.resolve()).as_posix()
     except ValueError:
         return resolved.name
 

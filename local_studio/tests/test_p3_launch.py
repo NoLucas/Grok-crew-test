@@ -96,8 +96,9 @@ def test_reconcile_marks_running_receipts_failed(studio):
         )
     assert publishers.reconcile_publish_receipts() == 1
     receipts = publishers.list_publish_receipts(project["id"])
-    assert receipts[0]["status"] == "failed"
+    assert receipts[0]["status"] == "interrupted"
     assert "unclean" in (receipts[0]["error_text"] or "").lower()
+    assert "second copy" in (receipts[0]["error_text"] or "").lower()
 
 
 def test_http_receipts_and_retry_require_approval(live_server, studio, monkeypatch):

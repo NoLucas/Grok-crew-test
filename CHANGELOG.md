@@ -6,6 +6,14 @@ All notable changes to Grok Crew are documented here.
 
 ### Security
 
+- Publish HTTP clients now refuse redirects and connect only to the IP checked during URL validation, so a 307 or DNS rebind cannot send the video to an internal address.
+- CGNAT (`100.64.0.0/10`) and IPv4-mapped loopback addresses are treated as blocked upload targets.
+- An empty `Origin` header is no longer treated as a missing Origin. Curl/Electron with no Origin stay allowed; `Origin: ` and `Origin: null` stay blocked.
+- Publish receipts claim `running` atomically, so overlapping retries cannot double-post. Crash recovery marks leftovers `interrupted` and retry reports `possible_duplicate`.
+- Publish error redaction also covers JSON secret fields such as `"access_token": "..."`.
+- Workspace-relative paths always use `/`, including on Windows.
+- Desktop only shows and retries receipts whose `project_id` matches the open project.
+- GitHub release URL matching is case-insensitive for the `owner/repo` slug.
 - Instagram, YouTube, and TikTok upload URLs are now https-only, host-allowlisted, and rejected when they resolve to a private or loopback address.
 - Publish error text also redacts OAuth headers, refresh tokens, `ya29.` / `ghp_` / `github_pat_` / `sk-` secrets.
 - Publish retry keeps only caption/privacy/render fields; client `approved` / `receipt_id` / extra keys are not forwarded into the publisher.

@@ -60,6 +60,10 @@ test('release page URLs stay on github.com without credentials', () => {
   assert.equal(parseReleasePageUrl('https://evil.example/NoLucas/Grok-crew-test/releases', repo), null);
   assert.equal(parseReleasePageUrl('https://user:pass@github.com/NoLucas/Grok-crew-test/releases', repo), null);
   assert.equal(parseReleasePageUrl('https://github.com/evil/malware/releases', repo), null);
+  assert.equal(
+    parseReleasePageUrl('https://github.com/nolucas/grok-crew-test/releases/tag/v1.0.0', repo),
+    'https://github.com/nolucas/grok-crew-test/releases/tag/v1.0.0',
+  );
 });
 
 test('fetchLatestRelease rejects an unsafe repository slug', async () => {

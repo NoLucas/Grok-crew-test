@@ -28,7 +28,7 @@ export function parseReleasePageUrl(url, expectedRepo = '') {
   if (parts.length < 3 || parts[2] !== 'releases') return null;
   const repo = `${parts[0]}/${parts[1]}`;
   if (!validateGitHubRepoSlug(repo)) return null;
-  if (expectedRepo && repo !== expectedRepo) return null;
+  if (expectedRepo && repo.toLowerCase() !== String(expectedRepo).toLowerCase()) return null;
   return parsed.href;
 }
 

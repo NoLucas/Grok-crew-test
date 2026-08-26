@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from config import require_path
-from upload_urls import require_https_upload_url
+from upload_urls import require_https_upload_url, validated_request
 
-__all__ = ["Publisher", "media_path", "mime_type", "request_with_backoff", "require_https_upload_url"]
+__all__ = ["Publisher", "media_path", "mime_type", "request_with_backoff", "require_https_upload_url", "validated_request"]
 
 
 class Publisher(Protocol):
@@ -34,12 +34,11 @@ def mime_type(path: Path) -> str:
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
-def request_with_backoff(requests_module, method: str, url: str, *, attempts: int = 5, **kwargs):
-    require_https_upload_url(url)
+def request_with_backoff(requests_module, method: str, url: str, *, attempts: int = 5, resolver=None, **kwargs):
     last = None
     for attempt in range(attempts):
         try:
-            response = requests_module.request(method, url, **kwargs)
+            response = validated_request(requests_module, method, url, resolver=resolver, **kwargs)
             if response.status_code not in {429, 500, 502, 503, 504}:
                 return response
             last = RuntimeError(f"{response.status_code}: {response.text[:500]}")

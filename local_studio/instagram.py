@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from config import require_path, workspace_relative
-from upload_urls import require_https_upload_url
+from upload_urls import require_https_upload_url, validated_request
 
 _API_VERSION_RE = re.compile(r"^v\d+(\.\d+)?$")
 _SAFE_ID_RE = re.compile(r"^[\w.-]+$")
@@ -37,7 +37,7 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
         raise RuntimeError("Instagram upload expects a supported local video format.")
     caption = str(payload.get("caption", project.get("caption", "")))[:2200]
     api = f"https://graph.instagram.com/{version}/{user_id}"
-    container = requests.post(f"{api}/media", data={"media_type": "REELS", "upload_type": "resumable", "caption": caption, "share_to_feed": str(bool(payload.get("share_to_feed", False))).lower()}, headers={"Authorization": f"Bearer {token}"}, timeout=45)
+    container = validated_request(requests, "POST", f"{api}/media", data={"media_type": "REELS", "upload_type": "resumable", "caption": caption, "share_to_feed": str(bool(payload.get("share_to_feed", False))).lower()}, headers={"Authorization": f"Bearer {token}"}, timeout=45)
     container.raise_for_status()
     container_data = container.json()
     container_id, upload_uri = container_data.get("id"), container_data.get("uri")
@@ -47,12 +47,12 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
         raise RuntimeError("Instagram returned an invalid container id.")
     upload_uri = require_https_upload_url(str(upload_uri), field="Instagram upload URI")
     with media_path.open("rb") as media:
-        upload = requests.post(upload_uri, headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(media_path.stat().st_size), "Content-Type": "application/octet-stream"}, data=media, timeout=900)
+        upload = validated_request(requests, "POST", upload_uri, field="Instagram upload URI", headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(media_path.stat().st_size), "Content-Type": "application/octet-stream"}, data=media, timeout=900)
         upload.raise_for_status()
     deadline = time.time() + 90
     status_data: dict[str, Any] = {}
     while time.time() < deadline:
-        status = requests.get(f"https://graph.instagram.com/{version}/{container_id}", params={"fields": "status_code,status"}, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        status = validated_request(requests, "GET", f"https://graph.instagram.com/{version}/{container_id}", params={"fields": "status_code,status"}, headers={"Authorization": f"Bearer {token}"}, timeout=30)
         status.raise_for_status(); status_data = status.json()
         if status_data.get("status_code") == "FINISHED":
             break
@@ -61,6 +61,6 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
         time.sleep(3)
     else:
         raise RuntimeError("Instagram processing did not finish within 90 seconds.")
-    published = requests.post(f"{api}/media_publish", data={"creation_id": container_id}, headers={"Authorization": f"Bearer {token}"}, timeout=45)
+    published = validated_request(requests, "POST", f"{api}/media_publish", data={"creation_id": container_id}, headers={"Authorization": f"Bearer {token}"}, timeout=45)
     published.raise_for_status()
     return {"container_id": container_id, "container_status": status_data, "instagram_media_id": published.json().get("id"), "source_path": workspace_relative(media_path)}
