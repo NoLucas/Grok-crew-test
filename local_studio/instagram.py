@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from config import require_path, workspace_relative
-from publishers.base import require_https_upload_url
+from upload_urls import require_https_upload_url
 
 _API_VERSION_RE = re.compile(r"^v\d+(\.\d+)?$")
 _SAFE_ID_RE = re.compile(r"^[\w.-]+$")

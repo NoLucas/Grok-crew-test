@@ -8,7 +8,7 @@ import pytest
 
 import config
 import publishers
-from publishers.base import require_https_upload_url
+from upload_urls import require_https_upload_url
 
 
 def _public_resolver(_host, _port, **_kwargs):
