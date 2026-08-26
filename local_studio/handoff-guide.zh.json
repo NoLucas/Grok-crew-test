@@ -5,7 +5,12 @@
     "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：剪辑门（文件夹 editor/）或收集/其他代理门（文件夹 collector/）。保存后会把 spec.json 放入那扇门的发件箱。不要附上原片。",
     "grok_door": "剪辑门。文件夹名是 editor/。仍会读取留下的 grok/。谁被指定为剪辑机器人就写谁。Runner 配对也只用这扇门。不要用 collector/。",
     "other_agent_door": "收集/其他代理门。文件夹名是 collector/。仍会读取留下的 agents/。谁被指定为收集机器人，或非组员的其他代理。不要用 editor/ 或 Runner。",
-    "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。"
+    "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。保留操作者设定的画面比例、画质和字幕。节奏、风格、B-roll、开场和音频可由操作者稍后在工作台上改。"
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "reason": "这三项是工作台上定下的。不要在成片或 render_settings 里改。其余剪辑控件仍给操作者。",
+    "folder_board": "放下包裹后，操作者在工作台打开 inputs/handoff/ 或 handoff-materials/。列表在左，预览在旁。右键可选预览、放大、打开原片或删除。已删除的文件不要再用。远程机器人不要连接 127.0.0.1。"
   },
   "style_recipes": {
     "purpose": "命名风格会填好时长、画幅、钩子、节奏、字幕、外观和收集提示。它不是一扇门。",

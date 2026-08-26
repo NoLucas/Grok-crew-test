@@ -38,6 +38,12 @@ python grok-crew.py entry --bot-id cursor-desk --display-name "Cursor" --purpose
 
 git으로 보낼 때는 `HANDOFF_REPO_REMOTE`가 있을 때만입니다. 없으면 로컬 폴더만 씁니다.
 
+## 폴더 판과 규격 잠금
+
+같은 PC면 `GET /api/v2/handoff/folders`로 `inputs/handoff/` 패키지와 `handoff-materials/` 클립을 봅니다. 원격이면 이 PC 책장이 그 폴더를 한 줄로 접어둡니다. 펼치면 목록이 왼쪽, 미리보기가 옆입니다. 파일을 오른쪽 클릭하면 미리보기, 크게 보기, 원본 파일 보기, 삭제를 고릅니다. 프로젝트 원본은 지울 수 없습니다.
+
+화면 비율, 화질, 자막은 운영자가 규격에서 정한 값입니다. 봇은 이 세 가지를 바꾸지 않습니다. 템포·룩·B-roll·훅·오디오는 운영자가 설정 탭에서 필요할 때 바꿉니다. 잠긴 이유는 그 화면에 적혀 있습니다.
+
 ## 하지 않는 것
 
 - Cursor만 편집 봇으로 고정하기

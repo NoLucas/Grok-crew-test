@@ -5,7 +5,12 @@
     "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: editor (folder editor/) or collector / other-agent (folder collector/). Saving puts spec.json in that door's outbox. Do not attach footage.",
     "grok_door": "Editor door. Folder name is editor/. Leftover grok/ folders are still read. Whoever is assigned as editor. Runner pairing is this door only. Do not use collector/.",
     "other_agent_door": "Collector / other-agent door. Folder name is collector/. Leftover agents/ folders are still read. Whoever is assigned as collector, or a non-crew other-agent. Do not use editor/ or Runner pairing.",
-    "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
+    "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door. Keep the operator's aspect, quality, and captions. The operator may later change pacing, look, b-roll, hook, and audio on the desk."
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "reason": "Those three were set on the desk. Do not change them in the cut or render_settings. Other edit knobs stay open for the operator.",
+    "folder_board": "After you drop a package, the operator opens inputs/handoff/ or handoff-materials/ on the desk. The list sits beside the preview. Right-click chooses preview, enlarge, reveal original, or delete. Do not reuse a deleted file. Remote bots never call 127.0.0.1."
   },
   "style_recipes": {
     "purpose": "A named pack fills length, aspect, hook, pacing, captions, look, and collect hints. It is not a door.",

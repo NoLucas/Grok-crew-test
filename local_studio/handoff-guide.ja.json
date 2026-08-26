@@ -5,7 +5,12 @@
     "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは編集（フォルダ editor/）か収集・他エージェント（フォルダ collector/）のどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
     "grok_door": "編集ドア。フォルダ名は editor/。残った grok/ は読み取りだけ。割り当てた編集ボットだけ。Runner ペアリングもこのドアだけ。collector/ は使わない。",
     "other_agent_door": "収集・他エージェントドア。フォルダ名は collector/。残った agents/ は読み取りだけ。割り当てた収集ボット、またはクルー以外の他エージェント。editor/ と Runner は使わない。",
-    "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
+    "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。操作者が決めた画面比・画質・字幕はそのまま。テンポ・ルック・B-roll・フック・音声は操作者がデスクで後から変えられる。"
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "reason": "この3つはデスクで決めた値です。カットや render_settings で変えないでください。残りの編集操作は操作者に開いています。",
+    "folder_board": "パッケージを置いたあと、操作者はデスクで inputs/handoff/ または handoff-materials/ を開きます。一覧は左、プレビューは横です。右クリックでプレビュー・拡大・原本表示・削除を選びます。消したファイルは使わないでください。リモートボットは 127.0.0.1 に接続しません。"
   },
   "style_recipes": {
     "purpose": "名前付きレシピが長さ、画面比、フック、速度、字幕、ルック、収集ヒントを埋める。ドアではない。",

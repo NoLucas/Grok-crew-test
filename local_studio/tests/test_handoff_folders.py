@@ -1,5 +1,6 @@
 """Workspace-safe listing of saved bot folders."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -119,3 +120,84 @@ def test_http_workspace_and_folders_endpoint(live_server):
     status, body = get_status(live_server, "/api/v2/handoff/folders?kind=inbox")
     assert status == 400
     assert "kind" in body["error"]
+
+
+def test_delete_rejects_source_and_escape(studio):
+    from handoff_folders import delete_handoff_file, reveal_handoff_file
+
+    folder = config.WORKSPACE_DIR / "inputs" / "handoff" / "pkg-del"
+    folder.mkdir(parents=True)
+    (folder / "source.mp4").write_bytes(b"src")
+    (folder / "broll.mp4").write_bytes(b"brl")
+    studio.new_project({
+        "title": "Keep source",
+        "source_path": "inputs/handoff/pkg-del/source.mp4",
+        "output_path": "outputs/final-video.mp4",
+        "timeline": {"clips": [{"in": 0, "out": 2, "keep": True, "caption": ""}]},
+    })
+    with pytest.raises(ValueError, match="source"):
+        delete_handoff_file("inputs/handoff/pkg-del/source.mp4")
+    with pytest.raises(ValueError, match="not allowed|only files"):
+        delete_handoff_file("../secret.mp4")
+    with pytest.raises(ValueError, match="not allowed|only files"):
+        delete_handoff_file("outputs/final-video.mp4")
+    revealed = reveal_handoff_file("inputs/handoff/pkg-del/broll.mp4")
+    assert revealed["ok"] is True
+    assert revealed["path"] == "inputs/handoff/pkg-del/broll.mp4"
+    assert revealed["absolute_path"].endswith("broll.mp4")
+    deleted = delete_handoff_file("inputs/handoff/pkg-del/broll.mp4")
+    assert deleted["deleted"] == "inputs/handoff/pkg-del/broll.mp4"
+    assert not (folder / "broll.mp4").exists()
+    assert (folder / "source.mp4").exists()
+
+
+def test_delete_materials_updates_manifest(studio, tmp_path):
+    from handoff_folders import delete_handoff_file
+
+    record = create_spec({
+        "title": "Crew reel",
+        "goal": "Collect then cut",
+        "language": "en",
+        "crew": True,
+    })
+    incoming = tmp_path / "drop"
+    incoming.mkdir()
+    (incoming / "keep.mp4").write_bytes(b"keep")
+    (incoming / "drop.mp4").write_bytes(b"drop")
+    (incoming / "manifest.json").write_text(
+        '{"schema":"%s","edit_spec_id":"%s","agent":"Collector Agent","notes":"Two clips.","clips":[{"file":"keep.mp4","note":"Keep"},{"file":"drop.mp4","note":"Drop"}]}'
+        % (MATERIALS_SCHEMA, record["id"]),
+        encoding="utf-8",
+    )
+    assert apply_materials_folder(incoming, record["id"])["ok"] is True
+    with pytest.raises(ValueError, match="reserved"):
+        delete_handoff_file(f"handoff-materials/{record['id']}/manifest.json")
+    deleted = delete_handoff_file(f"handoff-materials/{record['id']}/drop.mp4")
+    assert deleted["ok"] is True
+    leftover = describe_materials_folder(record["id"])
+    names = {item["name"] for item in leftover["files"]}
+    assert names == {"keep.mp4"}
+    manifest = json.loads(
+        (config.WORKSPACE_DIR / "handoff-materials" / record["id"] / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert [item["file"] for item in manifest["clips"]] == ["keep.mp4"]
+
+
+def test_http_delete_and_reveal(live_server):
+    from tests.test_p3_launch import get_json, post
+    from tests.test_timeline_edit_api import post_status
+
+    folder = config.WORKSPACE_DIR / "inputs" / "handoff" / "http-del"
+    folder.mkdir(parents=True)
+    (folder / "clip.mp4").write_bytes(b"http-clip")
+    revealed = post(live_server, "/api/v2/handoff/files/reveal", {"path": "inputs/handoff/http-del/clip.mp4"})
+    assert revealed["ok"] is True
+    assert revealed["path"] == "inputs/handoff/http-del/clip.mp4"
+    deleted = post(live_server, "/api/v2/handoff/files/delete", {"path": "inputs/handoff/http-del/clip.mp4"})
+    assert deleted["deleted"] == "inputs/handoff/http-del/clip.mp4"
+    assert not (folder / "clip.mp4").exists()
+    listed = get_json(live_server, "/api/v2/handoff/folders")
+    assert all(item["id"] != "http-del" for item in listed["folders"])
+    bad_status, bad = post_status(live_server, "/api/v2/handoff/files/delete", {"path": "outputs/secret.mp4"})
+    assert bad_status == 400
+    assert "only files" in bad["error"] or "not allowed" in bad["error"]

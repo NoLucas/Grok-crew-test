@@ -30,6 +30,11 @@ def test_spec_marks_bot_as_source_owner(studio):
     assert "handoff-outbox/editor" in brief["text"]
     assert "handoff-inbox/editor" in brief["text"]
     assert "Do not use the collector/ folder" in brief["text"]
+    assert brief["operator_locks"]["aspect"] == "9:16"
+    assert brief["operator_locks"]["captions"] is True
+    assert "Do not change those three" in brief["text"]
+    assert "Right-click" in brief["text"]
+    assert brief["folder_board"]["actions"] == ["preview", "enlarge", "reveal_original", "delete"]
 
 
 def test_agent_door_brief_excludes_grok_inbox(studio):

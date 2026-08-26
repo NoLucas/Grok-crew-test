@@ -26,8 +26,8 @@
     {
       "step": 3,
       "name": "set_edit_method",
-      "action": "POST /api/edit-method with the selected hook strategy, pacing, filler policy, captions, reframe, look, audio, speed, FPS, and quality.",
-      "goal": "Configure only the allowed local edit controls. This records a plan; it does not render or publish."
+      "action": "Read the edit spec first. Keep the operator's aspect, quality, and captions. POST /api/edit-method only for hook, pacing, filler, reframe, look, audio, speed, and FPS. Inspect GET /api/v2/handoff/folders; the operator right-clicks a file to preview, enlarge, reveal the original, or delete it.",
+      "goal": "Follow the saved spec. Do not change the three locked controls. The operator may later change the other knobs on the desk."
     },
     {
       "step": 4,
@@ -38,7 +38,7 @@
     {
       "step": 5,
       "name": "prepare_finish",
-      "action": "Set reframe anchor, speed, audio, look, captions, quality, and FPS in render_settings.",
+      "action": "Set reframe anchor, speed, audio, look, and FPS in render_settings. Keep the operator's captions, quality, and aspect.",
       "goal": "Choose the smallest changes that solve the communication problem; avoid effect stacking."
     },
     {
@@ -71,7 +71,7 @@
   },
   "edit_method_contract": {
     "endpoint": "POST /api/edit-method",
-    "write_rule": "A bot may set an edit method after checking local scope. The method can be applied to the Finish Rack and does not itself start rendering or upload.",
+    "write_rule": "A bot may set an edit method after checking local scope. If a spec exists, do not change caption_mode or quality. Aspect lives on the timeline and the spec — keep it. The method can be applied to the Finish Rack and does not itself start rendering or upload.",
     "body": {
       "bot_id": "local-editor-bot",
       "display_name": "Local Editor Bot",
@@ -88,6 +88,16 @@
         "quality": "compact | balanced | high"
       }
     }
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "operator_may_change": ["pacing", "look", "broll_policy", "hook_strategy", "audio_policy", "filler_policy", "reframe_anchor", "speed", "fps", "content_type", "target_length"],
+    "reason": "The operator set aspect, quality, and captions on the desk. Keep those three. The operator may later change the other knobs and must be able to see why the three are locked."
+  },
+  "folder_board": {
+    "same_pc": "GET /api/v2/handoff/folders lists inputs/handoff/ packages and handoff-materials/ clips. POST /api/v2/handoff/files/reveal opens the original. POST /api/v2/handoff/files/delete removes a non-source file.",
+    "operator_ui": "The desk shows a collapsed folder row. Opening it puts the file list beside the preview. Right-click a file to preview, enlarge, show the original, or delete it. A project's source file cannot be deleted.",
+    "remote": "Remote bots never call 127.0.0.1. After a drop, the operator inspects the folder on the desk. Do not reuse a file the operator deleted."
   },
   "render_settings_contract": {
     "presets_endpoint": "GET /api/presets returns quality_presets, caption_layout_presets, and platform_presets. Merge a chosen preset's fields directly into a project's timeline.render_settings.",
@@ -111,7 +121,8 @@
   },
   "site_features": [
     {"id":"01","area":"PRODUCTION","name":"Project setup","use_when":"Starting a new video or checking its source/output paths.","bot_action":"Create or select the project, then read its saved settings and job history.","result":"A clear local project scope without overwriting another active job."},
-    {"id":"02","area":"EDIT METHOD","name":"Shared edit method","use_when":"The bot needs to establish the creative approach before making cuts.","bot_action":"Set hook, pace, filler policy, captions, reframe, look, audio, speed, FPS, and quality through /api/edit-method.","result":"A reusable plan that can be applied to the Finish Rack."},
+    {"id":"02","area":"EDIT METHOD","name":"Shared edit method","use_when":"The bot needs to establish the creative approach before making cuts.","bot_action":"Keep the spec aspect, quality, and captions. Set hook, pace, filler, reframe, look, audio, speed, and FPS through /api/edit-method.","result":"A reusable plan that can be applied to the Finish Rack. The three locked controls stay as the operator set them."},
+    {"id":"02b","area":"DESK","name":"Bot folder board","use_when":"Saved packages or materials clips need to be inspected or removed.","bot_action":"On the same PC read GET /api/v2/handoff/folders. Delete only non-source files with POST /api/v2/handoff/files/delete. Remote bots let the operator use the right-click menu.","result":"The list sits beside the preview. A deleted file is gone."},
     {"id":"03","area":"CUT LOG","name":"Transcript cut map","use_when":"A spoken source has filler, silence, retakes, or a weak opening.","bot_action":"Save kept timestamped segments with /api/projects/{id}/cut-map before changing the EDL.","result":"A non-destructive, reviewable map of the proposed edit."},
     {"id":"04","area":"FINISH RACK","name":"Frame, captions, and sound","use_when":"The visual finish needs reframing, readable captions, audio cleanup, or export settings.","bot_action":"Set render settings in Production; keep the subject inside the vertical safe area and select only necessary effects.","result":"A ready-to-render local MP4 specification."},
     {"id":"05","area":"OPERATIONS","name":"Media preflight","use_when":"Media has just arrived or its format and health are unknown.","bot_action":"Run /api/projects/{id}/inspect to record orientation, FPS, duration, audio presence, black frames, and silence.","result":"A local inspection report that identifies source risks before editing."},
@@ -191,8 +202,8 @@
     "Use auto_upload=true for immediate upload, or leave it false to keep the job queued."
   ],
   "allowed_endpoints": {
-    "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits"],
-    "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel"],
+    "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits", "GET /api/v2/handoff/folders"],
+    "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel", "POST /api/v2/handoff/files/reveal", "POST /api/v2/handoff/files/delete"],
     "local_render": ["POST /api/projects/{id}/render when the connected bot's policy is auto_local or a human approval is recorded."],
     "write_for_delivery": ["POST /api/projects/{id}/instagram with auto_upload=true or false"]
   },

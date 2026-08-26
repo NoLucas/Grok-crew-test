@@ -270,6 +270,9 @@ def _record(row: dict[str, Any] | None) -> dict[str, Any] | None:
         "recipe_id": spec.get("recipe_id") or "",
         "recipe_version": spec.get("recipe_version"),
         "collect_query": spec.get("collect_query") or "",
+        "aspect": spec.get("aspect") or "",
+        "captions": bool(spec.get("captions", True)),
+        "platform": spec.get("platform") or "",
         "collector": spec.get("collector") if isinstance(spec.get("collector"), dict) else None,
         "editor": spec.get("editor") if isinstance(spec.get("editor"), dict) else None,
     }
@@ -415,6 +418,49 @@ def _collect_hint_block(spec: dict[str, Any], language: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+FOLDER_BOARD = {
+    "package_root": "inputs/handoff/",
+    "materials_root": "handoff-materials/",
+    "actions": ["preview", "enlarge", "reveal_original", "delete"],
+}
+
+
+def operator_locks_of(spec: dict[str, Any] | None, quality: str = "balanced") -> dict[str, Any]:
+    payload = spec if isinstance(spec, dict) else {}
+    aspect = str(payload.get("aspect") or "9:16")
+    captions = bool(payload.get("captions", True))
+    return {
+        "aspect": aspect,
+        "quality": quality,
+        "captions": captions,
+        "caption_mode": "burn_in" if captions else "off",
+        "locked": ["aspect", "quality", "captions"],
+        "operator_may_change": [
+            "pacing", "look", "broll_policy", "hook_strategy", "audio_policy",
+            "filler_policy", "reframe_anchor", "speed", "fps", "content_type", "target_length",
+        ],
+        "reason_ko": (
+            f"화면 비율 {aspect}, 화질 {quality}, 자막 {'켜짐' if captions else '꺼짐'}은 운영자가 규격에서 정한 값입니다. "
+            "봇은 이 세 가지를 바꾸지 않습니다. 템포·룩·B-roll·훅·오디오는 운영자가 책상에서 필요할 때 바꿀 수 있습니다."
+        ),
+        "reason_en": (
+            f"Aspect {aspect}, quality {quality}, and captions {'on' if captions else 'off'} were set by the operator. "
+            "Do not change those three. The operator may later change pacing, look, b-roll, hook, and audio on the desk."
+        ),
+    }
+
+
+def _brief_result(record: dict[str, Any], text: str, **extra: Any) -> dict[str, Any]:
+    spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
+    return {
+        "spec": record,
+        "text": text,
+        "operator_locks": operator_locks_of(spec),
+        "folder_board": FOLDER_BOARD,
+        **extra,
+    }
+
+
 def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     record = get_spec(spec_id)
     if not record:
@@ -454,6 +500,20 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             f"{recipe_text}"
         )
     )
+    locks = operator_locks_of(spec)
+    lock_note = (locks["reason_ko"] if language.startswith("ko") else locks["reason_en"]) + "\n"
+    folder_note = (
+        "운영자는 책장에서 inputs/handoff/ 와 handoff-materials/ 폴더를 펼칩니다. "
+        "오른쪽 클릭으로 미리보기·크게 보기·원본 보기·삭제를 합니다. "
+        "삭제한 파일은 더 이상 쓰지 마세요.\n"
+        if language.startswith("ko")
+        else (
+            "The operator inspects inputs/handoff/ and handoff-materials/ on the desk. "
+            "Right-click a file to preview, enlarge, reveal the original, or delete it. "
+            "Do not use a file after the operator deleted it.\n"
+        )
+    )
+    common = f"{common}{lock_note}{folder_note}"
     if spec.get("crew"):
         collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
         editor = spec.get("editor") if isinstance(spec.get("editor"), dict) else {}
@@ -534,38 +594,26 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             )
         )
         if requested == "collect":
-            return {
-                "spec": record,
-                "text": collect_text,
-                "channel": "crew-collect",
-                "door": COLLECTOR_DOOR,
-                "agent": collector_name,
-                "role": "collect",
-                "crew": True,
-            }
+            return _brief_result(
+                record, collect_text,
+                channel="crew-collect", door=COLLECTOR_DOOR, agent=collector_name,
+                role="collect", crew=True,
+            )
         if requested == "edit":
-            return {
-                "spec": record,
-                "text": edit_text,
-                "channel": "crew-edit",
-                "door": EDITOR_DOOR,
-                "agent": editor_name,
-                "role": "edit",
-                "crew": True,
-            }
-        return {
-            "spec": record,
-            "text": f"{collect_text}\n\n---\n\n{edit_text}",
-            "channel": "crew",
-            "door": EDITOR_DOOR,
-            "agent": editor_name,
-            "role": "crew",
-            "crew": True,
-            "roles": {
+            return _brief_result(
+                record, edit_text,
+                channel="crew-edit", door=EDITOR_DOOR, agent=editor_name,
+                role="edit", crew=True,
+            )
+        return _brief_result(
+            record, f"{collect_text}\n\n---\n\n{edit_text}",
+            channel="crew", door=EDITOR_DOOR, agent=editor_name,
+            role="crew", crew=True,
+            roles={
                 "collect": {"text": collect_text, "door": COLLECTOR_DOOR, "agent": collector_name},
                 "edit": {"text": edit_text, "door": EDITOR_DOOR, "agent": editor_name},
             },
-        }
+        )
     if mode == "own":
         text = (
             f"이 글은 편집 문입니다. {agent}만 이 규격을 이행하세요. "
@@ -597,7 +645,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"Do not use the collector/ folder. Do not connect to 127.0.0.1."
             )
         )
-        return {"spec": record, "text": text, "channel": "editor-door", "door": EDITOR_DOOR, "agent": agent, "role": "edit"}
+        return _brief_result(record, text, channel="editor-door", door=EDITOR_DOOR, agent=agent, role="edit")
     if door == EDITOR_DOOR:
         text = (
             f"이 글은 편집 문입니다. {agent}만 이 규격을 이행하세요. "
@@ -657,7 +705,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"Do not connect to 127.0.0.1. Rules: local_studio/handoff-guide.json."
             )
         )
-    return {"spec": record, "text": text, "channel": f"{door}-door", "door": door, "agent": agent}
+    return _brief_result(record, text, channel=f"{door}-door", door=door, agent=agent)
 
 
 def _purpose_role(purpose: str) -> str:
@@ -754,9 +802,10 @@ def spec_invite(spec_id: str, language: str = "ko") -> dict[str, Any]:
             f"같은 컴퓨터에서 명령할 수 있으면:\n"
             f"  python grok-crew.py entry --bot-id desk-bot --display-name \"당신의 이름\" --purpose edit_video\n"
             f"  (스크립트는 http://127.0.0.1:7214/downloads/grok-crew.py)\n\n"
+            f"화면 비율·화질·자막은 이 규격 그대로 두세요. 템포·룩·B-roll은 운영자가 나중에 바꿀 수 있습니다.\n"
             f"끝난 패키지는 이 폴더에 둡니다:\n"
             f"  {inbox}\n"
-            f"127.0.0.1 말고는 붙지 마세요."
+            f"이 PC 책장에서 그 폴더를 오른쪽 클릭해 미리보기·삭제합니다. 127.0.0.1 말고는 붙지 마세요."
         )
     else:
         text = (
@@ -767,9 +816,10 @@ def spec_invite(spec_id: str, language: str = "ko") -> dict[str, Any]:
             f"If you can run a command on this computer:\n"
             f"  python grok-crew.py entry --bot-id desk-bot --display-name \"your name\" --purpose edit_video\n"
             f"  (script: http://127.0.0.1:7214/downloads/grok-crew.py)\n\n"
+            f"Keep the spec aspect, quality, and captions. The operator may later change pacing, look, and b-roll.\n"
             f"Put the finished package in this folder:\n"
             f"  {inbox}\n"
-            f"Do not connect anywhere except 127.0.0.1."
+            f"The desk right-clicks that folder to preview or delete. Do not connect anywhere except 127.0.0.1."
         )
     return {
         "schema": "grok-crew.spec-invite/v1",

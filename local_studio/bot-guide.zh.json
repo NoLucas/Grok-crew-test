@@ -13,9 +13,9 @@
   "workflow": [
     { "step": 1, "name": "进入本地工作室", "action": "携带 bot_id、display_name、purpose、task 调用 POST /api/bot-entry。", "goal": "创建本地入场记录和首次心跳。新机器人默认获得本地渲染的 auto_local 权限,也可以改选 approval_required。" },
     { "step": 2, "name": "检查现状", "action": "读取 GET /api/bot-guide、Cut Log、剪辑图、现有项目和排队中的任务。", "goal": "不要覆盖已批准的项目,也不要重试正在运行的任务。" },
-    { "step": 3, "name": "设置剪辑方式", "action": "用选定的钩子策略、节奏、冗余处理策略、字幕、重构图、风格、音频、速度、FPS、质量调用 POST /api/edit-method。", "goal": "只设置允许的本地编辑控制项。这是记录计划,不会启动渲染或发布。" },
+    { "step": 3, "name": "设置剪辑方式", "action": "先读规格。保留操作者设定的画面比例、画质和字幕。POST /api/edit-method 只改开场、节奏、冗余、重构图、风格、音频、速度和 FPS。用 GET /api/v2/handoff/folders 查看已保存文件夹。操作者右键文件可预览、放大、打开原片或删除。", "goal": "遵守已保存规格。不要改被锁定的三项。其余控件操作者可稍后在工作台上改。" },
     { "step": 4, "name": "规划剪辑", "action": "创建只包含保留语音片段的、以文字稿为先的 EDL。", "goal": "使用连续的原始时间码、易读的两词字幕和清晰的钩子。" },
-    { "step": 5, "name": "准备收尾", "action": "在 render_settings 中设置重构图基准点、速度、音频、风格、字幕、质量和 FPS。", "goal": "选择能解决表达问题的最小改动,避免叠加过多特效。" },
+    { "step": 5, "name": "准备收尾", "action": "在 render_settings 中设置重构图基准点、速度、音频、风格和 FPS。字幕、画质和画面比例保持操作者规格。", "goal": "选择能解决表达问题的最小改动,避免叠加过多特效。" },
     { "step": 6, "name": "选择执行策略", "action": "读取 GET /api/bots/{bot_id}/execution-policy。保持 auto_local 以自动本地渲染,或在请求审核前用 mode=approval_required 调用 POST /api/bots/execution-policy。", "goal": "机器人自行选择本地渲染的门槛。这个选择记录在 SQLite 中,并显示在 Bot Check 中。" },
     { "step": 7, "name": "渲染", "action": "在 auto_local 下,将本地渲染加入队列并执行。在 approval_required 下,记录简明的审核请求,并使用经人工批准的渲染任务。", "goal": "检查最终任务状态,并报告输出路径或确切的失败原因。" },
     { "step": 8, "name": "发布或排队", "action": "渲染完成后将 Instagram 任务加入队列,设置 auto_upload=true 可立即上传。", "goal": "开启 auto_upload 后,本地服务立即开始上传;否则可以直接执行排队中的任务。" }
@@ -31,8 +31,18 @@
   },
   "edit_method_contract": {
     "endpoint": "POST /api/edit-method",
-    "write_rule": "机器人在确认本地范围后可以设置剪辑方式。该方式可应用到 Finish Rack,但本身不会启动渲染或上传。",
+    "write_rule": "机器人在确认本地范围后可以设置剪辑方式。若已有规格，不要改 caption_mode 和 quality。画面比例在规格和时间线上，保持原样。该方式可应用到 Finish Rack,但本身不会启动渲染或上传。",
     "body": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "method": { "hook_strategy": "payoff_first | question_first | chronological", "pacing": "tight | balanced | deliberate", "filler_policy": "remove | review | keep", "caption_mode": "burn_in | off", "reframe_anchor": "left | center | right", "look": "natural | punchy | mono | night", "audio_policy": "preserve | normalize | mute", "speed": "0.5 到 2.0", "fps": "24 | 30 | 60", "quality": "compact | balanced | high" } }
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "operator_may_change": ["pacing", "look", "broll_policy", "hook_strategy", "audio_policy", "filler_policy", "reframe_anchor", "speed", "fps", "content_type", "target_length"],
+    "reason": "画面比例、画质和字幕由操作者在工作台上设定。机器人不得改这三项。操作者稍后可改其余控件，并应能在界面上看到锁定原因。"
+  },
+  "folder_board": {
+    "same_pc": "GET /api/v2/handoff/folders 列出 inputs/handoff/ 包裹和 handoff-materials/ 片段。POST /api/v2/handoff/files/reveal 打开原片。POST /api/v2/handoff/files/delete 删除非原片文件。",
+    "operator_ui": "工作台把文件夹收成一行。展开后左侧是列表，右侧是预览。右键文件可预览、放大、打开原片或删除。项目原片不能删除。",
+    "remote": "远程机器人不要连接 127.0.0.1。放下文件后由操作者在工作台查看。操作者已删除的文件不要再用。"
   },
   "render_settings_contract": {
     "presets_endpoint": "GET /api/presets 返回 quality_presets、caption_layout_presets 和 platform_presets。把选中预设的字段直接合并到项目的 timeline.render_settings 中。",

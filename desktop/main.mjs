@@ -17,6 +17,7 @@ let studioProcess = null;
 let rendererServer = null;
 let studioPort = 0;
 let studioToken = '';
+let studioWorkspace = '';
 let mainWindow = null;
 let tray = null;
 let quitting = false;
@@ -86,6 +87,7 @@ async function startStudio() {
     : null;
   const dataRoot = e2eRoot ? join(e2eRoot, 'studio-data') : join(app.getPath('userData'), 'studio-data');
   const workspace = e2eRoot ? join(e2eRoot, 'workspace') : join(app.getPath('videos'), 'Grok Crew');
+  studioWorkspace = workspace;
   const environment = {
     ...process.env,
     LOCAL_STUDIO_TOKEN: studioToken,
@@ -221,10 +223,19 @@ function registerIpc(apiBase) {
   });
   ipcMain.handle('desktop:show-output', async (event, relativePath) => {
     assertTrustedRenderer(event);
-    const target = resolve(app.getPath('videos'), 'Grok Crew', String(relativePath ?? ''));
-    const rootPath = resolve(app.getPath('videos'), 'Grok Crew');
-    if (target !== rootPath && !target.startsWith(`${rootPath}${process.platform === 'win32' ? '\\' : '/'}`)) throw new Error('Output path leaves the app workspace.');
-    return shell.showItemInFolder(target);
+    const rel = String(relativePath ?? '').replaceAll('\\', '/');
+    if (!rel || rel.includes('..')) throw new Error('Path is not allowed.');
+    const separator = process.platform === 'win32' ? '\\' : '/';
+    const roots = [
+      resolve(app.getPath('videos'), 'Grok Crew'),
+      studioWorkspace ? resolve(studioWorkspace) : '',
+    ].filter(Boolean);
+    for (const rootPath of [...new Set(roots)]) {
+      const target = resolve(rootPath, rel);
+      if (target !== rootPath && !target.startsWith(`${rootPath}${separator}`)) continue;
+      if (existsSync(target)) return shell.showItemInFolder(target);
+    }
+    throw new Error('File is not in the app workspace.');
   });
   ipcMain.handle('desktop:app-info', (event) => {
     assertTrustedRenderer(event);

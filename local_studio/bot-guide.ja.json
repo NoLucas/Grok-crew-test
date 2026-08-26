@@ -13,9 +13,9 @@
   "workflow": [
     { "step": 1, "name": "ローカルスタジオに入場", "action": "bot_id・display_name・purpose・task を指定して POST /api/bot-entry を呼び出します。", "goal": "ローカルの入場記録と最初のハートビートを作成します。新しいボットはデフォルトでローカルレンダーの auto_local を受け取り、代わりに approval_required を選ぶこともできます。" },
     { "step": 2, "name": "現状を確認", "action": "GET /api/bot-guide、Cut Log、編集マップ、既存プロジェクト、キュー内のジョブを読み取ります。", "goal": "承認済みの既存プロジェクトを上書きしたり、実行中のジョブを再試行したりしないでください。" },
-    { "step": 3, "name": "編集方式を設定", "action": "選択したフック戦略・テンポ・フィラーポリシー・キャプション・リフレーム・ルック・オーディオ・速度・FPS・品質を指定して POST /api/edit-method を呼び出します。", "goal": "許可されたローカル編集コントロールのみを設定します。これは計画の記録であり、レンダーや公開は行いません。" },
+    { "step": 3, "name": "編集方式を設定", "action": "先に仕様を読みます。操作者が決めた画面比・画質・字幕はそのままにします。POST /api/edit-method ではフック・テンポ・フィラー・リフレーム・ルック・音声・速度・FPS だけを変えます。GET /api/v2/handoff/folders で保存フォルダを見ます。操作者はファイルを右クリックしてプレビュー・拡大・原本表示・削除を選びます。", "goal": "保存された仕様に従います。ロックされた3つは変えません。残りの操作は操作者がデスクで後から変えられます。" },
     { "step": 4, "name": "カットを計画", "action": "採用する発話区間のみを含む、文字起こし優先の EDL を作成します。", "goal": "連続したソースのタイムコード、読みやすい2単語のキャプション、明確なフックを使用してください。" },
-    { "step": 5, "name": "仕上げを準備", "action": "render_settings でリフレームアンカー・速度・オーディオ・ルック・キャプション・品質・FPS を設定します。", "goal": "コミュニケーション上の課題を解決する最小限の変更を選び、エフェクトの重ね掛けは避けてください。" },
+    { "step": 5, "name": "仕上げを準備", "action": "render_settings でリフレームアンカー・速度・オーディオ・ルック・FPS を設定します。字幕・画質・画面比は操作者の仕様を保ちます。", "goal": "コミュニケーション上の課題を解決する最小限の変更を選び、エフェクトの重ね掛けは避けてください。" },
     { "step": 6, "name": "実行ポリシーを選択", "action": "GET /api/bots/{bot_id}/execution-policy を読み取ります。自動ローカルレンダーのためには auto_local のままにするか、レビューを依頼する前に mode=approval_required で POST /api/bots/execution-policy を呼び出します。", "goal": "ボットは自分自身のローカルレンダーのゲートを選びます。この選択は SQLite に記録され、Bot Check に表示されます。" },
     { "step": 7, "name": "レンダー", "action": "auto_local の場合はローカルレンダーをキューに入れて実行します。approval_required の場合は簡潔なレビュー依頼を記録し、人による承認済みのレンダージョブを使用します。", "goal": "最終的なジョブ状態を確認し、出力パスまたは正確な失敗理由を報告します。" },
     { "step": 8, "name": "公開またはキュー", "action": "レンダー完了後に Instagram ジョブをキューに入れます。auto_upload=true にすると即座にアップロードされます。", "goal": "auto_upload が有効な場合、ローカルサービスは即座にアップロードを開始します。無効な場合はキュー内のジョブを直接実行できます。" }
@@ -31,8 +31,18 @@
   },
   "edit_method_contract": {
     "endpoint": "POST /api/edit-method",
-    "write_rule": "ボットはローカルの範囲を確認した上で編集方式を設定できます。この方式は Finish Rack に適用できますが、それ自体でレンダーやアップロードが始まることはありません。",
+    "write_rule": "ボットはローカルの範囲を確認した上で編集方式を設定できます。仕様があるときは caption_mode と quality を変えないでください。画面比は仕様とタイムラインにあります。この方式は Finish Rack に適用できますが、それ自体でレンダーやアップロードが始まることはありません。",
     "body": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "method": { "hook_strategy": "payoff_first | question_first | chronological", "pacing": "tight | balanced | deliberate", "filler_policy": "remove | review | keep", "caption_mode": "burn_in | off", "reframe_anchor": "left | center | right", "look": "natural | punchy | mono | night", "audio_policy": "preserve | normalize | mute", "speed": "0.5 から 2.0", "fps": "24 | 30 | 60", "quality": "compact | balanced | high" } }
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "operator_may_change": ["pacing", "look", "broll_policy", "hook_strategy", "audio_policy", "filler_policy", "reframe_anchor", "speed", "fps", "content_type", "target_length"],
+    "reason": "画面比・画質・字幕は操作者がデスクで決めた値です。ボットはこの3つを変えません。操作者は残りの操作を後から変えられ、ロック理由を画面で見ます。"
+  },
+  "folder_board": {
+    "same_pc": "GET /api/v2/handoff/folders は inputs/handoff/ のパッケージと handoff-materials/ のクリップを列挙します。POST /api/v2/handoff/files/reveal は原本を開きます。POST /api/v2/handoff/files/delete は原本以外のファイルを消します。",
+    "operator_ui": "デスクはフォルダを1行に畳みます。開くと左が一覧、右がプレビューです。ファイルを右クリックするとプレビュー・拡大・原本表示・削除を選べます。プロジェクトの原本は消せません。",
+    "remote": "リモートボットは 127.0.0.1 に接続しません。置いたあと操作者がデスクでフォルダを見ます。操作者が消したファイルは使わないでください。"
   },
   "render_settings_contract": {
     "presets_endpoint": "GET /api/presets は quality_presets・caption_layout_presets・platform_presets を返します。選んだプリセットのフィールドをそのままプロジェクトの timeline.render_settings にマージしてください。",

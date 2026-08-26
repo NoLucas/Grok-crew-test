@@ -13,9 +13,9 @@
   "workflow": [
     { "step": 1, "name": "로컬 스튜디오 입장", "action": "bot_id, display_name, purpose, task와 함께 POST /api/bot-entry를 호출합니다.", "goal": "로컬 입장 기록과 첫 체크인을 만듭니다. 새 봇은 기본으로 auto_local을 받고 approval_required로 바꿀 수 있습니다." },
     { "step": 2, "name": "현재 상태 확인", "action": "GET /api/bot-guide, 컷 로그, 편집 맵, 기존 프로젝트, 대기 작업을 읽습니다.", "goal": "이미 승인된 프로젝트를 덮어쓰거나 진행 중인 작업을 다시 시도하지 않습니다." },
-    { "step": 3, "name": "편집 방식 설정", "action": "선택한 훅 전략·템포·군더더기 정책·자막·리프레임·룩·오디오·속도·FPS·품질로 POST /api/edit-method를 호출합니다.", "goal": "허용된 로컬 편집 제어만 설정합니다. 이는 계획 기록이며 렌더나 게시를 시작하지 않습니다." },
+    { "step": 3, "name": "편집 방식 설정", "action": "먼저 규격을 읽습니다. 운영자가 정한 화면 비율·화질·자막은 유지합니다. POST /api/edit-method는 훅·템포·군더더기·리프레임·룩·오디오·속도·FPS만 바꿉니다. GET /api/v2/handoff/folders로 저장된 폴더를 봅니다. 운영자는 파일을 오른쪽 클릭해 미리보기·크게 보기·원본 보기·삭제를 합니다.", "goal": "저장된 규격을 따릅니다. 잠긴 세 가지는 바꾸지 않습니다. 나머지 조절은 운영자가 책상에서 나중에 바꿀 수 있습니다." },
     { "step": 4, "name": "컷 계획", "action": "남길 말 구간만 담은 대본 우선 EDL을 만듭니다.", "goal": "연속된 원본 시간 코드, 읽기 쉬운 두 단어 자막, 분명한 훅을 사용합니다." },
-    { "step": 5, "name": "마무리 준비", "action": "render_settings에서 리프레임 기준점·속도·오디오·룩·자막·품질·FPS를 설정합니다.", "goal": "전달 문제를 해결하는 최소한의 변경만 선택하고 효과를 과하게 쌓지 않습니다." },
+    { "step": 5, "name": "마무리 준비", "action": "render_settings에서 리프레임 기준점·속도·오디오·룩·FPS를 설정합니다. 자막·품질·화면 비율은 운영자 규격을 유지합니다.", "goal": "전달 문제를 해결하는 최소한의 변경만 선택하고 효과를 과하게 쌓지 않습니다." },
     { "step": 6, "name": "실행 정책 선택", "action": "GET /api/bots/{bot_id}/execution-policy를 읽습니다. 자동 로컬 렌더는 auto_local을 유지하고, 검토를 먼저 받으려면 mode=approval_required로 POST /api/bots/execution-policy를 호출합니다.", "goal": "봇이 자신의 로컬 렌더 승인 방식을 선택합니다. 이 선택은 SQLite에 기록되고 Bot Check에서 보입니다." },
     { "step": 7, "name": "렌더", "action": "auto_local이면 로컬 렌더를 대기열에 넣고 실행합니다. approval_required이면 간결한 검토 요청을 남긴 뒤 사람이 승인한 렌더 작업을 사용합니다.", "goal": "최종 작업 상태를 확인하고 출력 경로나 정확한 실패 원인을 보고합니다." },
     { "step": 8, "name": "업로드 또는 대기열", "action": "렌더가 완료된 뒤 Instagram 작업을 대기열에 넣고, 즉시 업로드하려면 auto_upload=true를 지정합니다.", "goal": "auto_upload가 켜져 있으면 로컬 서비스가 바로 업로드를 시작하고, 꺼져 있으면 대기열 작업을 직접 실행합니다." }
@@ -31,8 +31,18 @@
   },
   "edit_method_contract": {
     "endpoint": "POST /api/edit-method",
-    "write_rule": "봇은 로컬 범위를 확인한 뒤 편집 방식을 설정할 수 있습니다. 이 방식은 Finish Rack에 적용할 수 있지만 자체로 렌더나 업로드를 시작하지는 않습니다.",
+    "write_rule": "봇은 로컬 범위를 확인한 뒤 편집 방식을 설정할 수 있습니다. 규격이 있으면 caption_mode와 quality는 바꾸지 않습니다. 화면 비율은 규격과 타임라인에 있습니다. 이 방식은 Finish Rack에 적용할 수 있지만 자체로 렌더나 업로드를 시작하지는 않습니다.",
     "body": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "method": { "hook_strategy": "payoff_first | question_first | chronological", "pacing": "tight | balanced | deliberate", "filler_policy": "remove | review | keep", "caption_mode": "burn_in | off", "reframe_anchor": "left | center | right", "look": "natural | punchy | mono | night", "audio_policy": "preserve | normalize | mute", "speed": "0.5에서 2.0", "fps": "24 | 30 | 60", "quality": "compact | balanced | high" } }
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "operator_may_change": ["pacing", "look", "broll_policy", "hook_strategy", "audio_policy", "filler_policy", "reframe_anchor", "speed", "fps", "content_type", "target_length"],
+    "reason": "화면 비율·화질·자막은 운영자가 책상에서 정한 값입니다. 봇은 이 세 가지를 바꾸지 않습니다. 운영자는 나머지 조절을 나중에 바꿀 수 있고, 잠긴 이유를 화면에서 봅니다."
+  },
+  "folder_board": {
+    "same_pc": "GET /api/v2/handoff/folders는 inputs/handoff/ 패키지와 handoff-materials/ 클립을 나열합니다. POST /api/v2/handoff/files/reveal는 원본을 엽니다. POST /api/v2/handoff/files/delete는 원본이 아닌 파일을 지웁니다.",
+    "operator_ui": "책장은 폴더를 한 줄로 접어둡니다. 펼치면 목록이 왼쪽, 미리보기가 오른쪽입니다. 파일을 오른쪽 클릭하면 미리보기·크게 보기·원본 보기·삭제를 고릅니다. 프로젝트 원본은 지울 수 없습니다.",
+    "remote": "원격 봇은 127.0.0.1에 붙지 않습니다. 둔 뒤 운영자가 책장에서 폴더를 봅니다. 운영자가 지운 파일은 다시 쓰지 마세요."
   },
   "render_settings_contract": {
     "presets_endpoint": "GET /api/presets는 quality_presets, caption_layout_presets, platform_presets를 반환합니다. 선택한 프리셋의 값을 프로젝트의 timeline.render_settings에 그대로 병합하세요.",
@@ -49,7 +59,8 @@
   },
   "site_features": [
     {"id":"01","area":"제작","name":"프로젝트 설정","use_when":"새 영상을 시작하거나 소스·출력 경로를 확인할 때 사용합니다.","bot_action":"프로젝트를 만들거나 선택한 뒤 저장된 설정과 작업 이력을 읽습니다.","result":"다른 진행 중 작업을 덮어쓰지 않는 명확한 로컬 작업 범위가 생깁니다."},
-    {"id":"02","area":"편집 방식","name":"공통 편집 방식","use_when":"컷을 만들기 전에 창작 방향을 정해야 할 때 사용합니다.","bot_action":"/api/edit-method로 훅·템포·군더더기 정책·자막·리프레임·룩·오디오·속도·FPS·품질을 설정합니다.","result":"Finish Rack에 적용할 수 있는 재사용 가능한 계획이 생깁니다."},
+    {"id":"02","area":"편집 방식","name":"공통 편집 방식","use_when":"컷을 만들기 전에 창작 방향을 정해야 할 때 사용합니다.","bot_action":"규격의 화면 비율·화질·자막은 유지하고, /api/edit-method로는 훅·템포·군더더기·리프레임·룩·오디오·속도·FPS만 설정합니다.","result":"Finish Rack에 적용할 수 있는 재사용 가능한 계획이 생깁니다. 잠긴 세 가지는 그대로입니다."},
+    {"id":"02b","area":"책장","name":"봇 폴더 판","use_when":"저장된 패키지나 자료함 클립을 확인하거나 지울 때 사용합니다.","bot_action":"같은 PC면 GET /api/v2/handoff/folders를 읽고, 원본이 아닌 파일만 POST /api/v2/handoff/files/delete로 지웁니다. 원격이면 운영자가 오른쪽 클릭 메뉴를 씁니다.","result":"목록과 미리보기가 나란히 있고, 삭제한 파일은 더 이상 쓰지 않습니다."},
     {"id":"03","area":"컷 로그","name":"대본 컷 맵","use_when":"말하는 영상에 군더더기·침묵·재촬영·약한 도입부가 있을 때 사용합니다.","bot_action":"EDL을 바꾸기 전에 /api/projects/{id}/cut-map으로 유지할 시간 표시 구간을 저장합니다.","result":"검토 가능한 비파괴 편집 제안 맵이 생깁니다."},
     {"id":"04","area":"마무리","name":"프레임·자막·사운드","use_when":"리프레임·읽기 쉬운 자막·오디오 정리·출력 설정이 필요할 때 사용합니다.","bot_action":"Production에서 렌더 설정을 정하고, 피사체는 세로 안전 영역에 유지하며 필요한 효과만 선택합니다.","result":"로컬 MP4 렌더에 준비된 명세가 생깁니다."},
     {"id":"05","area":"운영","name":"미디어 사전 검사","use_when":"미디어를 막 받았거나 형식·상태를 모를 때 사용합니다.","bot_action":"/api/projects/{id}/inspect를 실행해 방향·FPS·길이·오디오·검은 화면·무음을 기록합니다.","result":"편집 전 소스 위험을 알려 주는 로컬 검사 보고서가 생깁니다."},
@@ -99,7 +110,7 @@
   },
   "execution_policy": { "on_entry": "Local Studio에 입장하는 모든 봇은 approval_required를 직접 고르지 않는 한 auto_local을 받습니다.", "read": "GET /api/bots/{bot_id}/execution-policy", "write": "bot_id와 mode를 포함한 POST /api/bots/execution-policy", "modes": { "auto_local": "연결된 봇이 자체 로컬 MP4 렌더를 대기열에 넣고 시작할 수 있습니다.", "approval_required": "봇은 계획·검사·프로젝트·운영 기능을 모두 사용하지만 렌더 요청에는 approved: true 또는 --human-approved가 필요합니다." }, "external_boundary": "Instagram 업로드는 로컬 렌더와 별개입니다. 작업의 auto_upload 설정으로 즉시 업로드 또는 대기열 직접 실행을 정합니다." },
   "approval_gates": ["Instagram 업로드에는 유효한 로컬 Instagram 자격증명과 지원되는 렌더 파일이 필요합니다.", "auto_upload=true면 즉시 업로드하고, false면 작업을 대기열에 둡니다."],
-  "allowed_endpoints": { "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits"], "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel"], "local_render": ["연결된 봇의 정책이 auto_local이거나 사람 승인이 기록된 경우 POST /api/projects/{id}/render"], "write_for_delivery": ["auto_upload=true 또는 false로 POST /api/projects/{id}/instagram"] },
+  "allowed_endpoints": { "read": ["GET /health", "GET /api/projects", "GET /api/projects/{id}/operations", "GET /api/jobs", "GET /api/jobs/{id}", "GET /api/presets", "GET /api/bots", "GET /api/bots/{bot_id}/execution-policy", "GET /api/bot-activity", "GET /api/bot-entry", "GET /api/terminal-contract", "GET /downloads/grok-crew.py", "GET /api/bot-entries", "GET /api/bot-guide", "GET /api/edit-method", "GET /api/brand-kits", "GET /api/v2/handoff/folders"], "write_after_scope_check": ["POST /api/bot-entry", "POST /api/bots/heartbeat", "POST /api/bots/execution-policy", "POST /api/edit-method", "POST /api/projects", "POST /api/projects/{id}/inspect", "POST /api/projects/{id}/cut-map", "POST /api/projects/{id}/quality-check", "POST /api/projects/{id}/artifacts", "POST /api/artifacts/{id}/update", "POST /api/brand-kits", "POST /api/jobs/{id}/cancel", "POST /api/v2/handoff/files/reveal", "POST /api/v2/handoff/files/delete"], "local_render": ["연결된 봇의 정책이 auto_local이거나 사람 승인이 기록된 경우 POST /api/projects/{id}/render"], "write_for_delivery": ["auto_upload=true 또는 false로 POST /api/projects/{id}/instagram"] },
   "never": ["LOCAL_STUDIO_TOKEN, INSTAGRAM_ACCESS_TOKEN, .env 내용을 읽거나 드러내지 않습니다.", "local_studio/workspace 밖의 경로를 사용하지 않습니다.", "현재 heartbeat가 없는데 봇이 활성이라고 주장하지 않습니다.", "소유자가 새 편집을 요청하지 않는 한 완료된 출력 파일을 바꾸지 않습니다."],
   "heartbeat_example": { "bot_id": "local-editor-bot", "display_name": "Local Editor Bot", "action": "render_or_upload_ready", "detail": { "project": "my-video-project", "decision": "군더더기를 제거하고 말 구간 3개를 유지했으며 9:16 가운데 리프레임을 적용했습니다.", "next": "봇 실행 정책에 따라 로컬 렌더를 실행하고, 필요하면 Instagram 업로드를 대기열에 넣거나 자동 업로드합니다." } }
 }

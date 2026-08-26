@@ -5,7 +5,12 @@
     "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 편집(폴더 editor/) 또는 수집·다른 에이전트(폴더 collector/) 중 하나만 고릅니다. 저장하면 그 문 보낼함에 spec.json 이 올라갑니다. 원본 파일을 붙이지 않습니다.",
     "grok_door": "편집 문. 폴더 이름은 editor/. 남은 grok/ 폴더는 읽기만 합니다. 지정된 편집 봇만. Runner 페어링도 이 문만. collector/ 는 쓰지 마세요.",
     "other_agent_door": "수집·다른 에이전트 문. 폴더 이름은 collector/. 남은 agents/ 폴더는 읽기만 합니다. 지정된 수집 봇, 또는 크루가 아닌 다른 에이전트. editor/ 와 Runner는 쓰지 마세요.",
-    "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다."
+    "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다. 운영자가 정한 화면 비율·화질·자막은 유지합니다. 템포·룩·B-roll·훅·오디오는 운영자가 책상에서 나중에 바꿀 수 있습니다."
+  },
+  "operator_locks": {
+    "locked": ["aspect", "quality", "captions"],
+    "reason": "이 세 가지는 책상에서 정한 값입니다. 컷이나 render_settings에서 바꾸지 마세요. 나머지 편집 조절은 운영자가 엽니다.",
+    "folder_board": "패키지를 두면 운영자가 책장에서 inputs/handoff/ 또는 handoff-materials/ 를 엽니다. 목록은 왼쪽, 미리보기는 옆입니다. 오른쪽 클릭으로 미리보기·크게 보기·원본 보기·삭제를 고릅니다. 지운 파일은 다시 쓰지 마세요. 원격 봇은 127.0.0.1에 붙지 않습니다."
   },
   "style_recipes": {
     "purpose": "이름 있는 레시피가 길이, 화면비, 훅, 속도, 자막, 룩, 수집 힌트를 채웁니다. 문이 아닙니다.",

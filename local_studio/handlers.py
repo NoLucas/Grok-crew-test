@@ -73,7 +73,7 @@ from studio_server import (
 from first_run import first_run_status, open_sample_project
 from bot_pack import bot_pack_bytes
 from edit_spec import create_spec, get_spec, list_specs, spec_brief, spec_invite
-from handoff_folders import workspace_handoff_folders
+from handoff_folders import delete_handoff_file, reveal_handoff_file, workspace_handoff_folders
 from handoff_inbox import handoff_status, pull_handoff
 from handoff_materials import materials_status, pull_materials, write_owned_materials
 from style_recipes import list_recipes
@@ -438,6 +438,10 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, pull_materials(body))
             elif path == "/api/v2/handoff/materials/own":
                 self._json(200, write_owned_materials(str(body.get("edit_spec_id") or ""), body.get("paths") or body.get("owned_paths") or []))
+            elif path == "/api/v2/handoff/files/delete":
+                self._json(200, delete_handoff_file(str(body.get("path") or "")))
+            elif path == "/api/v2/handoff/files/reveal":
+                self._json(200, reveal_handoff_file(str(body.get("path") or "")))
             elif path == "/api/v2/runners/pair":
                 self._json(201, {"runner": pair_runner(body)})
             elif path == "/api/v2/runner-events":

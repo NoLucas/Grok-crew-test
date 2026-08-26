@@ -58,7 +58,7 @@ function studioBase() {
   return typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214';
 }
 type PublishMode = 'export_only' | 'ask' | 'auto';
-type Project = { id: string; title: string; source_path: string; output_path: string; updated_at: string; current_revision: number; handoff_door?: string | null; handoff_agent?: string | null };
+type Project = { id: string; title: string; source_path: string; output_path: string; updated_at: string; current_revision: number; handoff_door?: string | null; handoff_agent?: string | null; edit_spec_id?: string | null };
 type TimelineConflict = { schema: string; reason: string; expected_revision: number; current_revision: number; timeline_patch?: { operations?: unknown[] } };
 type ControlJob = { id: string; project_id: string; status: string; execution_policy: string; updated_at: string; error_text?: string; result_revision?: number; attempt?: number; control_sequence?: number; runner_id?: string; render_job_id?: string; conflict_json?: TimelineConflict };
 type RunnerEvent = { id: string; control_job_id: string; runner_id: string; sequence: number; stage: string; status: string; detail_json: Record<string, unknown>; verified_at: string };
@@ -75,7 +75,22 @@ type Version = {
   restored_from_revision?: number | null;
 };
 type FirstRun = { sample_available?: boolean; sample_open?: boolean; sample_path?: string; has_projects?: boolean };
-type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string; door?: string; agent?: string; crew?: boolean; source_mode?: string; recipe_id?: string };
+type EditSpec = {
+  id: string;
+  status: string;
+  project_id?: string | null;
+  title: string;
+  goal: string;
+  door?: string;
+  agent?: string;
+  crew?: boolean;
+  source_mode?: string;
+  recipe_id?: string;
+  aspect?: string;
+  captions?: boolean;
+  platform?: string;
+  spec?: { aspect?: string; captions?: boolean; platform?: string };
+};
 type StyleRecipe = {
   id: string;
   name?: { ko?: string; en?: string; zh?: string; ja?: string };
@@ -164,6 +179,7 @@ const defaultMethod = {
   hook_strategy: 'payoff_first', pacing: 'tight', filler_policy: 'remove', caption_mode: 'burn_in',
   reframe_anchor: 'center', look: 'natural', audio_policy: 'normalize', speed: 1, fps: 30, quality: 'balanced',
 };
+const EDIT_METHOD_FIELDS = ['hook_strategy', 'pacing', 'filler_policy', 'caption_mode', 'reframe_anchor', 'look', 'audio_policy', 'speed', 'fps', 'quality'] as const;
 const defaultPublish = { schema: 'grok-crew.publish-policy/v1', instagram: 'ask' as PublishMode, tiktok: 'ask' as PublishMode, youtube: 'ask' as PublishMode };
 
 function relativeWorkspacePath(value: string) {
@@ -399,6 +415,27 @@ export default function DesktopWorkspace() {
       || relativeWorkspacePath(project.source_path).startsWith('inputs/handoff/')
     ),
   );
+  const linkedSpec = useMemo(() => {
+    if (!project) return null;
+    const specs = workspace.edit_specs ?? [];
+    return specs.find((item) => item.id === project.edit_spec_id)
+      || specs.find((item) => item.project_id === project.id)
+      || null;
+  }, [project, workspace.edit_specs]);
+  const specLocked = Boolean(linkedSpec) || projectLooksImported;
+  const lockedAspect = linkedSpec?.aspect || linkedSpec?.spec?.aspect || method.aspect_ratio;
+  const lockedCaptions = linkedSpec
+    ? ((linkedSpec.captions ?? linkedSpec.spec?.captions) ? 'burn_in' : 'off')
+    : method.caption_mode;
+  const appliedMethod = specLocked
+    ? { ...method, aspect_ratio: lockedAspect, caption_mode: lockedCaptions }
+    : method;
+  const folderActions = {
+    request: api,
+    onRefresh: () => refreshWorkspace(true),
+    onMessage: setMessage,
+    protectedPaths: project ? [relativeWorkspacePath(project.source_path)] : [],
+  };
   const openHandoffProject = (projectId: string) => {
     setSpecDeskOpen(false);
     setAdvancedSpecOpen(false);
@@ -565,12 +602,16 @@ export default function DesktopWorkspace() {
     if (!project || !timeline) return null;
     setBusy(true);
     try {
-      await api('/api/edit-method', { method: 'POST', body: JSON.stringify({ origin: 'human', updated_by: 'operator', method }) });
-      const dimensions = method.aspect_ratio === '16:9' ? { width: 1920, height: 1080 } : method.aspect_ratio === '1:1' ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
+      const locked = specLocked
+        ? { ...method, aspect_ratio: lockedAspect, caption_mode: lockedCaptions }
+        : method;
+      const editMethod = Object.fromEntries(EDIT_METHOD_FIELDS.map((key) => [key, locked[key]]));
+      await api('/api/edit-method', { method: 'POST', body: JSON.stringify({ origin: 'human', updated_by: 'operator', method: editMethod }) });
+      const dimensions = locked.aspect_ratio === '16:9' ? { width: 1920, height: 1080 } : locked.aspect_ratio === '1:1' ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
       const next = await patchTimeline([{ op: 'set_settings', changes: {
-        ...dimensions, aspect_ratio: method.aspect_ratio, target_length: Number(method.target_length), content_type: method.content_type, broll_policy: method.broll_policy,
-        fps: Number(method.fps), quality: method.quality, crop_anchor: method.reframe_anchor, look: method.look, speed: Number(method.speed),
-        captions_enabled: method.caption_mode === 'burn_in', normalize_audio: method.audio_policy === 'normalize', mute_audio: method.audio_policy === 'mute',
+        ...dimensions, aspect_ratio: locked.aspect_ratio, target_length: Number(locked.target_length), content_type: locked.content_type, broll_policy: locked.broll_policy,
+        fps: Number(locked.fps), quality: locked.quality, crop_anchor: locked.reframe_anchor, look: locked.look, speed: Number(locked.speed),
+        captions_enabled: locked.caption_mode === 'burn_in', normalize_audio: locked.audio_policy === 'normalize', mute_audio: locked.audio_policy === 'mute',
       } }]);
       setMessage(t('설정을 저장하고 타임라인에 반영했습니다.', 'Settings saved and applied to the timeline.', '设置已保存并应用到时间线。', '設定を保存してタイムラインに反映しました。'));
       return next;
@@ -1021,6 +1062,7 @@ export default function DesktopWorkspace() {
                   folders={handoffFolders}
                   studioState={studioState}
                   onOpenProject={openHandoffProject}
+                  {...folderActions}
                 />
                 <SpecDesk
                   specs={workspace.edit_specs ?? []}
@@ -1089,6 +1131,7 @@ export default function DesktopWorkspace() {
                 folders={handoffFolders}
                 studioState={studioState}
                 onOpenProject={openHandoffProject}
+                {...folderActions}
               />
               </div>
             )
@@ -1101,6 +1144,7 @@ export default function DesktopWorkspace() {
                 folders={projectFolders}
                 studioState={studioState}
                 expectEmpty={projectLooksImported}
+                {...folderActions}
               />
               <section className="desktop-card desktop-source-card">
                 <div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div>
@@ -1123,20 +1167,32 @@ export default function DesktopWorkspace() {
                   <div className={`desktop-transcript-state ${analysis.transcript_json.status === 'ready' ? 'ready' : ''}`}><span>{analysis.transcript_json.status === 'ready' ? '✓' : 'i'}</span><div><b>{analysis.transcript_json.status === 'ready' ? t('대본 준비됨', 'Transcript ready', '字幕稿已就绪', '文字起こし準備完了') : t('장면 분석만 완료됨', 'Scene analysis complete', '场景分析已完成', 'シーン解析のみ完了')}</b><p>{analysis.transcript_json.status === 'ready' ? (analysis.transcript_json.text || analysisWords.map((word) => word.text).join(' ')) : t('whisper.cpp를 설정하면 음성을 대본으로 변환합니다.', 'Configure whisper.cpp to transcribe speech.', '配置 whisper.cpp 后可将语音转成文字。', 'whisper.cpp を設定すると音声を文字起こしできます。')}</p></div></div>
                 </div>}
               </section>
-              <section className="desktop-card desktop-settings-card"><div className="desktop-card-title"><span>02</span><div><b>{t('편집 Agent 설정', 'Editor Agent controls', '剪辑 Agent 设置', '編集 Agent 設定')}</b><small>{t('채팅 없이 명확한 선택으로 전달합니다.', 'Clear controls, no prompt writing.', '无需编写提示词。', 'プロンプト入力は不要です。')}</small></div></div><div className="desktop-form-grid">
+              <section className="desktop-card desktop-settings-card"><div className="desktop-card-title"><span>02</span><div><b>{t('편집 Agent 설정', 'Editor Agent controls', '剪辑 Agent 设置', '編集 Agent 設定')}</b><small>{t('채팅 없이 명확한 선택으로 전달합니다.', 'Clear controls, no prompt writing.', '无需编写提示词。', 'プロンプト入力は不要です。')}</small></div></div>
+              {specLocked ? (
+                <div className="desktop-lock-note" role="note">
+                  <b>{t('봇이 지키는 값', 'Values the bot must keep', '机器人必须遵守的值', 'ボットが守る値')}</b>
+                  <p>{t(
+                    `화면 비율 ${appliedMethod.aspect_ratio}, 화질 ${appliedMethod.quality}, 자막 ${appliedMethod.caption_mode === 'burn_in' ? '켜짐' : '꺼짐'}은 이 책상에서 정한 규격입니다. 봇은 이 세 가지를 바꾸지 않습니다. 템포·룩·B-roll·훅·오디오는 필요할 때 여기서 바꿀 수 있습니다.`,
+                    `Aspect ${appliedMethod.aspect_ratio}, quality ${appliedMethod.quality}, and captions ${appliedMethod.caption_mode === 'burn_in' ? 'on' : 'off'} were set on this desk. The bot must keep those three. You can still change pacing, look, b-roll, hook, and audio here if needed.`,
+                    `画面比例 ${appliedMethod.aspect_ratio}、画质 ${appliedMethod.quality}、字幕${appliedMethod.caption_mode === 'burn_in' ? '开' : '关'}是此工作台定下的规格。机器人不得改这三项。节奏、风格、B-roll、开场和音频仍可在此调整。`,
+                    `画面比 ${appliedMethod.aspect_ratio}、画質 ${appliedMethod.quality}、字幕${appliedMethod.caption_mode === 'burn_in' ? 'オン' : 'オフ'}はこのデスクで決めた仕様です。ボットはこの3つを変えません。テンポ・ルック・B-roll・フック・音声は必要ならここで変えられます。`,
+                  )}</p>
+                </div>
+              ) : null}
+              <div className="desktop-form-grid">
                 <label>{t('콘텐츠 유형', 'Content type', '内容类型', 'コンテンツ種別')}<select value={method.content_type} onChange={(e) => setMethod({ ...method, content_type: e.target.value })}><option value="talking_head">{t('토킹헤드', 'Talking head', '口播', 'トーキングヘッド')}</option><option value="vlog">Vlog</option><option value="product">{t('제품·서비스', 'Product / service', '产品服务', '製品・サービス')}</option><option value="tutorial">{t('튜토리얼', 'Tutorial', '教程', 'チュートリアル')}</option></select></label>
                 <label>{t('목표 길이', 'Target length', '目标时长', '目標尺')}<select value={method.target_length} onChange={(e) => setMethod({ ...method, target_length: Number(e.target.value) })}><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option></select></label>
-                <label>{t('화면비', 'Aspect ratio', '画面比例', 'アスペクト比')}<select value={method.aspect_ratio} onChange={(e) => setMethod({ ...method, aspect_ratio: e.target.value })}><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="16:9">16:9</option></select></label>
+                <label className={specLocked ? 'is-locked' : undefined}>{t('화면비', 'Aspect ratio', '画面比例', 'アスペクト比')}<select disabled={specLocked} value={appliedMethod.aspect_ratio} onChange={(e) => setMethod({ ...method, aspect_ratio: e.target.value })}><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="16:9">16:9</option></select>{specLocked ? <em>{t('규격 잠금', 'Locked by spec', '规格锁定', '仕様ロック')}</em> : null}</label>
                 <label>B-roll<select value={method.broll_policy} onChange={(e) => setMethod({ ...method, broll_policy: e.target.value })}><option value="auto">{t('필요할 때 제안', 'Suggest when useful', '按需建议', '必要時に提案')}</option><option value="required">{t('적극 사용', 'Use actively', '积极使用', '積極的に使用')}</option><option value="off">{t('사용 안 함', 'Off', '关闭', 'オフ')}</option></select></label>
                 <label>{t('훅', 'Hook', '开场', 'フック')}<select value={method.hook_strategy} onChange={(e) => setMethod({ ...method, hook_strategy: e.target.value })}><option value="payoff_first">{t('결과 먼저', 'Payoff first', '结果优先', '結果を先に')}</option><option value="question_first">{t('질문 먼저', 'Question first', '问题优先', '質問を先に')}</option><option value="chronological">{t('순서대로', 'Chronological', '按时间顺序', '時系列')}</option></select></label>
                 <label>{t('속도감', 'Pacing', '节奏', 'テンポ')}<select value={method.pacing} onChange={(e) => setMethod({ ...method, pacing: e.target.value })}><option value="tight">{t('빠르고 타이트', 'Tight', '紧凑', 'タイト')}</option><option value="balanced">{t('균형', 'Balanced', '平衡', 'バランス')}</option><option value="deliberate">{t('차분하게', 'Deliberate', '沉稳', '丁寧')}</option></select></label>
                 <label>{t('군더더기', 'Filler', '冗余', 'フィラー')}<select value={method.filler_policy} onChange={(e) => setMethod({ ...method, filler_policy: e.target.value })}><option value="remove">{t('자동 제거', 'Remove', '删除', '削除')}</option><option value="review">{t('검토 표시', 'Flag for review', '标记审核', '要確認')}</option><option value="keep">{t('유지', 'Keep', '保留', '維持')}</option></select></label>
-                <label>{t('자막', 'Captions', '字幕', '字幕')}<select value={method.caption_mode} onChange={(e) => setMethod({ ...method, caption_mode: e.target.value })}><option value="burn_in">{t('영상에 포함', 'Burn in', '嵌入视频', '焼き込み')}</option><option value="off">{t('끄기', 'Off', '关闭', 'オフ')}</option></select></label>
+                <label className={specLocked ? 'is-locked' : undefined}>{t('자막', 'Captions', '字幕', '字幕')}<select disabled={specLocked} value={appliedMethod.caption_mode} onChange={(e) => setMethod({ ...method, caption_mode: e.target.value })}><option value="burn_in">{t('영상에 포함', 'Burn in', '嵌入视频', '焼き込み')}</option><option value="off">{t('끄기', 'Off', '关闭', 'オフ')}</option></select>{specLocked ? <em>{t('규격 잠금', 'Locked by spec', '规格锁定', '仕様ロック')}</em> : null}</label>
                 <label>{t('화면 중심', 'Reframe', '重构图', 'リフレーム')}<select value={method.reframe_anchor} onChange={(e) => setMethod({ ...method, reframe_anchor: e.target.value })}><option value="left">{t('왼쪽', 'Left', '左', '左')}</option><option value="center">{t('가운데', 'Center', '中', '中央')}</option><option value="right">{t('오른쪽', 'Right', '右', '右')}</option></select></label>
                 <label>{t('룩', 'Look', '画面风格', 'ルック')}<select value={method.look} onChange={(e) => setMethod({ ...method, look: e.target.value })}><option value="natural">Natural</option><option value="punchy">Punchy</option><option value="mono">Mono</option><option value="night">Night</option></select></label>
                 <label>{t('오디오', 'Audio', '音频', 'オーディオ')}<select value={method.audio_policy} onChange={(e) => setMethod({ ...method, audio_policy: e.target.value })}><option value="preserve">{t('원본 유지', 'Preserve', '保留原音', '原音')}</option><option value="normalize">{t('음량 정리', 'Normalize', '标准化', '正規化')}</option><option value="mute">{t('음소거', 'Mute', '静音', 'ミュート')}</option></select></label>
                 <label>FPS<select value={method.fps} onChange={(e) => setMethod({ ...method, fps: Number(e.target.value) })}><option>24</option><option>30</option><option>60</option></select></label>
-                <label>{t('품질', 'Quality', '质量', '品質')}<select value={method.quality} onChange={(e) => setMethod({ ...method, quality: e.target.value })}><option value="compact">Compact</option><option value="balanced">Balanced</option><option value="high">High</option></select></label>
+                <label className={specLocked ? 'is-locked' : undefined}>{t('품질', 'Quality', '质量', '品質')}<select disabled={specLocked} value={appliedMethod.quality} onChange={(e) => setMethod({ ...method, quality: e.target.value })}><option value="compact">Compact</option><option value="balanced">Balanced</option><option value="high">High</option></select>{specLocked ? <em>{t('규격 잠금', 'Locked by spec', '规格锁定', '仕様ロック')}</em> : null}</label>
                 <label className="desktop-wide">{t('전체 속도', 'Overall speed', '整体速度', '全体速度')}<div className="desktop-range"><input type="range" min="0.5" max="2" step="0.05" value={method.speed} onChange={(e) => setMethod({ ...method, speed: Number(e.target.value) })} /><output>{Number(method.speed).toFixed(2)}×</output></div></label>
               </div><button className="desktop-secondary" disabled={busy} onClick={() => void saveSettings()}>{t('설정만 저장', 'Save controls', '保存设置', '設定を保存')}</button></section>
               <section className="desktop-card desktop-policy-card"><div className="desktop-card-title"><span>03</span><div><b>{t('자동화 범위', 'Automation', '自动化范围', '自動化範囲')}</b><small>{t('렌더와 게시 권한을 각각 정합니다.', 'Choose render and publishing authority.', '分别设置渲染和发布权限。', 'レンダーと公開を個別に設定。')}</small></div></div><label className="desktop-radio"><input type="radio" checked={executionPolicy === 'auto_edit_render'} onChange={() => setExecutionPolicy('auto_edit_render')} /><span><b>{t('자동 편집 + 렌더', 'Auto edit + render', '自动编辑和渲染', '自動編集＋レンダー')}</b><small>{t('새 버전을 만들고 바로 렌더합니다.', 'Create a new version and render it.', '创建新版本并渲染。', '新しいバージョンを作成してレンダー。')}</small></span></label><label className="desktop-radio"><input type="radio" checked={executionPolicy === 'review_before_render'} onChange={() => setExecutionPolicy('review_before_render')} /><span><b>{t('편집안 먼저 검토', 'Review before render', '渲染前审核', 'レンダー前に確認')}</b><small>{t('타임라인 변경을 확인할 때 멈춥니다.', 'Pause when the proposal is ready.', '编辑方案完成后暂停。', '提案の準備後に一時停止。')}</small></span></label></section>
@@ -1148,6 +1204,7 @@ export default function DesktopWorkspace() {
                 studioState={studioState}
                 compact
                 expectEmpty={projectLooksImported}
+                {...folderActions}
               />
               <ProgramMonitor
                 projectId={project.id}

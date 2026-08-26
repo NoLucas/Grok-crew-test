@@ -9,6 +9,11 @@ Inbox and outbox folders are not listed. Paths stay workspace-relative.
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,6 +26,7 @@ from edit_spec import get_spec, list_specs
 PACKAGE_ROOT = Path("inputs") / "handoff"
 MATERIALS_ROOT = Path("handoff-materials")
 RESERVED = {".git", ".processed"}
+RESERVED_FILES = {"manifest.json"}
 MAX_FILES = 80
 MAX_FOLDERS = 40
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
@@ -252,4 +258,113 @@ def workspace_handoff_folders(
     return {
         "schema": SCHEMA,
         "folders": folders[:MAX_FOLDERS],
+    }
+
+
+def _source_paths() -> set[Path]:
+    found: set[Path] = set()
+    for project in _projects():
+        raw = str(project.get("source_path") or "").strip()
+        if not raw:
+            continue
+        try:
+            candidate = Path(raw).expanduser()
+            if not candidate.is_absolute():
+                candidate = config.WORKSPACE_DIR / candidate
+            found.add(candidate.resolve())
+        except OSError:
+            continue
+    return found
+
+
+def _resolve_handoff_file(rel_path: str) -> tuple[Path, tuple[str, ...]]:
+    text = str(rel_path or "").strip().replace("\\", "/")
+    if not text:
+        raise ValueError("path is required.")
+    rel = Path(text)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("path is not allowed.")
+    parts = rel.parts
+    if len(parts) == 4 and parts[0] == "inputs" and parts[1] == "handoff":
+        _safe_leaf_name(parts[2])
+        name = _safe_leaf_name(parts[3])
+    elif len(parts) == 3 and parts[0] == "handoff-materials":
+        _safe_leaf_name(parts[1])
+        name = _safe_leaf_name(parts[2])
+        if name.lower() in RESERVED_FILES:
+            raise ValueError("reserved file")
+    else:
+        raise ValueError("only files in the handoff inbox or materials box can be used.")
+    workspace = config.WORKSPACE_DIR.resolve()
+    expected_parent = (workspace.joinpath(*parts[:-1])).resolve()
+    target = (workspace / rel).resolve()
+    if workspace not in target.parents:
+        raise ValueError("path leaves the workspace.")
+    if target.parent != expected_parent:
+        raise ValueError("path leaves the allowed root.")
+    if not target.is_file():
+        raise ValueError("file not found.")
+    return target, parts
+
+
+def _drop_clip_from_manifest(folder: Path, name: str) -> None:
+    from handoff_materials import _read_manifest
+
+    manifest = _read_manifest(folder)
+    if not isinstance(manifest, dict):
+        return
+    clips = manifest.get("clips")
+    if not isinstance(clips, list):
+        return
+    kept: list[Any] = []
+    removed = False
+    for raw in clips:
+        if isinstance(raw, dict) and Path(str(raw.get("file") or "")).name.lower() == name.lower():
+            removed = True
+            continue
+        kept.append(raw)
+    if not removed:
+        return
+    manifest["clips"] = kept
+    (folder / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _open_in_file_manager(target: Path) -> bool:
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", "-R", str(target)], check=False, timeout=5)
+            return True
+        if sys.platform == "win32":
+            subprocess.run(["explorer", "/select,", str(target)], check=False, timeout=5)
+            return True
+        opener = shutil.which("xdg-open")
+        if opener:
+            subprocess.run([opener, str(target.parent)], check=False, timeout=5)
+            return True
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return False
+
+
+def delete_handoff_file(rel_path: str) -> dict[str, Any]:
+    target, parts = _resolve_handoff_file(rel_path)
+    if target in _source_paths():
+        raise ValueError("file is the project's source and cannot be deleted.")
+    name = target.name
+    os.unlink(target)
+    if parts[0] == "handoff-materials":
+        _drop_clip_from_manifest(config.WORKSPACE_DIR / MATERIALS_ROOT / parts[1], name)
+    return {"ok": True, "deleted": "/".join(parts)}
+
+
+def reveal_handoff_file(rel_path: str) -> dict[str, Any]:
+    target, parts = _resolve_handoff_file(rel_path)
+    return {
+        "ok": True,
+        "path": "/".join(parts),
+        "absolute_path": str(target),
+        "revealed": _open_in_file_manager(target),
     }

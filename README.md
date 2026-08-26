@@ -24,7 +24,7 @@ You do not need an account to start.
 
 ## What you see
 
-The first screen is short: a title, a drop zone, and **Copy this for the bot**. That save is one bot (`source_mode: bot`). A Cursor agent on this PC can check in; a remote Cursor agent only drops a folder in the editor inbox from the invite. Style recipes and a two-bot crew stay behind **More detail**. Incoming cuts on the editor door open on their own. Files the bot saved — the package under `inputs/handoff/` and clips in the materials box — show in a folder card so you can preview them. This desk does not scrape websites.
+The first screen is short: a title, a drop zone, and **Copy this for the bot**. That save is one bot (`source_mode: bot`). A Cursor agent on this PC can check in; a remote Cursor agent only drops a folder in the editor inbox from the invite. Style recipes and a two-bot crew stay behind **More detail**. Incoming cuts on the editor door open on their own. Files the bot saved — the package under `inputs/handoff/` and clips in the materials box — stay in one collapsed row. Open it and the list sits beside the preview. Right-click a file to preview, enlarge, show the original, or delete it. Aspect, quality, and captions stay locked to the spec; the other edit knobs stay yours. This desk does not scrape websites.
 
 Then you work in three tabs:
 
