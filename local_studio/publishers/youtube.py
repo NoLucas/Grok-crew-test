@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .base import media_path, mime_type, request_with_backoff
+from config import workspace_relative
+
+from .base import media_path, mime_type, request_with_backoff, require_https_upload_url
 
 
 class YouTubePublisher:
@@ -36,9 +38,10 @@ class YouTubePublisher:
         initiated.raise_for_status(); upload_url = initiated.headers.get("Location")
         if not upload_url:
             raise RuntimeError("YouTube did not return a resumable upload URL.")
+        upload_url = require_https_upload_url(str(upload_url), field="YouTube upload URL")
         with path.open("rb") as media:
             uploaded = request_with_backoff(requests, "PUT", upload_url, headers={"Authorization": f"Bearer {token}", "Content-Type": content_type, "Content-Length": str(size)}, data=media, timeout=1800)
         uploaded.raise_for_status(); value = uploaded.json()
         if not value.get("id"):
             raise RuntimeError(f"YouTube upload returned no video id: {value}")
-        return {"platform": "youtube", "youtube_video_id": value["id"], "privacy_status": privacy, "source_path": str(path)}
+        return {"platform": "youtube", "youtube_video_id": value["id"], "privacy_status": privacy, "source_path": workspace_relative(path)}

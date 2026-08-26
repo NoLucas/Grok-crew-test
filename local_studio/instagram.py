@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any
 
-from config import require_path
+from config import require_path, workspace_relative
+from publishers.base import require_https_upload_url
+
+_API_VERSION_RE = re.compile(r"^v\d+(\.\d+)?$")
+_SAFE_ID_RE = re.compile(r"^[\w.-]+$")
 
 
 def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
@@ -19,6 +24,10 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
     version = os.getenv("INSTAGRAM_API_VERSION", "").strip()
     if not token or not user_id or not version:
         raise RuntimeError("Instagram credentials are not configured locally. Set INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID, and INSTAGRAM_API_VERSION in local_studio/.env.")
+    if not _API_VERSION_RE.fullmatch(version):
+        raise RuntimeError("INSTAGRAM_API_VERSION must look like v21.0.")
+    if not _SAFE_ID_RE.fullmatch(user_id):
+        raise RuntimeError("INSTAGRAM_USER_ID is invalid.")
     media_path = require_path(payload.get("render_path", project["output_path"]), "render_path")
     if not media_path.exists():
         raise RuntimeError(f"Approved render does not exist: {media_path}")
@@ -34,6 +43,9 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
     container_id, upload_uri = container_data.get("id"), container_data.get("uri")
     if not container_id or not upload_uri:
         raise RuntimeError("Instagram did not return a resumable upload container URI.")
+    if not _SAFE_ID_RE.fullmatch(str(container_id)):
+        raise RuntimeError("Instagram returned an invalid container id.")
+    upload_uri = require_https_upload_url(str(upload_uri), field="Instagram upload URI")
     with media_path.open("rb") as media:
         upload = requests.post(upload_uri, headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(media_path.stat().st_size), "Content-Type": "application/octet-stream"}, data=media, timeout=900)
         upload.raise_for_status()
@@ -51,4 +63,4 @@ def instagram_publish(project: dict[str, Any], payload: dict[str, Any]) -> dict[
         raise RuntimeError("Instagram processing did not finish within 90 seconds.")
     published = requests.post(f"{api}/media_publish", data={"creation_id": container_id}, headers={"Authorization": f"Bearer {token}"}, timeout=45)
     published.raise_for_status()
-    return {"container_id": container_id, "container_status": status_data, "instagram_media_id": published.json().get("id"), "source_path": str(media_path)}
+    return {"container_id": container_id, "container_status": status_data, "instagram_media_id": published.json().get("id"), "source_path": workspace_relative(media_path)}

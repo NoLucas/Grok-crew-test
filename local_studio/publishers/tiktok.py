@@ -4,7 +4,9 @@ import math
 import os
 from typing import Any
 
-from .base import media_path, mime_type, request_with_backoff
+from config import workspace_relative
+
+from .base import media_path, mime_type, request_with_backoff, require_https_upload_url
 
 
 class TikTokPublisher:
@@ -42,10 +44,11 @@ class TikTokPublisher:
         data = value.get("data") or {}; upload_url, publish_id = data.get("upload_url"), data.get("publish_id")
         if not upload_url or not publish_id:
             raise RuntimeError("TikTok did not return upload_url and publish_id.")
+        upload_url = require_https_upload_url(str(upload_url), field="TikTok upload URL")
         with path.open("rb") as media:
             offset = 0
             while offset < total:
                 body = media.read(chunk); last = offset + len(body) - 1
                 uploaded = request_with_backoff(requests, "PUT", upload_url, headers={"Content-Type": mime_type(path), "Content-Length": str(len(body)), "Content-Range": f"bytes {offset}-{last}/{total}"}, data=body, timeout=900)
                 uploaded.raise_for_status(); offset = last + 1
-        return {"platform": "tiktok", "publish_id": publish_id, "privacy_level": privacy, "audit_fallback": not audited and requested_privacy != "SELF_ONLY", "source_path": str(path)}
+        return {"platform": "tiktok", "publish_id": publish_id, "privacy_level": privacy, "audit_fallback": not audited and requested_privacy != "SELF_ONLY", "source_path": workspace_relative(path)}

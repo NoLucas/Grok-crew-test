@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { isRendererNavigationAllowed, studioRequestUrl } from './ipc-guard.mjs';
 import { RelayService } from './relay-service.mjs';
 import { createDesktopTray, installCloseToTray } from './tray-controller.mjs';
-import { fetchLatestRelease, updatePolicy } from './update-service.mjs';
+import { fetchLatestRelease, parseReleasePageUrl, resolveUpdateRepo, updatePolicy } from './update-service.mjs';
 
 const desktopDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(desktopDir, '..');
@@ -222,7 +222,7 @@ function registerIpc(apiBase) {
     assertTrustedRenderer(event);
     const currentVersion = app.getVersion();
     const packaged = app.isPackaged;
-    const repo = String(process.env.GROK_CREW_UPDATE_REPO || 'NoLucas/Grok-crew-test');
+    const repo = resolveUpdateRepo(process.env.GROK_CREW_UPDATE_REPO);
     let latest = null;
     if (packaged) {
       try {
@@ -242,11 +242,11 @@ function registerIpc(apiBase) {
   });
   ipcMain.handle('desktop:open-release', async (event, url) => {
     assertTrustedRenderer(event);
-    const target = String(url ?? '');
-    if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/releases(\/|$)/.test(target)) {
+    const allowed = parseReleasePageUrl(url, resolveUpdateRepo(process.env.GROK_CREW_UPDATE_REPO));
+    if (!allowed) {
       throw new Error('Release URL is not allowed.');
     }
-    return shell.openExternal(target);
+    return shell.openExternal(allowed);
   });
   const relay = new RelayService({ request, safeStorage, dialog, shell, clipboard, userData: app.getPath('userData'), documents: app.getPath('documents') });
   ipcMain.handle('relay:pair-runner', (event) => { assertTrustedRenderer(event); return relay.pairRunner(); });
@@ -275,7 +275,12 @@ async function createWindow(apiBase, rendererUrl) {
     },
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' && parsed.hostname === 'github.com' && !parsed.username && !parsed.password) {
+        void shell.openExternal(parsed.href);
+      }
+    } catch { /* ignore unparseable window-open targets */ }
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {

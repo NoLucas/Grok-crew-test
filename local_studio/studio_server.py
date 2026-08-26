@@ -387,10 +387,7 @@ def project_operations(project_id: str) -> dict[str, Any]:
 
 
 def _relative_workspace_path(value: str) -> str:
-    try:
-        return str(Path(value).resolve().relative_to(config.WORKSPACE_DIR))
-    except ValueError:
-        return value
+    return config.workspace_relative(value)
 
 
 def export_project_bundle(project_id: str) -> dict[str, Any]:

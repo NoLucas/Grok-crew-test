@@ -20,11 +20,35 @@ PUBLISHERS = {
     "youtube": YouTubePublisher(),
 }
 
-_SECRET_RE = re.compile(r"(?i)(bearer\s+|token=|access_token=)\S+")
+_PREFIXED_SECRET_RE = re.compile(
+    r"(?i)(bearer\s+|oauth\s+|authorization[=:\s]+|refresh_token[=:\s]+|access_token[=:\s]+|client_secret[=:\s]+|api[_-]?key[=:\s]+|token=)\S+"
+)
+_BARE_SECRET_RE = re.compile(
+    r"(?i)(ya29\.[A-Za-z0-9._-]+|gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9]+)"
+)
+_RETRY_PAYLOAD_KEYS = frozenset(
+    {
+        "render_path",
+        "caption",
+        "title",
+        "description",
+        "privacy_status",
+        "privacy_level",
+        "share_to_feed",
+        "made_for_kids",
+        "tags",
+        "category_id",
+        "disable_duet",
+        "disable_comment",
+        "disable_stitch",
+        "is_aigc",
+    }
+)
 
 
 def sanitize_publish_error(value: str) -> str:
-    return _SECRET_RE.sub(r"\1[redacted]", str(value)[:500])
+    text = _PREFIXED_SECRET_RE.sub(r"\1[redacted]", str(value)[:500])
+    return _BARE_SECRET_RE.sub("[redacted]", text)
 
 
 def publisher_credentials() -> dict[str, dict[str, Any]]:
@@ -81,8 +105,10 @@ def retry_publish(project: dict[str, Any], receipt_id: str, payload: dict[str, A
         return {**(receipt.get("result_json") or {}), "deduplicated": True, "idempotency_key": receipt["idempotency_key"]}
     if receipt["status"] == "running":
         raise ValueError("This publish receipt is already running.")
-    body = {**(payload or {}), "idempotency_key": receipt["idempotency_key"]}
-    return publish(receipt["platform"], project, body)
+    incoming = payload if isinstance(payload, dict) else {}
+    retry_payload = {key: incoming[key] for key in _RETRY_PAYLOAD_KEYS if key in incoming}
+    retry_payload["idempotency_key"] = receipt["idempotency_key"]
+    return publish(receipt["platform"], project, retry_payload)
 
 
 def publish(platform: str, project: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:

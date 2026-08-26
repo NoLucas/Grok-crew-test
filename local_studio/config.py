@@ -113,10 +113,19 @@ def workspace_path(value: str) -> Path:
     return resolved
 
 
-def require_path(value: Any, field: str) -> Path:
+def require_path(value: object, field: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} is required.")
     return workspace_path(value)
+
+
+def workspace_relative(path: Path | str) -> str:
+    """Return a workspace-relative path, or just the filename if the path is outside."""
+    resolved = Path(path).expanduser().resolve()
+    try:
+        return str(resolved.relative_to(WORKSPACE_DIR.resolve()))
+    except ValueError:
+        return resolved.name
 
 
 def caption_font() -> str | None:

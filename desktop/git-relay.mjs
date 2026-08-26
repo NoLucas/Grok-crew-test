@@ -76,9 +76,13 @@ export class GitRelay {
   git(repo, args) { return run('git', ['-C', repo, ...args], repo, this.gitEnvironment()); }
 
   async githubRequest(path, options = {}) {
+    const safePath = String(path ?? '');
+    if (!safePath.startsWith('/') || safePath.includes('//') || safePath.includes('\\') || safePath.includes('\0')) {
+      throw new Error('Blocked GitHub API path.');
+    }
     const auth = options.token ? { access_token: options.token } : this.githubAuth();
     if (!auth?.access_token) throw new Error('GitHub login is required.');
-    const response = await this.fetch(`https://api.github.com${path}`, {
+    const response = await this.fetch(`https://api.github.com${safePath}`, {
       ...options,
       headers: {
         Accept: 'application/vnd.github+json',
@@ -115,7 +119,22 @@ export class GitRelay {
     const device = await response.json();
     if (!response.ok || !device.device_code) throw new Error(String(device.error_description ?? device.error ?? 'GitHub device login could not start.'));
     this.clipboard?.writeText(String(device.user_code));
-    await this.shell?.openExternal(String(device.verification_uri));
+    let verification;
+    try {
+      verification = new URL(String(device.verification_uri ?? ''));
+    } catch {
+      throw new Error('GitHub returned an invalid device verification URL.');
+    }
+    if (
+      verification.protocol !== 'https:'
+      || verification.hostname !== 'github.com'
+      || !verification.pathname.startsWith('/login/device')
+      || verification.username
+      || verification.password
+    ) {
+      throw new Error('GitHub device verification URL is not allowed.');
+    }
+    await this.shell?.openExternal(verification.href);
     const confirmation = await this.dialog.showMessageBox({
       type: 'info', title: 'GitHub 로그인',
       message: `브라우저에서 코드 ${device.user_code}를 확인하세요.`,

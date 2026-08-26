@@ -139,6 +139,19 @@ def test_token_check_rejects_wrong_bearer_token(live_server, monkeypatch):
         assert exc.code == 401
 
 
+def test_token_check_rejects_different_length_token_without_leaking(live_server, monkeypatch):
+    monkeypatch.setenv("LOCAL_STUDIO_TOKEN", "correct-token")
+    request = Request(f"{live_server}/api/projects", headers={"Authorization": "Bearer x"})
+    try:
+        urlopen(request, timeout=10)
+        assert False, "expected a 401 for a short token"
+    except HTTPError as exc:
+        assert exc.code == 401
+        body = json.loads(exc.read().decode("utf-8"))
+        assert body["error"] == "Invalid local studio token."
+        assert "length" not in body["error"].lower()
+
+
 def test_token_check_accepts_correct_bearer_token(live_server, monkeypatch):
     monkeypatch.setenv("LOCAL_STUDIO_TOKEN", "correct-token")
     request = Request(f"{live_server}/api/projects", headers={"Authorization": "Bearer correct-token"})

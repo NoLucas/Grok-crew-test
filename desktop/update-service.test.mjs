@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareVersions, fetchLatestRelease, updatePolicy } from './update-service.mjs';
+import {
+  compareVersions,
+  fetchLatestRelease,
+  parseReleasePageUrl,
+  resolveUpdateRepo,
+  updatePolicy,
+  validateGitHubRepoSlug,
+} from './update-service.mjs';
 
 test('compareVersions orders dotted versions', () => {
   assert.equal(compareVersions('0.2.3', '0.2.3'), 0);
@@ -35,4 +42,29 @@ test('a newer unsigned release is available externally', () => {
 test('fetchLatestRelease treats a missing release as an empty feed', async () => {
   const latest = await fetchLatestRelease('owner/repo', async () => ({ status: 404, ok: false }));
   assert.equal(latest, null);
+});
+
+test('GitHub repo slugs reject traversal and odd hosts', () => {
+  assert.equal(validateGitHubRepoSlug('NoLucas/Grok-crew-test'), true);
+  assert.equal(validateGitHubRepoSlug('../evil/repo'), false);
+  assert.equal(validateGitHubRepoSlug('https://evil.example/repo'), false);
+  assert.equal(resolveUpdateRepo('evil.com/../x'), 'NoLucas/Grok-crew-test');
+});
+
+test('release page URLs stay on github.com without credentials', () => {
+  const repo = 'NoLucas/Grok-crew-test';
+  assert.equal(
+    parseReleasePageUrl('https://github.com/NoLucas/Grok-crew-test/releases/tag/v1.0.0', repo),
+    'https://github.com/NoLucas/Grok-crew-test/releases/tag/v1.0.0',
+  );
+  assert.equal(parseReleasePageUrl('https://evil.example/NoLucas/Grok-crew-test/releases', repo), null);
+  assert.equal(parseReleasePageUrl('https://user:pass@github.com/NoLucas/Grok-crew-test/releases', repo), null);
+  assert.equal(parseReleasePageUrl('https://github.com/evil/malware/releases', repo), null);
+});
+
+test('fetchLatestRelease rejects an unsafe repository slug', async () => {
+  await assert.rejects(
+    () => fetchLatestRelease('../evil/repo', async () => ({ status: 200, ok: true, json: async () => ({}) })),
+    /not allowed/,
+  );
 });

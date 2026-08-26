@@ -3,6 +3,7 @@ studio_server.py for the actual domain logic each route calls into)."""
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import mimetypes
@@ -208,7 +209,10 @@ class StudioHandler(BaseHTTPRequestHandler):
         if not expected:
             return True
         provided = self.headers.get("Authorization", "")
-        return hmac.compare_digest(provided, f"Bearer {expected}")
+        expected_header = f"Bearer {expected}"
+        provided_digest = hashlib.sha256(provided.encode("utf-8")).digest()
+        expected_digest = hashlib.sha256(expected_header.encode("utf-8")).digest()
+        return hmac.compare_digest(provided_digest, expected_digest)
 
     def _internal_error(self, exc: Exception) -> None:
         print(f"[{utc_now()}] local studio error: {exc}")
