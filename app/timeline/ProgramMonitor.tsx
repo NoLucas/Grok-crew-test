@@ -13,6 +13,8 @@ type PreviewPayload = {
   height?: number;
   audio_rms?: number;
   active_clip_ids?: string[];
+  preview_quality?: 'draft' | 'full';
+  used_proxy?: boolean;
   error?: string;
 };
 
@@ -30,6 +32,7 @@ export function ProgramMonitor({
   outputReady,
   onToggleOutput,
   actions,
+  quality = 'draft',
 }: {
   projectId: string;
   playhead: number;
@@ -39,6 +42,7 @@ export function ProgramMonitor({
   outputReady: boolean;
   onToggleOutput: () => void;
   actions?: ReactNode;
+  quality?: 'draft' | 'full';
 }) {
   const { t } = useLanguage();
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
@@ -51,7 +55,7 @@ export function ProgramMonitor({
     let cancelled = false;
     const handle = window.setTimeout(() => {
       setBusy(true);
-      void request(`/api/v2/projects/${projectId}/preview?at=${playhead.toFixed(3)}`)
+      void request(`/api/v2/projects/${projectId}/preview?at=${playhead.toFixed(3)}&quality=${quality}`)
         .then((payload) => {
           if (cancelled) return;
           setPreview(payload.preview as PreviewPayload);
@@ -63,12 +67,12 @@ export function ProgramMonitor({
         .finally(() => {
           if (!cancelled) setBusy(false);
         });
-    }, 180);
+    }, 200);
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [playhead, previewOutput, projectId, request]);
+  }, [playhead, previewOutput, projectId, quality, request]);
 
   const loadScopes = async () => {
     try {
@@ -108,11 +112,18 @@ export function ProgramMonitor({
         <span>{formatTimecode(playhead)}</span>
         <span>
           {preview?.width ? `${preview.width}×${preview.height}` : '—'}
+          {preview?.preview_quality === 'draft'
+            ? ` · ${preview.used_proxy
+              ? t('프록시 초안', 'Proxy draft', '代理草稿', 'プロキシ草案')
+              : t('초안', 'Draft', '草稿', '草案')}`
+            : preview?.preview_quality === 'full'
+              ? ` · ${t('풀 합성', 'Full composite', '完整合成', 'フル合成')}`
+              : ''}
           {preview?.caption ? ` · ${preview.caption}` : ''}
         </span>
         <span>
           {typeof preview?.audio_rms === 'number'
-            ? `${t('오디오', 'Audio', '音频', 'オーディオ')} ${preview.audio_rms.toFixed(3)}`
+            ? `${t('오디오', 'Audio', '音频', 'オーディオ')} ${preview.audio_rms.toFixed(3)} · ${t('최종 렌더: 원본', 'Final render: original', '最终渲染：原片', '最終レンダー: 元素材')}`
             : t('최종 렌더: 원본', 'Final render: original', '最终渲染：原片', '最終レンダー: 元素材')}
         </span>
       </div>

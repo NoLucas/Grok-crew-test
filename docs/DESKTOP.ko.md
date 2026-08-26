@@ -60,7 +60,7 @@ GitHub OAuth 앱을 등록한 배포에서는 Electron 프로세스에 `GROK_CRE
 
 - 기존 `/api/*`, CLI, Production 및 레거시 화면은 유지됩니다. 새 기능은 `/api/v2/*`를 사용합니다.
 - 현재 렌더러는 다중 영상·이미지·오디오·자막·오버레이 트랙, 기본 transform/opacity/volume/speed를 처리합니다.
-- P1 직접 편집·트랙·이력·프록시·키프레임·전환/자막·오디오 믹서·렌더 골든·Electron E2E가 연결되어 있습니다. 프로그램 모니터는 플레이헤드의 합성 프레임을 최종 MoviePy 렌더와 같은 경로로 만듭니다.
+- P1 직접 편집·트랙·이력·프록시·키프레임·전환/자막·오디오 믹서·렌더 골든·Electron E2E가 연결되어 있습니다. 프로그램 모니터는 기본으로 540px JPEG 초안 합성을 쓰고, 프록시가 있으면 미리보기에만 사용합니다. `quality=full`과 스코프는 최종 MoviePy 렌더와 같은 경로입니다.
 - P2 고급 편집의 첫 슬라이스도 포함됩니다: 마스크·블렌드·크로마 키, 스피드 램프·트래커 부착·안정화, nested sequence·multicam, LUT/컬러 휠/스코프, EQ·컴프레서, EDL/OTIO 교환과 렌더 큐. After Effects급 합성·플러그인 SDK·실시간 공동 편집은 1.0 범위 밖입니다.
 - P3 안정 1.0 로컬 게이트: 게시 영수증·재시도·중단 정리, `/api/v2/launch`, GitHub 릴리스 알림(설치는 서명 채널이 생길 때까지 외부). Instagram/TikTok/YouTube OAuth 앱과 macOS 서명/notarization은 이 저장소에서 만들지 않습니다.
 - UI Quality Track UI-01..UI-10: 시각 계층, 8px 간격, 빈/로딩/오류 상태, 포커스 링, 좁은 화면에서 설정·편집·내보내기 탭 유지, 프로젝트/상태 서랍, 스테이지 가독성, 커맨드바·영수증 안내.

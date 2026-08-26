@@ -109,6 +109,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 ### 내장 제작 도구
 
+- 프로그램 모니터 초안 미리보기(작은 JPEG 합성, 준비된 프록시). 최종 렌더는 원본을 사용합니다
 - 프로젝트 설정, 로컬 소스/출력 경로, 렌더 설정
 - 단어·구절 중심의 대본 컷 맵
 - 리프레임, 자막, 속도, FPS, 룩, 오디오 정책, 품질 선택

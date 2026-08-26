@@ -49,6 +49,39 @@ def proxy_relative_path(project_id: str, asset_id: str, source: Path) -> str:
     return f"proxies/{safe_project}/{safe_asset}-{stat.st_size:x}-{stat.st_mtime_ns:x}.mp4"
 
 
+def ready_proxy_paths(project_id: str, timeline: dict[str, Any] | None = None) -> dict[str, Path]:
+    """Asset ids whose current proxy file can be used for draft preview."""
+    assets: dict[str, dict[str, Any]] = {}
+    if isinstance(timeline, dict):
+        assets = {
+            str(item.get("id")): item
+            for item in timeline.get("assets", [])
+            if isinstance(item, dict) and item.get("id")
+        }
+    paths: dict[str, Path] = {}
+    for proxy in list_proxies(project_id):
+        asset_id = str(proxy.get("asset_id") or "")
+        if not asset_id:
+            continue
+        asset = assets.get(asset_id)
+        if asset is not None:
+            try:
+                source = workspace_path(str(asset.get("path", "")))
+            except ValueError:
+                continue
+            if not proxy_is_current(proxy, source):
+                continue
+        elif proxy.get("status") != "ready" or not proxy.get("proxy_path"):
+            continue
+        try:
+            destination = workspace_path(str(proxy["proxy_path"]))
+        except ValueError:
+            continue
+        if destination.is_file():
+            paths[asset_id] = destination
+    return paths
+
+
 def list_proxies(project_id: str) -> list[dict[str, Any]]:
     with db() as conn:
         rows = conn.execute(

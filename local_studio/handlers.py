@@ -293,12 +293,17 @@ class StudioHandler(BaseHTTPRequestHandler):
                 query = urlparse(self.path).query
                 at = 0.0
                 include_image = True
+                quality = "draft"
                 for part in query.split("&"):
                     if part.startswith("at="):
                         at = float(part.split("=", 1)[1] or 0)
                     if part == "image=0":
                         include_image = False
-                self._json(200, {"preview": project_preview(path.split("/")[4], at, include_image=include_image)})
+                    if part.startswith("quality="):
+                        value = part.split("=", 1)[1]
+                        if value in {"draft", "full"}:
+                            quality = value
+                self._json(200, {"preview": project_preview(path.split("/")[4], at, include_image=include_image, quality=quality)})
             elif path.startswith("/api/v2/projects/") and path.endswith("/scopes"):
                 query = urlparse(self.path).query
                 at = 0.0

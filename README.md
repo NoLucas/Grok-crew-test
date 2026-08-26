@@ -113,6 +113,7 @@ Then open [Bot Check](http://localhost:3000/bots). The bot appears only after it
 
 ### Built-in production tools
 
+- Program monitor draft preview (capped JPEG composite, optional proxy) while final render stays on original media
 - Project setup, local source/output paths, and render settings
 - Transcript cut maps for word- and phrase-led editing
 - Reframing, captions, speed, FPS, look, audio policy, and quality choices

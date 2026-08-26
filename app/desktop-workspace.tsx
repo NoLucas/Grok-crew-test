@@ -214,6 +214,7 @@ export default function DesktopWorkspace() {
   const [studioState, setStudioState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [drawer, setDrawer] = useState<'none' | 'projects' | 'status'>('none');
   const syncingRelay = useRef(false);
+  const autoProxyKey = useRef('');
   const selectedClipId = selectedClipIds[selectedClipIds.length - 1] ?? '';
 
   const api = useCallback(async (path: string, init?: RequestInit): Promise<JsonObject> => {
@@ -495,10 +496,12 @@ export default function DesktopWorkspace() {
       setMessage(error instanceof Error ? error.message : t('교환 파일을 만들지 못했습니다.', 'Could not export the edit list.', '无法导出交换文件。', '交換ファイルを書き出せませんでした。'));
     }
   };
-  const generateProxy = async (force = false) => {
+  const generateProxy = useCallback(async (force = false, quiet = false) => {
     if (!project || !primaryVideoAsset || proxyBusy) return;
     setProxyBusy(true);
-    setMessage(t('저해상도 프록시를 만들고 있습니다.', 'Generating a low-resolution proxy.', '正在生成低分辨率代理文件。', '低解像度プロキシを生成しています。'));
+    if (!quiet) {
+      setMessage(t('저해상도 프록시를 만들고 있습니다.', 'Generating a low-resolution proxy.', '正在生成低分辨率代理文件。', '低解像度プロキシを生成しています。'));
+    }
     try {
       const response = await api(`/api/v2/projects/${project.id}/proxies`, {
         method: 'POST',
@@ -515,7 +518,9 @@ export default function DesktopWorkspace() {
       setProxyJob(response.job);
       if (!response.job) {
         setUseProxy(true);
-        setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
+        if (!quiet) {
+          setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
+        }
         return;
       }
       const pollProxyJob = async (jobId: string, attempt = 0): Promise<LocalJob> => {
@@ -538,10 +543,18 @@ export default function DesktopWorkspace() {
       if (job.status === 'succeeded') {
         setUseProxy(true);
         setMessage(t(
-          '프록시가 준비되었습니다. 미리보기만 가벼운 파일을 사용하고 최종 렌더는 원본을 사용합니다.',
-          'Proxy ready. Preview uses the lighter file; final render still uses the original.',
-          '代理文件已就绪。预览使用轻量文件，最终渲染仍使用原片。',
-          'プロキシの準備ができました。プレビューのみ軽量ファイルを使い、最終レンダーは元素材を使います。',
+          quiet
+            ? '미리보기 프록시가 준비되었습니다. 최종 렌더는 원본을 사용합니다.'
+            : '프록시가 준비되었습니다. 미리보기만 가벼운 파일을 사용하고 최종 렌더는 원본을 사용합니다.',
+          quiet
+            ? 'Preview proxy ready. Final render still uses the original.'
+            : 'Proxy ready. Preview uses the lighter file; final render still uses the original.',
+          quiet
+            ? '预览代理已就绪。最终渲染仍使用原片。'
+            : '代理文件已就绪。预览使用轻量文件，最终渲染仍使用原片。',
+          quiet
+            ? 'プレビュー用プロキシの準備ができました。最終レンダーは元素材を使います。'
+            : 'プロキシの準備ができました。プレビューのみ軽量ファイルを使い、最終レンダーは元素材を使います。',
         ));
       } else {
         setMessage(job.error_text || t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
@@ -552,7 +565,16 @@ export default function DesktopWorkspace() {
     } finally {
       setProxyBusy(false);
     }
-  };
+  }, [api, primaryVideoAsset, project, proxyBusy, refreshProject, t]);
+  useEffect(() => {
+    if (!project?.id || !primaryVideoAsset?.id) return;
+    if (proxyReady || proxyBusy) return;
+    if (activeProxy && ['queued', 'running', 'failed'].includes(activeProxy.status)) return;
+    const key = `${project.id}:${primaryVideoAsset.id}`;
+    if (autoProxyKey.current === key) return;
+    autoProxyKey.current = key;
+    void generateProxy(false, true);
+  }, [activeProxy, generateProxy, primaryVideoAsset?.id, project?.id, proxyBusy, proxyReady]);
   const cancelProxy = async () => {
     if (!proxyJob || !['queued', 'running'].includes(proxyJob.status)) return;
     await api(`/api/jobs/${proxyJob.id}/cancel`, { method: 'POST', body: '{}' });
@@ -847,6 +869,7 @@ export default function DesktopWorkspace() {
                 sourceFallback={mediaUrl(previewPath)}
                 previewOutput={previewOutput}
                 outputReady={outputReady}
+                quality={useProxy ? 'draft' : 'full'}
                 onToggleOutput={() => setPreviewOutput((value) => !value)}
                 actions={(
                   <>

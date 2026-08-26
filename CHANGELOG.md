@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Program monitor HTTP preview now defaults to a draft composite: max 540px wide, JPEG, cheaper audio RMS, and ready proxies when they exist. `GET .../preview?quality=full` and Python `preview_at()` stay 1:1 with the final MoviePy render. Opening a Desktop project starts a background proxy for the primary video when one is missing.
 - First-run no longer needs a second terminal: Desktop can open the bundled sample project in one click (`POST /api/v2/first-run/sample`). `npm run local` and `npm run desktop` share the same Python + sample bootstrap, and later starts skip `pip` when `requirements.txt` is unchanged.
 
 - P3 publish receipts: list recent Instagram/TikTok/YouTube attempts, retry a failed receipt with the same idempotency key, and mark receipts left `running` as failed on the next Local Studio start.
@@ -64,6 +65,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Changed
 
+- Balanced local encodes use ffmpeg `faster` and High uses `medium`, so export iteration is quicker. Compact stays `veryfast`. Final output still reads original assets, never proxies.
 - README, Local Studio, and the desktop guide treat Desktop (`/`) as the default workspace. Instagram, TikTok, and YouTube publish are documented as implemented with local env tokens; official OAuth apps stay external.
 - Desktop Export asks before retrying an interrupted publish receipt, because the platform may already have the first upload. Receipt retry buttons stay visible when the error text is long.
 - Legacy browser pages keep their routes and show a banner that points to Desktop. Production and Bot Check can still run live jobs; the other header pages stay planning or preview. Production no longer crashes when a Desktop Timeline v2 project has no legacy `clips` array.

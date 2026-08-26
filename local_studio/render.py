@@ -26,6 +26,46 @@ def original_asset_path(asset: dict[str, Any]) -> Path:
     return _asset_path(str(asset.get("path", "")))
 
 
+DRAFT_PREVIEW_MAX_WIDTH = 540
+
+
+def encoder_settings(quality: str) -> tuple[str, str]:
+    """Return (bitrate, libx264 preset). Balanced/high prefer speed over tiny files."""
+    bitrate = {"compact": "3500k", "balanced": "6000k", "high": "9000k"}.get(quality, "6000k")
+    preset = {"compact": "veryfast", "balanced": "faster", "high": "medium"}.get(quality, "faster")
+    return bitrate, preset
+
+
+def draft_preview_size(
+    width: int,
+    height: int,
+    max_width: int = DRAFT_PREVIEW_MAX_WIDTH,
+) -> tuple[int, int]:
+    """Cap program-monitor composites so scrubbing does not decode 1080p."""
+    width = max(2, int(width))
+    height = max(2, int(height))
+    max_width = max(2, int(max_width))
+    if width > max_width:
+        height = max(2, int(round(height * (max_width / width))))
+        width = max_width
+    width -= width % 2
+    height -= height % 2
+    return max(2, width), max(2, height)
+
+
+def preview_asset_path(
+    asset: dict[str, Any],
+    proxy_paths: dict[str, Path] | None = None,
+) -> Path:
+    """Draft preview may use a ready proxy; missing files fall back to the original."""
+    asset_id = str(asset.get("id", ""))
+    if proxy_paths and asset_id in proxy_paths:
+        candidate = proxy_paths[asset_id]
+        if isinstance(candidate, Path) and candidate.is_file():
+            return candidate
+    return original_asset_path(asset)
+
+
 def _apply_dynamic_crop(layer: Any, keyframes: dict[str, list[dict[str, Any]]], transform: dict[str, Any]) -> Any:
     if not has_keyframes(keyframes, "crop_left", "crop_right", "crop_top", "crop_bottom"):
         return layer
@@ -115,6 +155,7 @@ def _render_timeline_v2(
     progress_cb: Callable[[int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
     sample_at: float | None = None,
+    preview: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Render the immutable multi-track timeline used by the desktop editor.
 
@@ -156,8 +197,20 @@ def _render_timeline_v2(
     target_h -= target_h % 2
     fps = int(contract["fps"])
     quality = str(settings.get("quality", "balanced"))
-    bitrate = {"compact": "3500k", "balanced": "6000k", "high": "9000k"}.get(quality, "6000k")
-    encoder_preset = {"compact": "veryfast", "balanced": "medium", "high": "slow"}.get(quality, "medium")
+    bitrate, encoder_preset = encoder_settings(quality)
+    preview_options = preview if isinstance(preview, dict) else {}
+    preview_quality = "draft" if preview_options.get("quality") == "draft" else "full"
+    is_draft = sample_at is not None and preview_quality == "draft"
+    proxy_paths = preview_options.get("proxy_paths") if is_draft else None
+    if not isinstance(proxy_paths, dict):
+        proxy_paths = None
+    if is_draft:
+        max_width = preview_options.get("max_width", DRAFT_PREVIEW_MAX_WIDTH)
+        try:
+            cap = int(max_width)
+        except (TypeError, ValueError):
+            cap = DRAFT_PREVIEW_MAX_WIDTH
+        target_w, target_h = draft_preview_size(target_w, target_h, cap)
     background = str(settings.get("background", "#000000"))
     try:
         bg_rgb = tuple(int(background.lstrip("#")[index:index + 2], 16) for index in (0, 2, 4))
@@ -187,7 +240,16 @@ def _render_timeline_v2(
     dialogue_audio_layers: list[Any] = []
     ducking_audio_layers: list[tuple[Any, float]] = []
     owned_clips: list[Any] = []
+    used_proxy_ids: set[str] = set()
     total = max(len(active_clips), 1)
+
+    def source_for(asset: dict[str, Any]) -> Path:
+        if is_draft:
+            resolved = preview_asset_path(asset, proxy_paths)
+            if resolved != original_asset_path(asset):
+                used_proxy_ids.add(str(asset.get("id", "")))
+            return resolved
+        return original_asset_path(asset)
 
     def close_owned() -> None:
         for item in reversed(owned_clips):
@@ -237,7 +299,7 @@ def _render_timeline_v2(
             elif kind == "audio":
                 if not asset or asset.get("kind") not in {"audio", "video"}:
                     continue
-                source_path = original_asset_path(asset)
+                source_path = source_for(asset)
                 if not source_path.exists():
                     raise RuntimeError(f"Timeline asset does not exist: {source_path}")
                 source_audio = AudioFileClip(str(source_path))
@@ -294,13 +356,17 @@ def _render_timeline_v2(
                         vertical_align="center",
                     ).with_duration(clip_duration)
                 else:
-                    source_path = original_asset_path(asset)
+                    source_path = source_for(asset)
                     if not source_path.exists():
                         raise RuntimeError(f"Timeline asset does not exist: {source_path}")
                 if asset.get("kind") == "image":
                     layer = ImageClip(str(source_path)).with_duration(clip_duration)
                 elif asset.get("kind") == "video":
-                    source_video = VideoFileClip(str(source_path))
+                    open_kwargs: dict[str, Any] = {}
+                    if is_draft:
+                        open_kwargs["target_resolution"] = (target_w, None)
+                        open_kwargs["resize_algorithm"] = "fast_bilinear"
+                    source_video = VideoFileClip(str(source_path), **open_kwargs)
                     owned_clips.append(source_video)
                     source_in = max(0, float(clip_data.get("source_in", 0)))
                     source_out = min(float(clip_data.get("source_out", source_in + clip_duration)), float(source_video.duration))
@@ -387,7 +453,9 @@ def _render_timeline_v2(
         if len(visual_layers) == 1 and not audio_layers:
             raise RuntimeError("No renderable video, image, caption, or audio clips were found.")
         if ducking_audio_layers:
-            if dialogue_audio_layers:
+            if is_draft or not dialogue_audio_layers:
+                audio_layers.extend(layer for layer, _floor in ducking_audio_layers)
+            else:
                 dialogue_mix = CompositeAudioClip(dialogue_audio_layers).with_duration(duration)
                 owned_clips.append(dialogue_mix)
                 for music_layer, floor in ducking_audio_layers:
@@ -395,8 +463,6 @@ def _render_timeline_v2(
                     ducked = _apply_music_ducking(music_layer, gain_at)
                     audio_layers.append(ducked)
                     owned_clips.append(ducked)
-            else:
-                audio_layers.extend(layer for layer, _floor in ducking_audio_layers)
         final = CompositeVideoClip(visual_layers, size=(target_w, target_h)).with_duration(duration)
         owned_clips.append(final)
         if audio_layers:
@@ -411,8 +477,12 @@ def _render_timeline_v2(
             frame = final.get_frame(time)
             audio_rms = 0.0
             if final.audio:
-                times = np.array([max(time + offset, 0.001) for offset in (0.011, 0.023, 0.037)])
-                samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=44_100)
+                if is_draft:
+                    times = np.array([max(time, 0.001)])
+                    samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=8_000)
+                else:
+                    times = np.array([max(time + offset, 0.001) for offset in (0.011, 0.023, 0.037)])
+                    samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=44_100)
                 audio_rms = float(np.sqrt(np.mean(np.square(samples))))
             logical = snapshot_at(timeline, time)
             return {
@@ -425,7 +495,9 @@ def _render_timeline_v2(
                 "caption": logical["caption"],
                 "active_clip_ids": logical["active_clip_ids"],
                 "render_contract": contract,
-                "scopes": waveform_scope(frame),
+                "scopes": {} if is_draft else waveform_scope(frame),
+                "preview_quality": "draft" if is_draft else "full",
+                "used_proxy": bool(used_proxy_ids),
             }
         if progress_cb:
             progress_cb(92)
@@ -502,10 +574,16 @@ def _apply_music_ducking(music, gain_at):
     return music.transform(duck, keep_duration=True)
 
 
-def sample_timeline_frame(timeline: dict[str, Any], at: float) -> dict[str, Any]:
+def sample_timeline_frame(
+    timeline: dict[str, Any],
+    at: float,
+    *,
+    preview: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return _render_timeline_v2(
         {"timeline_json": timeline, "output_path": "outputs/preview.mp4"},
         sample_at=at,
+        preview=preview,
     )
 
 
@@ -534,11 +612,9 @@ def render_moviepy(project: dict[str, Any], progress_cb: Callable[[int], None] |
     if fps not in {24, 30, 60}:
         fps = 30
     quality = str(settings.get("quality", "balanced"))
-    bitrate = {"compact": "3500k", "balanced": "6000k", "high": "9000k"}.get(quality, "6000k")
-    # libx264 encoder preset: trades file-size efficiency for encode speed. "compact" is
-    # meant for quick review/draft renders, so it uses the fastest preset rather than the
-    # ffmpeg default ("medium"), which is a large, low-risk win for iteration speed.
-    encoder_preset = {"compact": "veryfast", "balanced": "medium", "high": "slow"}.get(quality, "medium")
+    # libx264 encoder preset: trades file-size efficiency for encode speed. Balanced and
+    # high stay sharp enough for short-form delivery while avoiding the slowest presets.
+    bitrate, encoder_preset = encoder_settings(quality)
     crop_anchor = str(settings.get("crop_anchor", "center"))
     if crop_anchor not in {"left", "center", "right"}:
         crop_anchor = "center"

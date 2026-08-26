@@ -51,6 +51,7 @@ from proxy import (
     get_proxy,
     list_proxies,
     proxy_is_current,
+    ready_proxy_paths,
     source_asset,
     update_proxy,
 )
@@ -790,11 +791,26 @@ def start_job(job_id: str, *, wait: bool) -> dict[str, Any]:
     return get_job(job_id) or job
 
 
-def project_preview(project_id: str, at: float, *, include_image: bool = True) -> dict[str, Any]:
+def project_preview(
+    project_id: str,
+    at: float,
+    *,
+    include_image: bool = True,
+    quality: str = "draft",
+) -> dict[str, Any]:
     from desktop_domain import get_timeline
 
     payload = get_timeline(project_id)
-    preview = preview_at(payload["timeline"], at, include_image=include_image)
+    timeline = payload["timeline"]
+    preview_quality = "full" if quality == "full" else "draft"
+    proxies = ready_proxy_paths(project_id, timeline) if preview_quality == "draft" else {}
+    preview = preview_at(
+        timeline,
+        at,
+        include_image=include_image,
+        quality=preview_quality,
+        proxy_paths=proxies,
+    )
     preview.pop("frame", None)
     preview["project_id"] = project_id
     return preview
