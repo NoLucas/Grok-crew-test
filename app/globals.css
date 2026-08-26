@@ -6930,8 +6930,13 @@ select {
 .desktop-publish-row button:disabled { background: #ddd; color: #999; }
 .desktop-receipts-card { grid-column: 1 / -1; }
 .desktop-receipt {
-  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
-  padding: 10px 13px; border-bottom: 1px solid var(--desktop-line-soft);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--desktop-line-soft);
 }
 .desktop-receipt div { display: grid; gap: 3px; min-width: 0; }
 .desktop-receipt b { font-size: 10px; }
@@ -6950,10 +6955,10 @@ select {
 }
 .desktop-receipt-confirm b { font-size: 12px; color: #8a4b08; }
 .desktop-receipt-confirm p { margin: 0; color: var(--desktop-muted); font-size: 11px; line-height: 1.45; }
-.desktop-receipt-confirm div { display: flex; gap: 8px; }
-.desktop-receipt-confirm button { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 8px; font-weight: 750; }
+.desktop-receipt-confirm div { display: flex; flex-wrap: wrap; gap: 8px; }
+.desktop-receipt-confirm button { height: 30px; padding: 0 12px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .desktop-receipt-confirm button.desktop-secondary { background: #eee; color: var(--desktop-ink); }
-.desktop-receipt button { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 8px; font-weight: 750; }
+.desktop-receipt button { height: 30px; padding: 0 12px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .desktop-receipt button:disabled { background: #ddd; color: #999; }
 .desktop-receipt-empty { display: grid; gap: 6px; margin: 0; padding: 18px 16px; }
 .desktop-receipt-empty b { font-size: 13px; }
