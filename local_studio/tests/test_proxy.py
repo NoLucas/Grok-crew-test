@@ -102,6 +102,49 @@ def test_proxy_job_completion_persists_ready_file_metadata(studio, monkeypatch):
     assert (proxy["width"], proxy["height"], proxy["progress"]) == (640, 360, 100)
 
 
+def test_ensure_project_proxies_queues_each_missing_video_once(studio):
+    from desktop_domain import PATCH_SCHEMA, apply_timeline_patch, get_timeline
+
+    project, source = make_project(studio)
+    broll = config.WORKSPACE_DIR / "inputs" / "broll.mp4"
+    broll.write_bytes(b"broll-video")
+    timeline = get_timeline(project["id"])["timeline"]
+    apply_timeline_patch(project["id"], {
+        "schema": PATCH_SCHEMA,
+        "base_revision": timeline["revision"],
+        "origin": "human",
+        "created_by": "proxy-test",
+        "operations": [
+            {"op": "add_asset", "asset": {
+                "id": "broll-asset", "kind": "video", "name": "B-roll", "path": "inputs/broll.mp4",
+            }},
+        ],
+    })
+
+    first = studio.ensure_project_proxies(project["id"], run_immediately=False)
+    assert first["queued"] == 2
+    assert first["reused"] == 0
+    assert {item["asset_id"] for item in first["proxies"]} == {"source-main", "broll-asset"}
+
+    second = studio.ensure_project_proxies(project["id"], run_immediately=False)
+    assert second["queued"] == 0
+    assert second["reused"] == 2
+
+    relative = proxy_relative_path(project["id"], "source-main", source)
+    destination = config.workspace_path(relative)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b"proxy")
+    update_proxy(
+        project["id"], "source-main", source,
+        status="ready", proxy_path=relative, progress=100, width=640, height=360,
+    )
+    via_star = studio.request_proxy(project["id"], {"asset_id": "*", "run_immediately": False})
+    assert via_star["queued"] == 0
+    assert via_star["reused"] == 2
+    via_flag = studio.request_proxy(project["id"], {"ensure_all": True, "run_immediately": False})
+    assert via_flag["reused"] == 2
+
+
 def test_final_render_path_ignores_proxy_metadata(studio):
     project, source = make_project(studio)
     asset, _resolved = source_asset(project, "source-main")

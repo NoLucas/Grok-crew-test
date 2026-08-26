@@ -66,6 +66,17 @@ def preview_asset_path(
     return original_asset_path(asset)
 
 
+def close_owned(owned_clips: list[Any] | None) -> None:
+    """Close MoviePy clips in reverse creation order; swallow close errors."""
+    if not owned_clips:
+        return
+    for item in reversed(owned_clips):
+        try:
+            item.close()
+        except Exception:
+            pass
+
+
 def _apply_dynamic_crop(layer: Any, keyframes: dict[str, list[dict[str, Any]]], transform: dict[str, Any]) -> Any:
     if not has_keyframes(keyframes, "crop_left", "crop_right", "crop_top", "crop_bottom"):
         return layer
@@ -150,20 +161,19 @@ def _apply_transitions(layer: Any, clip_data: dict[str, Any], vfx: Any) -> Any:
     return layer.with_effects(effects) if effects else layer
 
 
-def _render_timeline_v2(
+def _compose_timeline_v2(
     project: dict[str, Any],
     progress_cb: Callable[[int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
-    sample_at: float | None = None,
     preview: dict[str, Any] | None = None,
+    *,
+    for_sample: bool = False,
 ) -> dict[str, Any]:
-    """Render the immutable multi-track timeline used by the desktop editor.
+    """Build the Timeline v2 composite. Caller owns the returned clips.
 
-    The first desktop milestone intentionally implements the effects represented
-    by the public v2 data model (track ordering, trims, static transforms, audio
-    levels and captions) without flattening it back into the legacy cut list.
-    More advanced effects can therefore be added without another persistence
-    migration.
+    Does not close clips and never writes a file. Preview sampling may pass
+    `for_sample=True` so draft quality can use proxies and a capped frame size.
+    Final render must call this with `for_sample=False`.
     """
     try:
         from moviepy import (
@@ -200,7 +210,7 @@ def _render_timeline_v2(
     bitrate, encoder_preset = encoder_settings(quality)
     preview_options = preview if isinstance(preview, dict) else {}
     preview_quality = "draft" if preview_options.get("quality") == "draft" else "full"
-    is_draft = sample_at is not None and preview_quality == "draft"
+    is_draft = for_sample and preview_quality == "draft"
     proxy_paths = preview_options.get("proxy_paths") if is_draft else None
     if not isinstance(proxy_paths, dict):
         proxy_paths = None
@@ -232,8 +242,6 @@ def _render_timeline_v2(
         raise RuntimeError("Timeline duration must be positive.")
 
     output = Path(project.get("output_path") or "outputs/preview.mp4")
-    if sample_at is None:
-        output.parent.mkdir(parents=True, exist_ok=True)
     font_path = caption_font()
     visual_layers: list[Any] = [ColorClip(size=(target_w, target_h), color=bg_rgb).with_duration(duration)]
     audio_layers: list[Any] = []
@@ -250,13 +258,6 @@ def _render_timeline_v2(
                 used_proxy_ids.add(str(asset.get("id", "")))
             return resolved
         return original_asset_path(asset)
-
-    def close_owned() -> None:
-        for item in reversed(owned_clips):
-            try:
-                item.close()
-            except Exception:
-                pass
 
     try:
         for index, (track, clip_data) in enumerate(active_clips):
@@ -468,53 +469,126 @@ def _render_timeline_v2(
         if audio_layers:
             combined = CompositeAudioClip(([final.audio] if final.audio else []) + audio_layers)
             owned_clips.append(combined)
-            final = final.with_audio(combined)
-        has_audio = bool(final.audio)
-        if sample_at is not None:
-            import numpy as np
+            with_audio = final.with_audio(combined)
+            if with_audio is not final:
+                owned_clips.append(with_audio)
+            final = with_audio
+        return {
+            "final": final,
+            "owned_clips": owned_clips,
+            "width": target_w,
+            "height": target_h,
+            "fps": fps,
+            "duration": duration,
+            "contract": contract,
+            "used_proxy": bool(used_proxy_ids),
+            "is_draft": is_draft,
+            "timeline": timeline,
+            "platform": platform,
+            "bitrate": bitrate,
+            "encoder_preset": encoder_preset,
+            "output": output,
+        }
+    except BaseException:
+        close_owned(owned_clips)
+        raise
 
-            time = min(max(float(sample_at), 0.0), max(duration - (1 / max(fps, 1)), 0.0))
-            frame = final.get_frame(time)
-            audio_rms = 0.0
-            if final.audio:
-                if is_draft:
-                    times = np.array([max(time, 0.001)])
-                    samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=8_000)
-                else:
-                    times = np.array([max(time + offset, 0.001) for offset in (0.011, 0.023, 0.037)])
-                    samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=44_100)
-                audio_rms = float(np.sqrt(np.mean(np.square(samples))))
-            logical = snapshot_at(timeline, time)
-            return {
-                "at": time,
-                "width": target_w,
-                "height": target_h,
-                "fps": fps,
-                "frame": frame,
-                "audio_rms": audio_rms,
-                "caption": logical["caption"],
-                "active_clip_ids": logical["active_clip_ids"],
-                "render_contract": contract,
-                "scopes": {} if is_draft else waveform_scope(frame),
-                "preview_quality": "draft" if is_draft else "full",
-                "used_proxy": bool(used_proxy_ids),
-            }
+
+def sample_composed_frame(
+    composed: dict[str, Any],
+    sample_at: float,
+    timeline: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Read one frame + RMS from an already-composed timeline. Does not close clips."""
+    import numpy as np
+
+    final = composed["final"]
+    duration = float(composed["duration"])
+    fps = int(composed["fps"])
+    is_draft = bool(composed.get("is_draft"))
+    snapshot_timeline = timeline if isinstance(timeline, dict) else composed.get("timeline")
+    if not isinstance(snapshot_timeline, dict):
+        snapshot_timeline = {}
+    time = min(max(float(sample_at), 0.0), max(duration - (1 / max(fps, 1)), 0.0))
+    frame = final.get_frame(time)
+    audio_rms = 0.0
+    if final.audio:
+        if is_draft:
+            times = np.array([max(time, 0.001)])
+            samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=8_000)
+        else:
+            times = np.array([max(time + offset, 0.001) for offset in (0.011, 0.023, 0.037)])
+            samples = final.audio.to_soundarray(tt=np.minimum(times, duration - 0.001), fps=44_100)
+        audio_rms = float(np.sqrt(np.mean(np.square(samples))))
+    logical = snapshot_at(snapshot_timeline, time)
+    return {
+        "at": time,
+        "width": composed["width"],
+        "height": composed["height"],
+        "fps": fps,
+        "frame": frame,
+        "audio_rms": audio_rms,
+        "caption": logical["caption"],
+        "active_clip_ids": logical["active_clip_ids"],
+        "render_contract": composed.get("contract") or timeline_render_contract(snapshot_timeline),
+        "scopes": {} if is_draft else waveform_scope(frame),
+        "preview_quality": "draft" if is_draft else "full",
+        "used_proxy": bool(composed.get("used_proxy")),
+    }
+
+
+def _render_timeline_v2(
+    project: dict[str, Any],
+    progress_cb: Callable[[int], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+    sample_at: float | None = None,
+    preview: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Render the immutable multi-track timeline used by the desktop editor.
+
+    The first desktop milestone intentionally implements the effects represented
+    by the public v2 data model (track ordering, trims, static transforms, audio
+    levels and captions) without flattening it back into the legacy cut list.
+    More advanced effects can therefore be added without another persistence
+    migration.
+    """
+    composed: dict[str, Any] | None = None
+    try:
+        composed = _compose_timeline_v2(
+            project,
+            progress_cb=progress_cb,
+            should_cancel=should_cancel,
+            preview=preview,
+            for_sample=sample_at is not None,
+        )
+        if sample_at is not None:
+            return sample_composed_frame(composed, sample_at)
+        output = Path(composed["output"])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        final = composed["final"]
+        has_audio = bool(final.audio)
         if progress_cb:
             progress_cb(92)
         final.write_videofile(
-            str(output), fps=fps, codec="libx264", audio_codec="aac", bitrate=bitrate,
-            threads=4, logger=None, ffmpeg_params=["-preset", encoder_preset, "-movflags", "+faststart"],
+            str(output), fps=composed["fps"], codec="libx264", audio_codec="aac",
+            bitrate=composed["bitrate"], threads=4, logger=None,
+            ffmpeg_params=["-preset", composed["encoder_preset"], "-movflags", "+faststart"],
         )
     finally:
-        close_owned()
+        if composed is not None:
+            close_owned(composed["owned_clips"])
     if progress_cb:
         progress_cb(100)
+    timeline = composed["timeline"]
+    contract = composed["contract"]
     return {
         "output_path": str(output), "format": "mp4", "video": "H.264",
-        "audio": "AAC" if has_audio else "none", "width": target_w, "height": target_h,
-        "platform": platform, "fps": fps, "bitrate": bitrate,
+        "audio": "AAC" if has_audio else "none",
+        "width": composed["width"], "height": composed["height"],
+        "platform": composed["platform"], "fps": composed["fps"],
+        "bitrate": composed["bitrate"],
         "timeline_schema": timeline["schema"], "revision": timeline.get("revision"),
-        "duration": duration, "frame_count": contract["frame_count"],
+        "duration": composed["duration"], "frame_count": contract["frame_count"],
         "render_contract": contract,
     }
 
@@ -585,6 +659,19 @@ def sample_timeline_frame(
         sample_at=at,
         preview=preview,
     )
+
+
+def sample_cached_timeline_frame(
+    project_id: str,
+    timeline: dict[str, Any],
+    at: float,
+    *,
+    preview: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Sample using the revision-scoped preview composite cache."""
+    from preview_cache import preview_composite_cache
+
+    return preview_composite_cache.sample(project_id, timeline, at, preview)
 
 
 def render_moviepy(project: dict[str, Any], progress_cb: Callable[[int], None] | None = None, should_cancel: Callable[[], bool] | None = None) -> dict[str, Any]:

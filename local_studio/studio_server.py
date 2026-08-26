@@ -643,9 +643,67 @@ def project_proxies(project_id: str) -> list[dict[str, Any]]:
     return list_proxies(project_id)
 
 
+def ensure_project_proxies(
+    project_id: str,
+    *,
+    force: bool = False,
+    run_immediately: bool = True,
+    wait: bool = False,
+) -> dict[str, Any]:
+    """Queue a proxy for every Timeline v2 video asset that is not current."""
+    from desktop_domain import ensure_timeline_version, get_timeline
+
+    ensure_timeline_version(project_id)
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("Project not found.")
+    timeline = get_timeline(project_id)["timeline"]
+    if not isinstance(timeline, dict) or timeline.get("schema") != "grok-crew.timeline/v2":
+        raise ValueError("Proxy editing requires a Timeline v2 project.")
+
+    proxies: list[dict[str, Any]] = []
+    queued = 0
+    reused = 0
+    seen: set[str] = set()
+    for item in timeline.get("assets", []):
+        if not isinstance(item, dict) or item.get("kind") != "video":
+            continue
+        asset_id = str(item.get("id") or "").strip()
+        if not asset_id or asset_id in seen:
+            continue
+        seen.add(asset_id)
+        try:
+            source_asset(project, asset_id)
+        except ValueError:
+            continue
+        result = request_proxy(
+            project_id,
+            {
+                "asset_id": asset_id,
+                "force": force,
+                "run_immediately": run_immediately,
+                "wait": wait,
+            },
+        )
+        if result.get("proxy"):
+            proxies.append(result["proxy"])
+        if result.get("reused"):
+            reused += 1
+        else:
+            queued += 1
+    return {"proxies": proxies, "queued": queued, "reused": reused}
+
+
 def request_proxy(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
     from desktop_domain import ensure_timeline_version
 
+    if body.get("ensure_all") or str(body.get("asset_id", "")).strip() == "*":
+        return ensure_project_proxies(
+            project_id,
+            force=bool(body.get("force")),
+            run_immediately=bool(body.get("run_immediately", True)),
+            wait=bool(body.get("wait", False)),
+        )
     ensure_timeline_version(project_id)
     project = get_project(project_id)
     if not project:
@@ -810,6 +868,7 @@ def project_preview(
         include_image=include_image,
         quality=preview_quality,
         proxy_paths=proxies,
+        project_id=project_id,
     )
     preview.pop("frame", None)
     preview["project_id"] = project_id

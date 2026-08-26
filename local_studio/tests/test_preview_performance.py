@@ -145,6 +145,49 @@ def test_http_preview_defaults_to_draft_and_can_request_full(studio):
     assert full["used_proxy"] is False
 
 
+def test_http_preview_reuses_revision_composite(studio, monkeypatch):
+    pytest.importorskip("moviepy")
+    source = _color_source(config.WORKSPACE_DIR / "inputs" / "perf-cache.mp4", (220, 20, 20))
+    project = studio.new_project({
+        "title": "Cached preview",
+        "source_path": str(source.relative_to(config.WORKSPACE_DIR)),
+        "output_path": "outputs/perf-cache.mp4",
+        "timeline": {
+            "clips": [{"in": 0, "out": 1, "keep": True, "caption": ""}],
+            "render_settings": {"fps": 24, "quality": "compact", "platform": "reels_tiktok_shorts"},
+        },
+    })
+    ensure_timeline_version(project["id"])
+
+    import render
+    calls = {"n": 0}
+    original = render._compose_timeline_v2
+
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(render, "_compose_timeline_v2", counted)
+    first = studio.project_preview(project["id"], 0.15)
+    second = studio.project_preview(project["id"], 0.45)
+    assert calls["n"] == 1
+    assert first["preview_quality"] == "draft"
+    assert second["preview_quality"] == "draft"
+    assert abs(first["at"] - second["at"]) > 0.1
+
+    from desktop_domain import PATCH_SCHEMA, apply_timeline_patch, get_timeline
+    timeline = get_timeline(project["id"])["timeline"]
+    apply_timeline_patch(project["id"], {
+        "schema": PATCH_SCHEMA,
+        "base_revision": timeline["revision"],
+        "origin": "human",
+        "created_by": "cache-test",
+        "operations": [{"op": "set_settings", "changes": {"quality": "compact"}}],
+    })
+    studio.project_preview(project["id"], 0.15)
+    assert calls["n"] == 2
+
+
 def test_ready_proxy_paths_require_current_file(studio):
     source = config.WORKSPACE_DIR / "inputs" / "source.mp4"
     source.parent.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@ import io
 from pathlib import Path
 from typing import Any
 
-from render import sample_timeline_frame
+from render import sample_cached_timeline_frame, sample_timeline_frame
 from render_contract import snapshot_at
 
 
@@ -38,6 +38,7 @@ def preview_at(
     include_image: bool = True,
     quality: str = "full",
     proxy_paths: dict[str, Path] | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Sample the timeline at `at`.
 
@@ -68,11 +69,20 @@ def preview_at(
     }
     if not include_image:
         return payload
-    sampled = sample_timeline_frame(
-        timeline,
-        logical["at"],
-        preview={"quality": preview_quality, "proxy_paths": proxy_paths or {}},
-    )
+    preview_options = {"quality": preview_quality, "proxy_paths": proxy_paths or {}}
+    if project_id:
+        sampled = sample_cached_timeline_frame(
+            project_id,
+            timeline,
+            logical["at"],
+            preview=preview_options,
+        )
+    else:
+        sampled = sample_timeline_frame(
+            timeline,
+            logical["at"],
+            preview=preview_options,
+        )
     if preview_quality == "draft":
         payload["image"] = f"data:image/jpeg;base64,{encode_jpeg(sampled['frame'])}"
         payload["mime"] = "image/jpeg"

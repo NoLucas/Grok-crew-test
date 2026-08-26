@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LanguageSwitcher, useLanguage } from './language';
 import { AudioMixer } from './timeline/AudioMixer';
 import { ClipLookPanel } from './timeline/ClipLookPanel';
@@ -309,10 +309,19 @@ export default function DesktopWorkspace() {
   const hideInspectorColumn = !project || !timeline;
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
-  const primaryVideoAsset = timeline?.assets.find((asset) => asset.kind === 'video');
+  const videoAssets = useMemo(
+    () => timeline?.assets.filter((asset) => asset.kind === 'video') ?? [],
+    [timeline],
+  );
+  const videoAssetKey = videoAssets.map((asset) => asset.id).sort().join(',');
+  const primaryVideoAsset = videoAssets[0];
   const activeProxy = primaryVideoAsset
     ? proxies.find((proxy) => proxy.asset_id === primaryVideoAsset.id)
     : undefined;
+  const busyProxies = proxies.filter((proxy) => ['queued', 'running'].includes(proxy.status));
+  const proxyProgress = busyProxies.length
+    ? Math.round(busyProxies.reduce((sum, proxy) => sum + (proxy.progress ?? 0), 0) / busyProxies.length)
+    : (proxyJob?.progress ?? activeProxy?.progress ?? 0);
   const proxyReady = activeProxy?.status === 'ready' && Boolean(activeProxy.proxy_path);
   const previewSourcePath = project
     ? (useProxy && proxyReady ? String(activeProxy?.proxy_path) : project.source_path)
@@ -584,18 +593,122 @@ export default function DesktopWorkspace() {
       setProxyBusy(false);
     }
   }, [api, primaryVideoAsset, project, proxyBusy, refreshProject, t]);
+  const ensureAllProxies = useCallback(async (force = false, quiet = false) => {
+    if (!project || proxyBusy) return;
+    if (!videoAssets.length) return;
+    setProxyBusy(true);
+    if (!quiet) {
+      setMessage(t('저해상도 프록시를 만들고 있습니다.', 'Generating a low-resolution proxy.', '正在生成低分辨率代理文件。', '低解像度プロキシを生成しています。'));
+    }
+    try {
+      const response = await api(`/api/v2/projects/${project.id}/proxies`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ensure_all: true,
+          force,
+          run_immediately: true,
+          wait: false,
+        }),
+      }) as { proxies?: MediaProxy[]; queued?: number; reused?: number };
+      const nextProxies = response.proxies ?? [];
+      setProxies(nextProxies);
+      const pending = nextProxies.filter((proxy) => proxy.job_id && ['queued', 'running'].includes(proxy.status));
+      if (!pending.length) {
+        setUseProxy(true);
+        if (!quiet && (response.reused ?? 0) > 0) {
+          setMessage(t('기존 프록시를 사용합니다.', 'Using the existing proxy.', '正在使用现有代理文件。', '既存のプロキシを使用します。'));
+        }
+        return;
+      }
+      const firstPending = pending[0];
+      if (firstPending.job_id) {
+        setProxyJob({
+          id: firstPending.job_id,
+          status: firstPending.status === 'ready' ? 'succeeded' : firstPending.status === 'queued' || firstPending.status === 'running' ? firstPending.status : 'failed',
+          progress: firstPending.progress,
+          error_text: firstPending.error_text,
+        });
+      }
+      const pollAll = async (attempt = 0): Promise<MediaProxy[]> => {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        const polled = await api(`/api/v2/projects/${project.id}/proxies`) as { proxies: MediaProxy[] };
+        const list = polled.proxies ?? [];
+        setProxies(list);
+        const running = list.filter((proxy) => ['queued', 'running'].includes(proxy.status));
+        const active = running.find((proxy) => proxy.job_id);
+        if (active?.job_id) {
+          setProxyJob({
+            id: String(active.job_id),
+            status: active.status === 'ready' ? 'succeeded' : active.status === 'queued' || active.status === 'running' ? active.status : 'failed',
+            progress: active.progress,
+            error_text: active.error_text,
+          });
+        }
+        if (attempt < 600 && running.length) {
+          return pollAll(attempt + 1);
+        }
+        return list;
+      };
+      const list = await pollAll();
+      await refreshProject(project.id);
+      const failed = list.filter((proxy) => proxy.status === 'failed');
+      const ready = list.filter((proxy) => proxy.status === 'ready');
+      if (failed.length && !ready.length) {
+        setMessage(failed[0].error_text || t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
+      } else if (ready.length) {
+        setUseProxy(true);
+        setMessage(t(
+          quiet
+            ? '미리보기 프록시가 준비되었습니다. 최종 렌더는 원본을 사용합니다.'
+            : '프록시가 준비되었습니다. 미리보기만 가벼운 파일을 사용하고 최종 렌더는 원본을 사용합니다.',
+          quiet
+            ? 'Preview proxy ready. Final render still uses the original.'
+            : 'Proxy ready. Preview uses the lighter file; final render still uses the original.',
+          quiet
+            ? '预览代理已就绪。最终渲染仍使用原片。'
+            : '代理文件已就绪。预览使用轻量文件，最终渲染仍使用原片。',
+          quiet
+            ? 'プレビュー用プロキシの準備ができました。最終レンダーは元素材を使います。'
+            : 'プロキシの準備ができました。プレビューのみ軽量ファイルを使い、最終レンダーは元素材を使います。',
+        ));
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t('프록시 생성에 실패했습니다.', 'Proxy generation failed.', '代理文件生成失败。', 'プロキシ生成に失敗しました。'));
+      if (project) await refreshProject(project.id);
+    } finally {
+      setProxyBusy(false);
+    }
+  }, [api, project, proxyBusy, refreshProject, t, videoAssets.length]);
   useEffect(() => {
-    if (!project?.id || !primaryVideoAsset?.id) return;
-    if (proxyReady || proxyBusy) return;
-    if (activeProxy && ['queued', 'running', 'failed'].includes(activeProxy.status)) return;
-    const key = `${project.id}:${primaryVideoAsset.id}`;
+    if (!project?.id || !videoAssetKey) return;
+    if (proxyBusy) return;
+    const key = `${project.id}:${videoAssetKey}`;
     if (autoProxyKey.current === key) return;
+    const allReady = videoAssets.every((asset) => {
+      const proxy = proxies.find((item) => item.asset_id === asset.id);
+      return proxy?.status === 'ready' && Boolean(proxy.proxy_path);
+    });
+    if (allReady) {
+      autoProxyKey.current = key;
+      return;
+    }
     autoProxyKey.current = key;
-    void generateProxy(false, true);
-  }, [activeProxy, generateProxy, primaryVideoAsset?.id, project?.id, proxyBusy, proxyReady]);
+    const handle = window.setTimeout(() => {
+      void ensureAllProxies(false, true);
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [ensureAllProxies, project?.id, proxyBusy, proxies, videoAssetKey, videoAssets]);
   const cancelProxy = async () => {
-    if (!proxyJob || !['queued', 'running'].includes(proxyJob.status)) return;
-    await api(`/api/jobs/${proxyJob.id}/cancel`, { method: 'POST', body: '{}' });
+    const runningIds = new Set(
+      proxies
+        .filter((proxy) => proxy.job_id && ['queued', 'running'].includes(proxy.status))
+        .map((proxy) => String(proxy.job_id)),
+    );
+    if (proxyJob && ['queued', 'running'].includes(proxyJob.status)) {
+      runningIds.add(proxyJob.id);
+    }
+    if (!runningIds.size) return;
+    await Promise.all([...runningIds].map((jobId) => api(`/api/jobs/${jobId}/cancel`, { method: 'POST', body: '{}' })));
     setMessage(t('프록시 생성을 취소하도록 요청했습니다.', 'Requested proxy cancellation.', '已请求取消代理文件生成。', 'プロキシ生成のキャンセルを要求しました。'));
   };
   const analyzeLocal = async () => {
@@ -901,7 +1014,7 @@ export default function DesktopWorkspace() {
                     ) : null}
                     {proxyBusy ? (
                       <>
-                        <span>{t('프록시 생성', 'Proxy', '代理文件', 'プロキシ')} {proxyJob?.progress ?? activeProxy?.progress ?? 0}%</span>
+                        <span>{t('프록시 생성', 'Proxy', '代理文件', 'プロキシ')} {proxyProgress}%</span>
                         <button onClick={() => void cancelProxy()}>{t('취소', 'Cancel', '取消', 'キャンセル')}</button>
                       </>
                     ) : null}

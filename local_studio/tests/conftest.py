@@ -21,7 +21,12 @@ def studio(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "WORKSPACE_DIR", tmp_path / "workspace")
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "data" / "studio.db")
     db.init_db()
-    return studio_server
+    import preview_cache  # noqa: E402
+    preview_cache.preview_composite_cache.reset()
+    try:
+        yield studio_server
+    finally:
+        preview_cache.preview_composite_cache.reset()
 
 
 @pytest.fixture()
