@@ -166,7 +166,6 @@ export function SimpleDesk({
               if (error) setError('');
             }}
             placeholder={t('15초 훅 릴', '15s hook Reel', '15秒钩子 Reel', '15秒フックのリール')}
-            required
             aria-invalid={Boolean(error) && titleEmpty}
             disabled={saving}
           />
