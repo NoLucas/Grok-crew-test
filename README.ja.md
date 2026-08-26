@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <strong>日本語</strong></p>
 
-**Windows で開く。** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) を受け取ってダブルクリックします。タイトルを書くか映像を置き、一行を一人のボットにコピーします。カットが届くと窓が開きます。
+**Windows で開く。** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-crew-test/releases/latest) を受け取ってダブルクリックします。タイトルを書くか映像を置き、一行を一人のボットにコピーします。カットが届くと窓が開きます。
 
 **Grok Crew は、あなたのパソコンにあるショート動画デスクです。仕様は人が書き、ドアは二つです。編集ドアと、収集・他エージェントドア。**
 
@@ -50,7 +50,7 @@ AI が**同じパソコン**ですでに動いているなら、普段の言葉�
 
 ## 開き方
 
-**Windows で開く** — [最新リリース](https://github.com/NoLucas/Grok-Crew/releases/latest)の `GrokCrew-Windows.exe` を受け取ってダブルクリックします。このアカウントだけに入ります。管理者パスワードは聞きません。
+**Windows で開く** — [最新リリース](https://github.com/NoLucas/Grok-crew-test/releases/latest)の `GrokCrew-Windows.exe` を受け取ってダブルクリックします。このアカウントだけに入ります。管理者パスワードは聞きません。
 
 Windows が PC を保護したと言ったら **詳細情報 → 実行**。
 

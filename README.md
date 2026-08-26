@@ -2,7 +2,7 @@
 
 <p align="center"><strong>English</strong> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**Open on Windows.** Get [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) and double-click. Write a title or drop a video. Copy one line to one bot. The cut opens when it arrives.
+**Open on Windows.** Get [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-crew-test/releases/latest) and double-click. Write a title or drop a video. Copy one line to one bot. The cut opens when it arrives.
 
 **Grok Crew is a short-form desk on your computer. You write the brief. There are two doors: the editor door, and the collector / other-agent door.**
 
@@ -50,7 +50,7 @@ A helper on another computer cannot open this desk. Your footage is not sent out
 
 ## How to open it
 
-**Open on Windows** — get `GrokCrew-Windows.exe` from the [latest release](https://github.com/NoLucas/Grok-Crew/releases/latest) and double-click it. It installs for this account only. It does not ask for an administrator password.
+**Open on Windows** — get `GrokCrew-Windows.exe` from the [latest release](https://github.com/NoLucas/Grok-crew-test/releases/latest) and double-click it. It installs for this account only. It does not ask for an administrator password.
 
 If Windows says it protected your PC: **More info → Run anyway**.
 

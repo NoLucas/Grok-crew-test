@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <strong>한국어</strong> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**Windows에서 연다.** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest)를 받아 더블클릭하세요. 제목을 적거나 영상을 놓고, 한 줄을 봇에게 복사합니다. 컷이 오면 창이 열립니다.
+**Windows에서 연다.** [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-crew-test/releases/latest)를 받아 더블클릭하세요. 제목을 적거나 영상을 놓고, 한 줄을 봇에게 복사합니다. 컷이 오면 창이 열립니다.
 
 **Grok Crew는 내 컴퓨터의 숏폼 책상입니다. 규격은 사람이 적고, 문은 두 개입니다. 편집 문과 수집·다른 에이전트 문.**
 
@@ -50,7 +50,7 @@
 
 ## 여는 방법
 
-**Windows에서 열기** — [최신 릴리스](https://github.com/NoLucas/Grok-Crew/releases/latest)에서 `GrokCrew-Windows.exe`를 받아 더블클릭하세요. 이 계정에만 들어갑니다. 관리자 비밀번호를 묻지 않습니다.
+**Windows에서 열기** — [최신 릴리스](https://github.com/NoLucas/Grok-crew-test/releases/latest)에서 `GrokCrew-Windows.exe`를 받아 더블클릭하세요. 이 계정에만 들어갑니다. 관리자 비밀번호를 묻지 않습니다.
 
 Windows가 PC를 보호한다고 하면 **추가 정보 → 그래도 실행**.
 

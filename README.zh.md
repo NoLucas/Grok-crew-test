@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <strong>简体中文</strong> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**在 Windows 打开。** 下载 [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-Crew/releases/latest) 并双击。写下标题或放进视频，把一行复制给一个机器人。剪辑到了窗口会自己打开。
+**在 Windows 打开。** 下载 [`GrokCrew-Windows.exe`](https://github.com/NoLucas/Grok-crew-test/releases/latest) 并双击。写下标题或放进视频，把一行复制给一个机器人。剪辑到了窗口会自己打开。
 
 **Grok Crew 是装在你电脑上的短视频工作台。你只写规格。有两扇门：剪辑门，以及收集/其他代理门。**
 
@@ -50,7 +50,7 @@
 
 ## 怎么打开
 
-**在 Windows 打开** — 从[最新发布](https://github.com/NoLucas/Grok-Crew/releases/latest)下载 `GrokCrew-Windows.exe` 并双击。只装到当前账户，不询问管理员密码。
+**在 Windows 打开** — 从[最新发布](https://github.com/NoLucas/Grok-crew-test/releases/latest)下载 `GrokCrew-Windows.exe` 并双击。只装到当前账户，不询问管理员密码。
 
 若提示 Windows 已保护你的电脑：点 **更多信息 → 仍要运行**。
 
