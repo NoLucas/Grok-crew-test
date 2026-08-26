@@ -7,6 +7,15 @@
     "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。読むのは outbox/agents/。返すパッケージは agents/ の下。grok/ と Runner は使わない。",
     "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
   },
+  "style_recipes": {
+    "purpose": "名前付きレシピが長さ、画面比、フック、速度、字幕、ルック、収集ヒントを埋める。ドアではない。",
+    "ids": ["instagram_reel", "tiktok_tight", "youtube_short", "youtube_long"]
+  },
+  "source_modes": {
+    "collect": "収集ボットがクリップを集める。送信箱は二つ。状態は waiting_for_collector。",
+    "own": "操作者のファイルだけ。Grok 送信箱だけ。状態は waiting_for_editor。",
+    "own_and_collect": "操作者の本編＋収集 Bロール。送信箱は二つ。owned クリップは残す。"
+  },
   "crew": {
     "purpose": "仕様は一つ、ボットは二人。収集ボットが素材を集め、編集ボットがそのクリップだけ切る。このデスクはサイトを掻かない。",
     "collector": {
@@ -15,7 +24,8 @@
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "source clips"],
-      "do_not": "完成カットを受信箱に入れない。操作者が使ってよい出典だけ集める。"
+      "clip_fields": ["file", "origin (owned|collected|bundled-sample)", "license (operator|stock|public|unknown)", "source_url"],
+      "do_not": "完成カットを受信箱に入れない。操作者が使ってよい出典だけ集める。ログイン壁の Instagram/TikTok は掻かない。owned クリップは消さない。"
     },
     "editor": {
       "door": "grok",

@@ -8,6 +8,15 @@ from typing import Any
 
 from config import utc_now
 from db import db, row_dict
+from style_recipes import (
+    MAX_DURATION_SECONDS,
+    apply_recipe_defaults,
+    needs_collector,
+    normalize_source_mode,
+    recipe_label,
+    snapshot_recipe,
+    take_owned_paths,
+)
 
 SCHEMA = "grok-crew.edit-spec/v1"
 PLATFORMS = {
@@ -19,6 +28,11 @@ SOURCE_RULE = "The operator does not attach footage. The bot must put the source
 CREW_SOURCE_RULE = (
     "The collector gathers source into handoff-materials. "
     "The editor cuts those clips. The operator does not attach footage."
+)
+OWN_SOURCE_RULE = "The operator put clips in handoff-materials. The editor cuts those clips."
+OWN_AND_COLLECT_RULE = (
+    "The operator put owned clips in handoff-materials. "
+    "The collector adds matching clips. The editor cuts both."
 )
 DOORS = ("grok", "agent")
 ROLES = ("collect", "edit")
@@ -123,70 +137,115 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _duration_range(value: Any, default: dict[str, int]) -> dict[str, int]:
+    if isinstance(value, (int, float)):
+        seconds = int(value)
+        duration = {"min": seconds, "max": seconds}
+    elif isinstance(value, dict):
+        duration = {
+            "min": int(value.get("min") or default["min"]),
+            "max": int(value.get("max") or default["max"]),
+        }
+    else:
+        duration = {"min": int(default["min"]), "max": int(default["max"])}
+    if duration["min"] < 1 or duration["max"] > MAX_DURATION_SECONDS or duration["min"] > duration["max"]:
+        raise ValueError(f"duration_seconds must be between 1 and {MAX_DURATION_SECONDS} seconds.")
+    return duration
+
+
+def _clip_count_range(value: Any, default: dict[str, int] | None = None) -> dict[str, int]:
+    fallback = default or {"min": 3, "max": 8}
+    if isinstance(value, (int, float)):
+        count = max(1, int(value))
+        return {"min": count, "max": count}
+    if isinstance(value, dict):
+        low = int(value.get("min") or fallback["min"])
+        high = int(value.get("max") or fallback["max"])
+    else:
+        low, high = int(fallback["min"]), int(fallback["max"])
+    if low < 1 or high > 40 or low > high:
+        raise ValueError("collect_clip_count must be between 1 and 40.")
+    return {"min": low, "max": high}
+
+
+def source_mode_of(spec: dict[str, Any] | None) -> str:
+    payload = spec if isinstance(spec, dict) else {}
+    raw = payload.get("source_mode")
+    if raw not in (None, ""):
+        return str(raw)
+    return "collect" if payload.get("crew") else "bot"
+
+
 def normalize_spec(body: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise ValueError("Edit spec must be a JSON object.")
-    title = str(body.get("title") or "").strip()[:120]
-    goal = str(body.get("goal") or "").strip()[:2000]
+    filled, recipe = apply_recipe_defaults(body)
+    title = str(filled.get("title") or "").strip()[:120]
+    goal = str(filled.get("goal") or "").strip()[:2000]
     if not title:
         raise ValueError("title is required.")
     if not goal:
         raise ValueError("goal is required.")
-    platform = str(body.get("platform") or "reels_tiktok_shorts").strip()
+    platform = str(filled.get("platform") or "reels_tiktok_shorts").strip()
     if platform not in PLATFORMS:
         raise ValueError("platform must be reels_tiktok_shorts, feed_square, or landscape.")
-    raw_duration = body.get("duration_seconds")
-    if isinstance(raw_duration, (int, float)):
-        duration = {"min": int(raw_duration), "max": int(raw_duration)}
-    elif isinstance(raw_duration, dict):
-        duration = {
-            "min": int(raw_duration.get("min") or 12),
-            "max": int(raw_duration.get("max") or 30),
-        }
-    else:
-        duration = {"min": 12, "max": 30}
-    if duration["min"] < 1 or duration["max"] > 180 or duration["min"] > duration["max"]:
-        raise ValueError("duration_seconds must be between 1 and 180 seconds.")
-    language = str(body.get("language") or "ko").strip().lower()[:8] or "ko"
-    crew = _as_bool(body.get("crew"), False) or body.get("collector") not in (None, "")
-    if crew:
-        collector_agent = normalize_agent(body.get("collector") or body.get("agent") or CREW_ROLES["collect"]["default_agent"], "agent")
-        editor_agent = normalize_agent(body.get("editor") or CREW_ROLES["edit"]["default_agent"], "grok")
-        return {
-            "schema": SCHEMA,
-            "title": title,
-            "goal": goal,
-            "platform": platform,
-            "aspect": PLATFORMS[platform],
-            "duration_seconds": duration,
-            "captions": _as_bool(body.get("captions"), True),
-            "look": str(body.get("look") or "").strip()[:400],
-            "must_keep": str(body.get("must_keep") or "").strip()[:800],
-            "must_drop": str(body.get("must_drop") or "").strip()[:800],
-            "upload": _as_bool(body.get("upload"), False),
-            "language": language,
-            "crew": True,
-            "door": "grok",
-            "agent": editor_agent,
-            "collector": {"role": "collect", "door": "agent", "agent": collector_agent},
-            "editor": {"role": "edit", "door": "grok", "agent": editor_agent},
-            "source": {"owner": "collector", "rule": CREW_SOURCE_RULE, "box": "handoff-materials"},
-        }
-    door = normalize_door(body.get("door"))
-    agent = normalize_agent(body.get("agent"), door)
-    return {
+    default_duration = (recipe or {}).get("duration_seconds") or {"min": 12, "max": 30}
+    duration = _duration_range(filled.get("duration_seconds"), default_duration)
+    language = str(filled.get("language") or "ko").strip().lower()[:8] or "ko"
+    owned_hint = bool(take_owned_paths(body))
+    crew_requested = _as_bool(filled.get("crew"), False) or filled.get("collector") not in (None, "")
+    source_mode = normalize_source_mode(filled.get("source_mode"), crew=crew_requested, has_owned=owned_hint)
+    crew = needs_collector(source_mode)
+    collect_default = ((recipe or {}).get("collect") or {}).get("clip_count")
+    collect_query = str(filled.get("collect_query") or "").strip()[:400]
+    collect_clip_count = _clip_count_range(filled.get("collect_clip_count"), collect_default) if crew else None
+    common = {
         "schema": SCHEMA,
         "title": title,
         "goal": goal,
         "platform": platform,
         "aspect": PLATFORMS[platform],
         "duration_seconds": duration,
-        "captions": _as_bool(body.get("captions"), True),
-        "look": str(body.get("look") or "").strip()[:400],
-        "must_keep": str(body.get("must_keep") or "").strip()[:800],
-        "must_drop": str(body.get("must_drop") or "").strip()[:800],
-        "upload": _as_bool(body.get("upload"), False),
+        "captions": _as_bool(filled.get("captions"), True),
+        "look": str(filled.get("look") or "").strip()[:400],
+        "must_keep": str(filled.get("must_keep") or "").strip()[:800],
+        "must_drop": str(filled.get("must_drop") or "").strip()[:800],
+        "upload": _as_bool(filled.get("upload"), False),
         "language": language,
+        "source_mode": source_mode,
+        "collect_query": collect_query,
+        "collect_clip_count": collect_clip_count,
+        "recipe_id": recipe["id"] if recipe else "",
+        "recipe_version": recipe["version"] if recipe else None,
+        "recipe": snapshot_recipe(recipe) if recipe else None,
+    }
+    if crew:
+        collector_agent = normalize_agent(filled.get("collector") or filled.get("agent") or CREW_ROLES["collect"]["default_agent"], "agent")
+        editor_agent = normalize_agent(filled.get("editor") or CREW_ROLES["edit"]["default_agent"], "grok")
+        owner = "operator+collector" if source_mode == "own_and_collect" else "collector"
+        rule = OWN_AND_COLLECT_RULE if source_mode == "own_and_collect" else CREW_SOURCE_RULE
+        return {
+            **common,
+            "crew": True,
+            "door": "grok",
+            "agent": editor_agent,
+            "collector": {"role": "collect", "door": "agent", "agent": collector_agent},
+            "editor": {"role": "edit", "door": "grok", "agent": editor_agent},
+            "source": {"owner": owner, "rule": rule, "box": "handoff-materials"},
+        }
+    door = normalize_door(filled.get("door"))
+    agent = normalize_agent(filled.get("agent"), door)
+    if source_mode == "own":
+        return {
+            **common,
+            "crew": False,
+            "door": "grok",
+            "agent": normalize_agent(filled.get("editor") or "Grok", "grok"),
+            "editor": {"role": "edit", "door": "grok", "agent": "Grok"},
+            "source": {"owner": "operator", "rule": OWN_SOURCE_RULE, "box": "handoff-materials"},
+        }
+    return {
+        **common,
         "crew": False,
         "door": door,
         "agent": agent,
@@ -200,6 +259,7 @@ def _record(row: dict[str, Any] | None) -> dict[str, Any] | None:
     spec = row.get("spec_json")
     if not isinstance(spec, dict):
         spec = {}
+    source_mode = source_mode_of(spec)
     return {
         "id": row["id"],
         "schema": SCHEMA,
@@ -213,16 +273,30 @@ def _record(row: dict[str, Any] | None) -> dict[str, Any] | None:
         "door": spec.get("door") or "grok",
         "agent": spec.get("agent") or ("Grok" if (spec.get("door") or "grok") == "grok" else "agent"),
         "crew": bool(spec.get("crew")),
+        "source_mode": source_mode,
+        "recipe_id": spec.get("recipe_id") or "",
+        "recipe_version": spec.get("recipe_version"),
+        "collect_query": spec.get("collect_query") or "",
         "collector": spec.get("collector") if isinstance(spec.get("collector"), dict) else None,
         "editor": spec.get("editor") if isinstance(spec.get("editor"), dict) else None,
     }
 
 
+def _initial_status(spec: dict[str, Any]) -> str:
+    mode = source_mode_of(spec)
+    if needs_collector(mode):
+        return "waiting_for_collector"
+    if mode == "own":
+        return "waiting_for_editor"
+    return "waiting_for_bot"
+
+
 def create_spec(body: dict[str, Any]) -> dict[str, Any]:
+    owned_paths = take_owned_paths(body if isinstance(body, dict) else {})
     spec = normalize_spec(body)
     spec_id = str(uuid.uuid4())
     now = utc_now()
-    status = "waiting_for_collector" if spec.get("crew") else "waiting_for_bot"
+    status = _initial_status(spec)
     with db() as conn:
         conn.execute(
             "INSERT INTO edit_specs (id, spec_json, status, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -235,7 +309,16 @@ def create_spec(body: dict[str, Any]) -> dict[str, Any]:
     if spec.get("crew"):
         record["outbox"] = write_crew_outbox(record)
     else:
-        record["outbox"] = write_outbox(record)
+        role = "edit" if source_mode_of(spec) == "own" else None
+        record["outbox"] = write_outbox(record, role=role)
+    if owned_paths:
+        from handoff_materials import write_owned_materials
+
+        materials = write_owned_materials(spec_id, owned_paths)
+        refreshed = get_spec(spec_id) or record
+        refreshed["outbox"] = record.get("outbox")
+        refreshed["materials"] = materials
+        return refreshed
     return record
 
 
@@ -278,6 +361,67 @@ def set_spec_status(spec_id: str, status: str) -> dict[str, Any] | None:
     return get_spec(spec_id)
 
 
+def _recipe_block(spec: dict[str, Any], language: str) -> str:
+    recipe = spec.get("recipe") if isinstance(spec.get("recipe"), dict) else {}
+    recipe_id = spec.get("recipe_id") or recipe.get("id")
+    if not recipe_id:
+        return ""
+    name = recipe_label(recipe, language) or str(recipe_id)
+    version = spec.get("recipe_version") or recipe.get("version") or 1
+    hook = recipe.get("hook") if isinstance(recipe.get("hook"), dict) else {}
+    pacing = recipe.get("pacing") if isinstance(recipe.get("pacing"), dict) else {}
+    if language.startswith("ko"):
+        return (
+            f"스타일: {name} ({recipe_id}@{version})\n"
+            f"훅: {hook.get('note') or '첫 줄을 강하게'}\n"
+            f"속도: {pacing.get('note') or '군더더기 없이'}\n"
+            f"자막 결: {recipe.get('caption_style') or '읽기 쉽게'}\n"
+        )
+    return (
+        f"Style: {name} ({recipe_id}@{version})\n"
+        f"Hook: {hook.get('note') or 'lead with the strongest line'}\n"
+        f"Pacing: {pacing.get('note') or 'cut filler'}\n"
+        f"Captions: {recipe.get('caption_style') or 'readable'}\n"
+    )
+
+
+def _collect_hint_block(spec: dict[str, Any], language: str) -> str:
+    recipe = spec.get("recipe") if isinstance(spec.get("recipe"), dict) else {}
+    collect = recipe.get("collect") if isinstance(recipe.get("collect"), dict) else {}
+    query = str(spec.get("collect_query") or collect.get("query") or "").strip()
+    counts = spec.get("collect_clip_count") if isinstance(spec.get("collect_clip_count"), dict) else collect.get("clip_count") or {}
+    seconds = collect.get("clip_seconds") if isinstance(collect.get("clip_seconds"), dict) else {}
+    if language.startswith("ko"):
+        lines = [
+            "각 클립에 license를 적으세요: operator, stock, public, unknown.",
+            "로그인 막힌 인스타/틱톡은 긁지 마세요. 이 책상은 스크래퍼가 아닙니다.",
+        ]
+        if query:
+            lines.insert(0, f"찾아올 것: {query}")
+        if counts:
+            extra = f"클립 {counts.get('min')}–{counts.get('max')}장"
+            if seconds:
+                extra += f", 각 {seconds.get('min')}–{seconds.get('max')}초"
+            lines.insert(1 if query else 0, extra + ".")
+        if source_mode_of(spec) == "own_and_collect":
+            lines.append("운영자가 이미 넣은 owned 클립은 지우지 마세요. B롤·커버만 보태세요.")
+        return "\n".join(lines) + "\n"
+    lines = [
+        "Write a license on each clip: operator, stock, public, or unknown.",
+        "Do not scrape login-walled Instagram or TikTok. This desk is not a scraper.",
+    ]
+    if query:
+        lines.insert(0, f"Find: {query}")
+    if counts:
+        extra = f"Clips: {counts.get('min')}–{counts.get('max')}"
+        if seconds:
+            extra += f", each {seconds.get('min')}–{seconds.get('max')}s"
+        lines.insert(1 if query else 0, extra + ".")
+    if source_mode_of(spec) == "own_and_collect":
+        lines.append("Keep owned clips the operator already put in the materials box. Add matching b-roll only.")
+    return "\n".join(lines) + "\n"
+
+
 def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     record = get_spec(spec_id)
     if not record:
@@ -290,6 +434,8 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     door = normalize_door(spec.get("door") or record.get("door"))
     agent = str(spec.get("agent") or ("Grok" if door == "grok" else "agent"))
     requested = normalize_role(role) if role not in (None, "") else ""
+    mode = source_mode_of(spec)
+    recipe_text = _recipe_block(spec, language)
     common = (
         f"규격 id: {record['id']}\n"
         f"제목: {spec.get('title')}\n"
@@ -300,6 +446,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
         f"남길 것: {spec.get('must_keep') or '가장 강한 대사와 훅'}\n"
         f"버릴 것: {spec.get('must_drop') or '침묵, 재촬영, 군더더기'}\n"
         f"게시: {upload}\n"
+        f"{recipe_text}"
         if language.startswith("ko")
         else (
             f"Spec id: {record['id']}\n"
@@ -311,6 +458,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             f"Keep: {spec.get('must_keep') or 'the strongest lines and the hook'}\n"
             f"Drop: {spec.get('must_drop') or 'silence, retakes, filler'}\n"
             f"Publish: {upload}\n"
+            f"{recipe_text}"
         )
     )
     if spec.get("crew"):
@@ -318,11 +466,23 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
         editor = spec.get("editor") if isinstance(spec.get("editor"), dict) else {}
         collector_name = str(collector.get("agent") or "Claude")
         editor_name = str(editor.get("agent") or "Grok")
+        collect_hints = _collect_hint_block(spec, language)
+        attach_line_ko = (
+            "운영자가 원본을 자료함에 일부 넣어 두었습니다. 맞는 클립만 보태세요. "
+            if mode == "own_and_collect"
+            else "운영자가 원본을 주지 않습니다. 운영자가 쓸 수 있는 출처에서만 클립을 모으세요. "
+        )
+        attach_line_en = (
+            "The operator already put owned clips in the materials box. Add matching clips only. "
+            if mode == "own_and_collect"
+            else "The operator will not attach footage. Collect only sources the operator may use. "
+        )
         collect_text = (
             f"이 글은 수집 역할입니다. 편집할 자료를 모으세요. 최종 컷은 만들지 마세요. "
             f"당신은 {collector_name}입니다. Grok 문과 Runner는 쓰지 마세요.\n\n"
             f"{common}\n"
-            f"운영자가 원본을 주지 않습니다. 운영자가 쓸 수 있는 출처에서만 클립을 모으세요. "
+            f"{collect_hints}"
+            f"{attach_line_ko}"
             f"이 책상은 로그인 벽을 넘는 스크래퍼가 아닙니다.\n"
             f"규격은 보낼함 local_studio/workspace/handoff-outbox/agents/{record['id']}/ 에 있습니다. "
             f"git이면 outbox/agents/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
@@ -334,7 +494,8 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"This is the collector role. Gather source clips. Do not make the final cut. "
                 f"You are {collector_name}. Do not use the Grok door or Runner.\n\n"
                 f"{common}\n"
-                f"The operator will not attach footage. Collect only sources the operator may use. "
+                f"{collect_hints}"
+                f"{attach_line_en}"
                 f"This desk is not a scraper for login-walled sites.\n"
                 f"This spec is in the outbox at local_studio/workspace/handoff-outbox/agents/{record['id']}/. "
                 f"On git read spec.json under outbox/agents/{record['id']}/.\n"
@@ -343,9 +504,19 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 f"Do not put a finished cut in any inbox. Do not connect to 127.0.0.1."
             )
         )
+        edit_attach_ko = (
+            "자료함의 클립만 자르세요. 운영자 파일과 수집 클립을 함께 씁니다.\n"
+            if mode == "own_and_collect"
+            else "수집 봇이 모은 자료만 자르세요.\n"
+        )
+        edit_attach_en = (
+            "Cut the clips in the materials box. Use owned files and collected clips together.\n"
+            if mode == "own_and_collect"
+            else "Cut the clips the collector gathered.\n"
+        )
         edit_text = (
             f"이 글은 편집 역할입니다. Grok만 이 컷을 만드세요. "
-            f"수집 봇이 모은 자료만 자르세요.\n\n"
+            f"{edit_attach_ko}\n"
             f"{common}\n"
             f"자료는 local_studio/workspace/handoff-materials/{record['id']}/manifest.json 에 있습니다. "
             f"git이면 materials/{record['id']}/ 입니다. 자료가 오기 전에 새 소스를 찾지 마세요.\n"
@@ -357,7 +528,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
             if language.startswith("ko")
             else (
                 f"This is the editor role. Only Grok should make this cut. "
-                f"Cut the clips the collector gathered.\n\n"
+                f"{edit_attach_en}\n"
                 f"{common}\n"
                 f"Materials are at local_studio/workspace/handoff-materials/{record['id']}/manifest.json "
                 f"or materials/{record['id']}/ on git. Do not hunt a new source before those files exist.\n"
@@ -402,6 +573,38 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
                 "edit": {"text": edit_text, "door": "grok", "agent": editor_name},
             },
         }
+    if mode == "own":
+        text = (
+            f"이 글은 Grok 전용 문입니다. Grok만 이 규격을 이행하세요. "
+            f"다른 에이전트는 다른 에이전트 문을 쓰세요.\n\n"
+            f"{common}\n"
+            f"원본은 운영자가 자료함에 둡니다. 그 클립만 자르세요. 새 소스를 찾지 마세요.\n"
+            f"자료는 local_studio/workspace/handoff-materials/{record['id']}/manifest.json 에 있습니다.\n"
+            f"이 규격은 보낼함 local_studio/workspace/handoff-outbox/grok/{record['id']}/ 에 있습니다. "
+            f"git이면 outbox/grok/{record['id']}/ 에서 spec.json 을 읽으세요.\n"
+            f"같은 PC면 `python local_studio/grok_crew.py` 와 Bot Check로 체크인하세요. "
+            f"데스크톱 Runner 페어링은 Grok 문에서만 씁니다.\n"
+            f"끝난 패키지는 local_studio/workspace/handoff-inbox/grok/ 또는 git 인계의 grok/ 아래에 두세요. "
+            f"bundle.project.door는 grok, created_by는 grok, edit_spec_id는 {record['id']}. "
+            f"agents/ 폴더에는 넣지 마세요. 127.0.0.1에는 접속하지 마세요."
+            if language.startswith("ko")
+            else (
+                f"This is the Grok-only door. Only Grok should fulfill this spec. "
+                f"Claude, Codex, ChatGPT, and other agents must use the other-agent door.\n\n"
+                f"{common}\n"
+                f"The operator put the footage in the materials box. Cut those clips. Do not hunt a new source.\n"
+                f"Materials are at local_studio/workspace/handoff-materials/{record['id']}/manifest.json.\n"
+                f"This spec is in the outbox at local_studio/workspace/handoff-outbox/grok/{record['id']}/. "
+                f"On git read spec.json under outbox/grok/{record['id']}/.\n"
+                f"On the same PC use `python local_studio/grok_crew.py` and Bot Check. "
+                f"Desktop Runner pairing is only for this Grok door.\n"
+                f"Put the finished package in local_studio/workspace/handoff-inbox/grok/ "
+                f"or under grok/ on the git handoff repo. "
+                f"Set bundle.project.door to grok, created_by to grok, edit_spec_id to {record['id']}. "
+                f"Do not use the agents/ folder. Do not connect to 127.0.0.1."
+            )
+        )
+        return {"spec": record, "text": text, "channel": "grok-door", "door": "grok", "agent": "Grok", "role": "edit"}
     if door == "grok":
         text = (
             f"이 글은 Grok 전용 문입니다. Grok만 이 규격을 이행하세요. "

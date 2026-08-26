@@ -6906,6 +6906,62 @@ select {
 }
 .desktop-spec-wide { grid-column: 1 / -1; }
 .desktop-spec-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, .8fr)); gap: 8px; }
+.desktop-spec-recipes, .desktop-spec-sources {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+}
+.desktop-spec-recipes legend, .desktop-spec-sources legend {
+  padding: 0;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--desktop-muted);
+}
+.desktop-spec-recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.desktop-spec-source-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.desktop-spec-recipe, .desktop-spec-source {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--desktop-line);
+  border-radius: 10px;
+  background: #fafafa;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.desktop-spec-recipe b, .desktop-spec-source b { font-size: 14px; letter-spacing: -.02em; }
+.desktop-spec-recipe small { color: var(--desktop-muted); font-size: 11px; }
+.desktop-spec-recipe span, .desktop-spec-source span {
+  color: var(--desktop-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.desktop-spec-recipe.is-selected, .desktop-spec-source.is-selected {
+  border-color: #7d78d4;
+  background: #f4f3ff;
+}
+.desktop-spec-license {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ead38a;
+  background: #fff8e8;
+  color: #6b4f12;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .desktop-spec-desk .desktop-spec-check { display: flex; flex-direction: row; align-items: center; gap: 8px; color: inherit; font-size: 13px; }
 .desktop-spec-desk .desktop-spec-check input { width: auto; margin: 0; }
 .desktop-spec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -6927,6 +6983,7 @@ select {
 @media (max-width: 920px) {
   .desktop-spec-doors { grid-template-columns: 1fr; }
   .desktop-spec-row { grid-template-columns: 1fr; }
+  .desktop-spec-recipe-grid, .desktop-spec-source-grid { grid-template-columns: 1fr; }
 }
 .desktop-spinner {
   width: 28px; height: 28px; border: 2px solid #dddde3; border-top-color: var(--desktop-blue);

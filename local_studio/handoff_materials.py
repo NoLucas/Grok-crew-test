@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import get_spec, normalize_agent, set_spec_status
+from edit_spec import get_spec, normalize_agent, set_spec_status, source_mode_of
+from style_recipes import needs_collector, normalize_license, normalize_origin
 
 MATERIALS_SCHEMA = "grok-crew.materials/v1"
 ALLOWED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
@@ -86,7 +87,10 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
     if not record:
         return {"ok": False, "folder": folder.name, "reason": "edit_spec_id not found", "edit_spec_id": resolved_id}
     spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
-    if not spec.get("crew"):
+    mode = source_mode_of(spec)
+    if mode == "own":
+        return {"ok": False, "folder": folder.name, "reason": "that spec uses operator files, not collector clips"}
+    if not spec.get("crew") and not needs_collector(mode):
         return {"ok": False, "folder": folder.name, "reason": "that spec is not a two-bot crew"}
     dest = materials_folder(resolved_id)
     dest.mkdir(parents=True, exist_ok=True)
@@ -109,12 +113,36 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
         target = dest / source.name
         if source.resolve() != target.resolve():
             shutil.copy2(source, target)
+        license_value = normalize_license((raw or {}).get("license") if isinstance(raw, dict) else "")
+        origin = normalize_origin((raw or {}).get("origin") if isinstance(raw, dict) else "", license_value=license_value)
         clips.append({
             "file": source.name,
             "note": str((raw or {}).get("note") or "") if isinstance(raw, dict) else "",
-            "origin": str((raw or {}).get("origin") or "") if isinstance(raw, dict) else "",
+            "origin": origin,
+            "license": license_value,
+            "source_url": str((raw or {}).get("source_url") or "")[:400] if isinstance(raw, dict) else "",
         })
         copied.append(source.name)
+    existing = _read_manifest(dest) if dest.exists() and dest.resolve() != folder.resolve() else _read_manifest(dest)
+    if existing and isinstance(existing.get("clips"), list):
+        incoming = {item["file"] for item in clips}
+        for old in existing["clips"]:
+            if not isinstance(old, dict):
+                continue
+            name = str(old.get("file") or "").strip()
+            if not name or name in incoming:
+                continue
+            if normalize_origin(old.get("origin"), license_value=normalize_license(old.get("license"), default="operator")) != "owned":
+                continue
+            if (dest / Path(name).name).is_file():
+                clips.insert(0, {
+                    "file": Path(name).name,
+                    "note": str(old.get("note") or ""),
+                    "origin": "owned",
+                    "license": "operator",
+                    "source_url": str(old.get("source_url") or ""),
+                    "local_path": str(old.get("local_path") or ""),
+                })
     if not clips:
         return {"ok": False, "folder": folder.name, "reason": "collector package must include at least one video clip"}
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
@@ -127,10 +155,12 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
         "agent": agent,
         "clips": clips,
         "notes": str(manifest.get("notes") or ""),
+        "unknown_license_count": sum(1 for item in clips if item.get("license") == "unknown"),
         "never": [
             "Do not connect to 127.0.0.1.",
             "Do not put a finished cut in any inbox.",
             "Only collect sources the operator may use.",
+            "Write license operator, stock, public, or unknown on every clip.",
         ],
     }
     (dest / "manifest.json").write_text(json.dumps(written, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -150,6 +180,85 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
     }
 
 
+def write_owned_materials(spec_id: str, paths: list[Any] | tuple[Any, ...] | str) -> dict[str, Any]:
+    record = get_spec(spec_id)
+    if not record:
+        raise ValueError("Edit spec not found.")
+    spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
+    mode = source_mode_of(spec)
+    if mode not in {"own", "own_and_collect"}:
+        raise ValueError("owned files are only for own or own_and_collect specs.")
+    if isinstance(paths, str):
+        items = [line.strip() for line in paths.splitlines() if line.strip()]
+    else:
+        items = [str(item).strip() for item in (paths or []) if str(item).strip()]
+    if not items:
+        raise ValueError("owned_paths must include at least one local video file.")
+    folder = materials_folder(spec_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    existing = _read_manifest(folder) or {}
+    clips: list[dict[str, Any]] = []
+    if isinstance(existing.get("clips"), list):
+        for old in existing["clips"]:
+            if isinstance(old, dict) and str(old.get("file") or "").strip():
+                clips.append(old)
+    copied: list[str] = []
+    known = {str(item.get("file") or "") for item in clips}
+    for raw in items:
+        source = Path(raw).expanduser()
+        if not source.is_file():
+            raise ValueError(f"owned file not found: {source}")
+        if source.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
+            raise ValueError(f"unsupported clip extension on '{source.name}'")
+        if source.stat().st_size > MAX_MEDIA_BYTES:
+            raise ValueError(f"clip '{source.name}' is over the handoff size limit")
+        dest = folder / source.name
+        if dest.exists() and dest.resolve() != source.resolve():
+            dest = folder / f"{source.stem}-owned{source.suffix}"
+        if source.resolve() != dest.resolve():
+            shutil.copy2(source, dest)
+        if dest.name in known:
+            continue
+        clips.append({
+            "file": dest.name,
+            "note": "Operator-owned source",
+            "origin": "owned",
+            "license": "operator",
+            "local_path": str(source.resolve()),
+        })
+        known.add(dest.name)
+        copied.append(dest.name)
+    if not clips:
+        raise ValueError("owned_paths must include at least one local video file.")
+    written = {
+        "schema": MATERIALS_SCHEMA,
+        "edit_spec_id": spec_id,
+        "role": "owned",
+        "door": "grok",
+        "agent": "operator",
+        "clips": clips,
+        "notes": str(existing.get("notes") or "Operator-owned clips. The editor cuts these."),
+        "unknown_license_count": sum(1 for item in clips if normalize_license(item.get("license")) == "unknown"),
+        "never": [
+            "Do not connect to 127.0.0.1.",
+            "Do not put a finished cut in any inbox.",
+        ],
+    }
+    (folder / "manifest.json").write_text(json.dumps(written, ensure_ascii=False, indent=2), encoding="utf-8")
+    if mode == "own":
+        set_spec_status(spec_id, "waiting_for_editor")
+    return {
+        "ok": True,
+        "folder": folder.name,
+        "path": str(folder),
+        "edit_spec_id": spec_id,
+        "origin": "owned",
+        "copied": copied,
+        "clip_count": len(clips),
+        "spec": get_spec(spec_id),
+    }
+
+
 def write_demo_materials(spec_id: str) -> dict[str, Any]:
     from first_run import find_bundled_sample, provision_sample_media
 
@@ -162,10 +271,17 @@ def write_demo_materials(spec_id: str) -> dict[str, Any]:
     if sample is None:
         raise ValueError("The bundled sample clip is missing, so demo materials cannot be written.")
     spec = record.get("spec") if isinstance(record.get("spec"), dict) else {}
+    if source_mode_of(spec) == "own":
+        return write_owned_materials(spec_id, [str(sample)])
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
     agent = normalize_agent(collector.get("agent") or "Claude", "agent")
     folder = materials_folder(spec_id)
     folder.mkdir(parents=True, exist_ok=True)
+    existing = _read_manifest(folder) or {}
+    owned = [
+        item for item in (existing.get("clips") or [])
+        if isinstance(item, dict) and normalize_origin(item.get("origin"), license_value="operator") == "owned"
+    ]
     shutil.copy2(sample, folder / "source.mp4")
     manifest = {
         "schema": MATERIALS_SCHEMA,
@@ -173,7 +289,12 @@ def write_demo_materials(spec_id: str) -> dict[str, Any]:
         "role": "collect",
         "door": "agent",
         "agent": agent,
-        "clips": [{"file": "source.mp4", "note": "Bundled sample used as collected source.", "origin": "bundled-sample"}],
+        "clips": owned + [{
+            "file": "source.mp4",
+            "note": "Bundled sample used as collected source.",
+            "origin": "bundled-sample",
+            "license": "operator",
+        }],
         "notes": "Demo materials. A real collector would drop allowed clips here.",
     }
     (folder / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -196,17 +317,24 @@ def materials_status() -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     for folder in pending:
         manifest = _read_manifest(folder) or {}
+        clips = manifest.get("clips") if isinstance(manifest.get("clips"), list) else []
+        unknown = sum(1 for item in clips if isinstance(item, dict) and normalize_license(item.get("license")) == "unknown")
         items.append({
             "id": folder.name,
             "path": str(folder),
             "agent": str(manifest.get("agent") or ""),
-            "clip_count": len(manifest.get("clips") or []) if isinstance(manifest.get("clips"), list) else 0,
+            "clip_count": len(clips),
+            "unknown_license_count": unknown,
+            "has_unknown_license": unknown > 0,
         })
+    unknown_total = sum(int(item.get("unknown_license_count") or 0) for item in items)
     return {
         "schema": "grok-crew.materials-status/v1",
         "materials_dir": str(local_materials_dir()),
         "pending_count": len(items),
         "pending": items,
+        "unknown_license_count": unknown_total,
+        "has_unknown_license": unknown_total > 0,
         "note": "Collector drops clips here. The editor reads them. This is not the operator inbox.",
     }
 

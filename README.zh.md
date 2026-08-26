@@ -22,7 +22,7 @@
 
 ## 你会看到什么
 
-首屏是**两个机器人接力同一份规格**。收集机器人（Claude、Codex、ChatGPT 等）读取 `handoff-outbox/agents`，把片段放进 `handoff-materials`。Grok 读取 `handoff-outbox/grok`，只剪那些片段，再交回 `handoff-inbox/grok`。这个工作台不抓网站。复制说明只是备用。**查看收集示例**和**查看剪辑示例**会用内置片段演示同一次到达。
+首屏先选**风格配方**（Instagram Reel、TikTok 快剪、YouTube Shorts、YouTube 长视频）以及画面从哪来（自己的文件、收集、或两者）。收集规格仍是两个机器人：收集机器人读 `handoff-outbox/agents`，把片段和许可写进 `handoff-materials`。只用自己文件时只进 Grok 发件箱。Grok 只剪那些片段，再交回 `handoff-inbox/grok`。这个工作台不抓网站。复制说明只是备用。**查看收集示例**和**查看剪辑示例**会用内置片段演示同一次到达。
 
 然后是三个标签：
 

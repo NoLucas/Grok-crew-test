@@ -73,7 +73,20 @@ type Version = {
   restored_from_revision?: number | null;
 };
 type FirstRun = { sample_available?: boolean; sample_open?: boolean; sample_path?: string; has_projects?: boolean };
-type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string; door?: string; agent?: string };
+type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string; door?: string; agent?: string; crew?: boolean; source_mode?: string; recipe_id?: string };
+type StyleRecipe = {
+  id: string;
+  name?: { ko?: string; en?: string; zh?: string; ja?: string };
+  summary?: { ko?: string; en?: string; zh?: string; ja?: string };
+  platform?: string;
+  aspect?: string;
+  duration_seconds?: { min?: number; max?: number };
+  captions?: boolean;
+  look?: string;
+  must_keep?: string;
+  must_drop?: string;
+  collect?: { query?: string; clip_count?: { min?: number; max?: number } };
+};
 type DoorInboxStatus = { pending_count?: number; inbox_dir?: string };
 type OutboxDoorStatus = { pending_count?: number; outbox_dir?: string; git_prefix?: string };
 type HandoffStatus = {
@@ -86,9 +99,9 @@ type HandoffStatus = {
     git_configured?: boolean;
     doors?: { grok?: OutboxDoorStatus; agent?: OutboxDoorStatus };
   };
-  materials?: { pending_count?: number };
+  materials?: { pending_count?: number; unknown_license_count?: number; has_unknown_license?: boolean };
 };
-type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus };
+type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus; style_recipes?: StyleRecipe[] };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;
 type AnalysisScene = { id: string; at: number; size_bytes: number };
@@ -934,6 +947,7 @@ export default function DesktopWorkspace() {
           : studioState === 'error' && !project ? <div className="desktop-empty"><span>!</span><h1>{t('데스크톱이 로컬 서비스에 닿지 않습니다', 'The desktop cannot reach the local service', '桌面无法连接本地服务', 'デスクトップがローカルサービスに届きません')}</h1><p>{t('npm run local 또는 데스크톱 앱을 실행한 뒤 다시 연결하세요.', 'Start npm run local or the desktop app, then reconnect.', '请先运行 npm run local 或桌面应用，然后重试。', 'npm run local かデスクトップアプリを起動してから再接続してください。')}</p><button type="button" className="desktop-primary" onClick={() => void refreshWorkspace()}>{t('다시 시도', 'Try again', '重试', '再試行')}</button></div>
           : specDeskOpen || !project ? <SpecDesk
               specs={workspace.edit_specs ?? []}
+              recipes={workspace.style_recipes ?? []}
               handoff={workspace.handoff}
               busy={busy}
               studioReady={studioState === 'ready'}

@@ -22,7 +22,7 @@ You do not need an account to start.
 
 ## What you see
 
-The first screen saves **one spec for two bots**. The collector (Claude, Codex, ChatGPT, and the rest) reads `handoff-outbox/agents` and drops clips in `handoff-materials`. Grok reads `handoff-outbox/grok`, cuts those clips, and returns the package to `handoff-inbox/grok`. This desk does not scrape websites. Copying the briefs is a backup. **See a collector sample** and **See an editor sample** show the same arrival using a bundled clip.
+The first screen lets you pick a **style recipe** (Instagram Reel, TikTok tight cut, YouTube Short, or YouTube long) and where the pictures come from (your files, a collector, or both). A collect spec still uses two bots: the collector reads `handoff-outbox/agents` and drops clips in `handoff-materials` with a license on each file. An own-files spec goes to the Grok outbox only. Grok cuts those clips and returns the package to `handoff-inbox/grok`. This desk does not scrape websites. Copying the briefs is a backup. **See a collector sample** and **See an editor sample** show the same arrival using a bundled clip.
 
 Then you work in three tabs:
 

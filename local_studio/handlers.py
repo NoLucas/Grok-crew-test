@@ -73,7 +73,8 @@ from studio_server import (
 from first_run import first_run_status, open_sample_project
 from edit_spec import create_spec, get_spec, list_specs, spec_brief
 from handoff_inbox import handoff_status, pull_handoff
-from handoff_materials import materials_status, pull_materials
+from handoff_materials import materials_status, pull_materials, write_owned_materials
+from style_recipes import list_recipes
 from handoff_outbox import outbox_status, push_handoff_outbox
 from desktop_domain import (
     TimelinePatchError,
@@ -278,6 +279,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, first_run_status())
             elif path == "/api/v2/edit-specs":
                 self._json(200, {"edit_specs": list_specs()})
+            elif path == "/api/v2/style-recipes":
+                self._json(200, {"recipes": list_recipes()})
             elif path == "/api/v2/handoff":
                 self._json(200, handoff_status())
             elif path == "/api/v2/handoff/outbox":
@@ -407,6 +410,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, push_handoff_outbox(body))
             elif path == "/api/v2/handoff/materials/pull":
                 self._json(200, pull_materials(body))
+            elif path == "/api/v2/handoff/materials/own":
+                self._json(200, write_owned_materials(str(body.get("edit_spec_id") or ""), body.get("paths") or body.get("owned_paths") or []))
             elif path == "/api/v2/runners/pair":
                 self._json(201, {"runner": pair_runner(body)})
             elif path == "/api/v2/runner-events":

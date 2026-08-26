@@ -189,10 +189,15 @@ def build_parser() -> argparse.ArgumentParser:
     spec = commands.add_parser("spec", help="Write an edit spec. The assigned door supplies the source video and the cut.")
     spec_sub = spec.add_subparsers(dest="command", required=True)
     spec_sub.add_parser("list", help="List saved edit specs.")
+    spec_sub.add_parser("recipes", help="List the named style recipes this desk fills in.")
     spec_create = spec_sub.add_parser("create", help="Save an edit spec from JSON.")
     spec_create.add_argument("--file", required=True)
     spec_create.add_argument("--door", choices=("grok", "agent"), default="", help="Grok door or other-agent door. Overrides the JSON file.")
     spec_create.add_argument("--crew", action="store_true", help="One spec for a collector and an editor.")
+    spec_create.add_argument("--recipe", default="", help="instagram_reel, tiktok_tight, youtube_short, or youtube_long.")
+    spec_create.add_argument("--source-mode", choices=("collect", "own", "own_and_collect"), default="", help="Where the clips come from.")
+    spec_create.add_argument("--collect-query", default="", help="What the collector should find.")
+    spec_create.add_argument("--owned", action="append", default=[], help="Local video path for own or own_and_collect. Repeatable.")
     spec_brief = spec_sub.add_parser("brief", help="Print the text to give that door's bot on another computer.")
     spec_brief.add_argument("--id", required=True)
     spec_brief.add_argument("--role", choices=("collect", "edit"), default="")
@@ -203,6 +208,9 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_sub.add_parser("outbox", help="List specs waiting in each door's outbox.")
     handoff_sub.add_parser("materials", help="List clips the collector dropped for the editor.")
     materials_pull = handoff_sub.add_parser("pull-materials", help="Import collector clips, or write a demo materials pack.")
+    materials_own = handoff_sub.add_parser("own-materials", help="Copy operator files into the materials box for an own spec.")
+    materials_own.add_argument("--spec-id", required=True)
+    materials_own.add_argument("--path", action="append", required=True, help="Local video path. Repeatable.")
     materials_pull.add_argument("--demo", action="store_true")
     materials_pull.add_argument("--spec-id", default="")
     handoff_push = handoff_sub.add_parser("push-outbox", help="Copy pending outbox specs onto the git handoff remote.")
@@ -316,12 +324,22 @@ def main() -> None:
     if args.group == "spec":
         if args.command == "list":
             print_json(client.request("/api/v2/edit-specs"))
+        elif args.command == "recipes":
+            print_json(client.request("/api/v2/style-recipes"))
         elif args.command == "create":
             body = read_json_file(args.file)
             if args.door:
                 body["door"] = args.door
             if args.crew:
                 body["crew"] = True
+            if args.recipe:
+                body["recipe_id"] = args.recipe
+            if args.source_mode:
+                body["source_mode"] = args.source_mode
+            if args.collect_query:
+                body["collect_query"] = args.collect_query
+            if args.owned:
+                body["owned_paths"] = args.owned
             print_json(client.request("/api/v2/edit-specs", body))
         else:
             path = f"/api/v2/edit-specs/{args.id}/brief"
@@ -344,6 +362,11 @@ def main() -> None:
             if args.spec_id:
                 payload["edit_spec_id"] = args.spec_id
             print_json(client.request("/api/v2/handoff/materials/pull", payload))
+        elif args.command == "own-materials":
+            print_json(client.request("/api/v2/handoff/materials/own", {
+                "edit_spec_id": args.spec_id,
+                "paths": args.path,
+            }))
         elif args.command == "push-outbox":
             payload: dict[str, Any] = {}
             if args.door:

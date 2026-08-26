@@ -7,6 +7,15 @@
     "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor 등 Grok이 아닌 에이전트. 보낼함은 outbox/agents/. 끝난 패키지는 agents/ 아래. grok/ 와 Runner는 쓰지 마세요.",
     "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다."
   },
+  "style_recipes": {
+    "purpose": "이름 있는 레시피가 길이, 화면비, 훅, 속도, 자막, 룩, 수집 힌트를 채웁니다. 문이 아닙니다.",
+    "ids": ["instagram_reel", "tiktok_tight", "youtube_short", "youtube_long"]
+  },
+  "source_modes": {
+    "collect": "수집 봇이 클립을 모읍니다. 보낼함 둘. 상태는 waiting_for_collector.",
+    "own": "운영자 파일만. Grok 보낼함만. 상태는 waiting_for_editor.",
+    "own_and_collect": "운영자 본편 + 수집 B롤. 보낼함 둘. owned 클립은 유지."
+  },
   "crew": {
     "purpose": "규격 하나, 봇 둘. 수집 봇이 자료를 모으고 편집 봇이 그 클립만 자릅니다. 이 책상은 사이트를 긁지 않습니다.",
     "collector": {
@@ -15,7 +24,8 @@
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "소스 클립"],
-      "do_not": "끝난 컷을 인박스에 넣지 마세요. 운영자가 쓸 수 있는 출처만 모으세요."
+      "clip_fields": ["file", "origin (owned|collected|bundled-sample)", "license (operator|stock|public|unknown)", "source_url"],
+      "do_not": "끝난 컷을 인박스에 넣지 마세요. 운영자가 쓸 수 있는 출처만 모으세요. 로그인 막힌 인스타/틱톡은 긁지 마세요. owned 클립은 지우지 마세요."
     },
     "editor": {
       "door": "grok",

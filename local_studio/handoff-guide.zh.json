@@ -7,6 +7,15 @@
     "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。读取 outbox/agents/。交回包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
     "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。"
   },
+  "style_recipes": {
+    "purpose": "命名风格会填好时长、画幅、钩子、节奏、字幕、外观和收集提示。它不是一扇门。",
+    "ids": ["instagram_reel", "tiktok_tight", "youtube_short", "youtube_long"]
+  },
+  "source_modes": {
+    "collect": "收集机器人找片段。两个发件箱。状态 waiting_for_collector。",
+    "own": "只用操作者的文件。只有 Grok 发件箱。状态 waiting_for_editor。",
+    "own_and_collect": "操作者主画面加收集 B-roll。两个发件箱。保留 owned 片段。"
+  },
   "crew": {
     "purpose": "一份规格，两个机器人。收集者找素材，剪辑者只剪那些片段。这个工作台不抓网站。",
     "collector": {
@@ -15,7 +24,8 @@
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "source clips"],
-      "do_not": "不要把成品剪辑放进任何收件箱。只收集操作者有权使用的来源。"
+      "clip_fields": ["file", "origin (owned|collected|bundled-sample)", "license (operator|stock|public|unknown)", "source_url"],
+      "do_not": "不要把成品剪辑放进任何收件箱。只收集操作者有权使用的来源。不要抓登录墙后的 Instagram/TikTok。不要替换 owned 片段。"
     },
     "editor": {
       "door": "grok",
