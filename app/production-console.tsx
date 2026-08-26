@@ -22,7 +22,7 @@ type StudioProject = {
   source_path: string;
   output_path: string;
   caption: string;
-  timeline_json: { clips: TimelineClip[] };
+  timeline_json?: { clips?: TimelineClip[] } | null;
   created_at: string;
 };
 type StudioJob = {
@@ -743,7 +743,7 @@ export default function ProductionConsole() {
                   >
                     <b>{project.title}</b>
                     <span>
-                      {t(`${project.timeline_json.clips.length}개 컷`, `${project.timeline_json.clips.length} clips`, `${project.timeline_json.clips.length} 个片段`, `${project.timeline_json.clips.length} クリップ`)} ·{" "}
+                      {t(`${project.timeline_json?.clips?.length ?? 0}개 컷`, `${project.timeline_json?.clips?.length ?? 0} clips`, `${project.timeline_json?.clips?.length ?? 0} 个片段`, `${project.timeline_json?.clips?.length ?? 0} クリップ`)} ·{" "}
                       {stamp(project.created_at, language)}
                     </span>
                     <i>{project.id.slice(0, 8)}</i>

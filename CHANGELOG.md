@@ -64,7 +64,7 @@ All notable changes to Grok Crew are documented here.
 
 - README, Local Studio, and the desktop guide treat Desktop (`/`) as the default workspace. Instagram, TikTok, and YouTube publish are documented as implemented with local env tokens; official OAuth apps stay external.
 - Desktop Export asks before retrying an interrupted publish receipt, because the platform may already have the first upload. Receipt retry buttons stay visible when the error text is long.
-- Legacy browser pages keep their routes and show a banner that points to Desktop. Production and Bot Check can still run live jobs; the other header pages stay planning or preview.
+- Legacy browser pages keep their routes and show a banner that points to Desktop. Production and Bot Check can still run live jobs; the other header pages stay planning or preview. Production no longer crashes when a Desktop Timeline v2 project has no legacy `clips` array.
 - `npm run local` and `site --page desktop` open `/` instead of sending operators to `/production`.
 
 - Core verification now runs every focused timeline UI test, so P1-01 and P1-02 interaction regressions are included in CI.
