@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import get_spec, normalize_door, spec_brief
+from edit_spec import default_agent_for_door, get_spec, normalize_door, spec_brief
 
 OUTBOX_SCHEMA = "grok-crew.outbox-spec/v1"
 DOOR_FOLDERS = {"grok": "grok", "agent": "agents"}
@@ -104,7 +104,7 @@ def write_outbox(
         raise ValueError("Edit spec is missing.")
     resolved_door = normalize_door(door or record.get("door") or (record.get("spec") or {}).get("door"))
     printed = spec_brief(record["id"], role=role)
-    agent = str(printed.get("agent") or record.get("agent") or ("editor" if resolved_door == "grok" else "collector"))
+    agent = str(printed.get("agent") or record.get("agent") or default_agent_for_door(resolved_door))
     folder = outbox_folder(record["id"], resolved_door)
     folder.mkdir(parents=True, exist_ok=True)
     payload = _package(record, printed["text"], door=resolved_door, agent=agent, role=str(printed.get("role") or role or ""))

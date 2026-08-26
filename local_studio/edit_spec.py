@@ -37,33 +37,14 @@ OWN_AND_COLLECT_RULE = (
 )
 DOORS = ("grok", "agent")
 ROLES = ("collect", "edit")
+EDITOR_AGENT = "Editor Agent"
+COLLECTOR_AGENT = "Collector Agent"
 CREW_ROLES = {
-    "collect": {"door": "agent", "default_agent": "collector"},
-    "edit": {"door": "grok", "default_agent": "editor"},
+    "collect": {"door": "agent", "default_agent": COLLECTOR_AGENT},
+    "edit": {"door": "grok", "default_agent": EDITOR_AGENT},
 }
 COLLECT_PURPOSE_HINTS = ("collect", "collector", "gather", "scrape", "scraping", "research", "materials")
 EDIT_PURPOSE_HINTS = ("edit", "editor", "cut", "edit_video", "render")
-AGENT_ALIASES = {
-    "grok": "Grok",
-    "grok-bot": "Grok",
-    "grokbot": "Grok",
-    "claude": "Claude",
-    "claude-code": "Claude",
-    "anthropic": "Claude",
-    "codex": "Codex",
-    "openai-codex": "Codex",
-    "chatgpt": "ChatGPT",
-    "chat-gpt": "ChatGPT",
-    "gpt": "ChatGPT",
-    "gpt-4": "ChatGPT",
-    "gpt-5": "ChatGPT",
-    "openai": "ChatGPT",
-    "gemini": "Gemini",
-    "gemini-cli": "Gemini",
-    "bard": "Gemini",
-    "cursor": "Cursor",
-    "cursor-agent": "Cursor",
-}
 
 
 def agent_key(value: Any) -> str:
@@ -92,17 +73,17 @@ def normalize_door(value: Any, *, required: bool = False) -> str:
     raise ValueError("door must be grok or agent.")
 
 
-def normalize_agent(value: Any, door: str) -> str:
-    """Canonical sender name. The door is the inbox; the name is whoever is connected."""
-    resolved_door = normalize_door(door)
-    key = agent_key(value)
-    canonical = AGENT_ALIASES.get(key)
-    if canonical:
-        return canonical
-    text = str(value or "").strip()[:80]
-    if not text or key in {"agent", "agents", "bot", "other", "other-agent", "default"}:
-        return "editor" if resolved_door == "grok" else "collector"
-    return text
+def default_agent_for_door(door: str) -> str:
+    return EDITOR_AGENT if normalize_door(door) == "grok" else COLLECTOR_AGENT
+
+
+def default_agent_for_role(role: str) -> str:
+    return COLLECTOR_AGENT if role == "collect" else EDITOR_AGENT
+
+
+def normalize_agent(_value: Any, door: str) -> str:
+    """Role label only. Brands and typed names do not become the role."""
+    return default_agent_for_door(door)
 
 
 def resolve_sender(project: dict[str, Any], spec: dict[str, Any] | None = None) -> tuple[str, str]:
@@ -268,7 +249,7 @@ def _record(row: dict[str, Any] | None) -> dict[str, Any] | None:
         "title": spec.get("title") or "",
         "goal": spec.get("goal") or "",
         "door": spec.get("door") or "grok",
-        "agent": spec.get("agent") or ("editor" if (spec.get("door") or "grok") == "grok" else "collector"),
+        "agent": spec.get("agent") or default_agent_for_door(spec.get("door") or "grok"),
         "crew": bool(spec.get("crew")),
         "source_mode": source_mode,
         "recipe_id": spec.get("recipe_id") or "",
@@ -429,7 +410,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     captions = "on" if spec.get("captions") else "off"
     upload = "do not upload" if not spec.get("upload") else "queue publish only after the operator confirms"
     door = normalize_door(spec.get("door") or record.get("door"))
-    agent = str(spec.get("agent") or ("editor" if door == "grok" else "collector"))
+    agent = str(spec.get("agent") or default_agent_for_door(door))
     requested = normalize_role(role) if role not in (None, "") else ""
     mode = source_mode_of(spec)
     recipe_text = _recipe_block(spec, language)
@@ -461,8 +442,8 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
     if spec.get("crew"):
         collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
         editor = spec.get("editor") if isinstance(spec.get("editor"), dict) else {}
-        collector_name = str(collector.get("agent") or "collector")
-        editor_name = str(editor.get("agent") or "editor")
+        collector_name = str(collector.get("agent") or COLLECTOR_AGENT)
+        editor_name = str(editor.get("agent") or EDITOR_AGENT)
         collect_hints = _collect_hint_block(spec, language)
         attach_line_ko = (
             "운영자가 원본을 자료함에 일부 넣어 두었습니다. 맞는 클립만 보태세요. "
@@ -504,7 +485,7 @@ def spec_brief(spec_id: str, role: str | None = None) -> dict[str, Any]:
         edit_attach_ko = (
             "자료함의 클립만 자르세요. 운영자 파일과 수집 클립을 함께 씁니다.\n"
             if mode == "own_and_collect"
-            else "수집 봇이 모은 자료만 자르세요.\n"
+            else "Collector Agent가 모은 자료만 자르세요.\n"
         )
         edit_attach_en = (
             "Cut the clips in the materials box. Use owned files and collected clips together.\n"
@@ -674,7 +655,7 @@ def _purpose_role(purpose: str) -> str:
 
 
 def crew_roster() -> dict[str, Any]:
-    """Connected bots, named by check-in — not by assuming Grok or Claude."""
+    """Connected bots stay listed; role slots are always Editor Agent / Collector Agent."""
     now = datetime.now(timezone.utc)
     with db() as conn:
         sessions = conn.execute("SELECT * FROM bot_sessions ORDER BY last_seen DESC LIMIT 40").fetchall()
@@ -727,8 +708,8 @@ def crew_roster() -> dict[str, Any]:
     return {
         "schema": "grok-crew.crew-roster/v1",
         "bots": bots,
-        "suggested_editor": str((editor or {}).get("display_name") or ""),
-        "suggested_collector": str((collector or {}).get("display_name") or ""),
+        "suggested_editor": default_agent_for_role("edit") if editor else "",
+        "suggested_collector": default_agent_for_role("collect") if collector else "",
     }
 
 

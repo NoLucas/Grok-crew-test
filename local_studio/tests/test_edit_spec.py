@@ -48,23 +48,23 @@ def test_agent_door_brief_excludes_grok_inbox(studio):
     assert "handoff-inbox/agents" in brief["text"]
     assert "Do not use the editor door" in brief["text"]
     assert "Desktop Runner pairing is only" not in brief["text"]
-    assert "Claude" in brief["text"]
+    assert "Collector Agent" in brief["text"]
+    assert "Claude" not in brief["text"]
 
 
-def test_sender_name_follows_connected_bot_not_door():
-    assert normalize_agent("grok", "grok") == "Grok"
-    assert normalize_agent("claude-code", "agent") == "Claude"
-    assert normalize_agent("Codex", "agent") == "Codex"
-    assert normalize_agent("chatgpt", "agent") == "ChatGPT"
-    assert normalize_agent("gemini-cli", "agent") == "Gemini"
-    assert normalize_agent("Cursor", "agent") == "Cursor"
-    assert normalize_agent("Claude", "grok") == "Claude"
-    assert normalize_agent("Grok", "agent") == "Grok"
-    assert normalize_agent("", "grok") == "editor"
-    assert normalize_agent("", "agent") == "collector"
-    assert resolve_sender({"door": "agent", "created_by": "Claude"}) == ("agent", "Claude")
-    assert resolve_sender({"door": "grok", "created_by": "Claude"}) == ("grok", "Claude")
-    assert resolve_sender({"door": "grok", "created_by": "Orion"}) == ("grok", "Orion")
+def test_role_names_are_editor_and_collector_agent():
+    assert normalize_agent("grok", "grok") == "Editor Agent"
+    assert normalize_agent("claude-code", "agent") == "Collector Agent"
+    assert normalize_agent("Codex", "agent") == "Collector Agent"
+    assert normalize_agent("Nova", "agent") == "Collector Agent"
+    assert normalize_agent("Orion", "grok") == "Editor Agent"
+    assert normalize_agent("Claude", "grok") == "Editor Agent"
+    assert normalize_agent("Grok", "agent") == "Collector Agent"
+    assert normalize_agent("", "grok") == "Editor Agent"
+    assert normalize_agent("", "agent") == "Collector Agent"
+    assert resolve_sender({"door": "agent", "created_by": "Claude"}) == ("agent", "Collector Agent")
+    assert resolve_sender({"door": "grok", "created_by": "Claude"}) == ("grok", "Editor Agent")
+    assert resolve_sender({"door": "grok", "created_by": "Orion"}) == ("grok", "Editor Agent")
 
 
 def test_media_relpaths_include_broll():
@@ -99,9 +99,9 @@ def test_apply_package_imports_bot_source_and_links_spec(studio, tmp_path):
     assert result["ok"] is True
     assert result["edit_spec_id"] == record["id"]
     assert result["door"] == "grok"
-    assert result["agent"] == "editor"
+    assert result["agent"] == "Editor Agent"
     assert result["project"]["handoff_door"] == "grok"
-    assert result["project"]["handoff_agent"] == "editor"
+    assert result["project"]["handoff_agent"] == "Editor Agent"
     import config
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/source.mp4").read_bytes() == b"x" * 32
     assert (config.WORKSPACE_DIR / "inputs/handoff/pkg/broll.mp4").read_bytes() == b"y" * 32
@@ -143,9 +143,9 @@ def test_agent_demo_is_invisible_to_grok_pull(studio, tmp_path, monkeypatch):
     assert written["folder"] not in {item.get("folder") for item in grok_pull["processed"]}
     agent_pull = pull_handoff({"door": "agent", "edit_spec_id": record["id"]})
     imported = next(item for item in agent_pull["imported"] if item.get("folder") == written["folder"])
-    assert imported["agent"] == "Codex"
+    assert imported["agent"] == "Collector Agent"
     assert imported["project"]["handoff_door"] == "agent"
-    assert imported["project"]["handoff_agent"] == "Codex"
+    assert imported["project"]["handoff_agent"] == "Collector Agent"
 
 
 def test_grok_pull_rejects_agent_spec(studio):
@@ -197,8 +197,8 @@ def test_apply_stores_named_agent(studio, tmp_path):
     }), encoding="utf-8")
     result = apply_package_local(folder, expected_door="agent")
     assert result["ok"] is True
-    assert result["agent"] == "Claude"
-    assert result["project"]["handoff_agent"] == "Claude"
+    assert result["agent"] == "Collector Agent"
+    assert result["project"]["handoff_agent"] == "Collector Agent"
     assert result["project"]["handoff_door"] == "agent"
 
 
@@ -230,9 +230,9 @@ def test_http_spec_brief_and_handoff_status(live_server):
 
 def test_unnamed_spec_uses_role_defaults_not_grok_or_claude(studio):
     record = create_spec({"title": "Unnamed crew", "goal": "No brand defaults", "language": "en", "crew": True})
-    assert record["collector"]["agent"] == "collector"
-    assert record["editor"]["agent"] == "editor"
-    assert record["agent"] == "editor"
+    assert record["collector"]["agent"] == "Collector Agent"
+    assert record["editor"]["agent"] == "Editor Agent"
+    assert record["agent"] == "Editor Agent"
 
 
 def test_crew_roster_suggests_names_from_checkin_purpose(studio):
@@ -263,8 +263,8 @@ def test_crew_roster_suggests_names_from_checkin_purpose(studio):
             ("e2", "bot-edit", "Orion", "edit_video", "", now),
         )
     roster = crew_roster()
-    assert roster["suggested_collector"] == "Nova"
-    assert roster["suggested_editor"] == "Orion"
+    assert roster["suggested_collector"] == "Collector Agent"
+    assert roster["suggested_editor"] == "Editor Agent"
     names = {item["display_name"] for item in roster["bots"]}
     assert names == {"Nova", "Orion"}
     record = create_spec({
@@ -275,8 +275,8 @@ def test_crew_roster_suggests_names_from_checkin_purpose(studio):
         "collector": "Nova",
         "editor": "Orion",
     })
-    assert record["collector"]["agent"] == "Nova"
-    assert record["editor"]["agent"] == "Orion"
+    assert record["collector"]["agent"] == "Collector Agent"
+    assert record["editor"]["agent"] == "Editor Agent"
     swapped = create_spec({
         "title": "Swapped brands",
         "goal": "Claude may edit",
@@ -285,8 +285,8 @@ def test_crew_roster_suggests_names_from_checkin_purpose(studio):
         "collector": "Grok",
         "editor": "Claude",
     })
-    assert swapped["collector"]["agent"] == "Grok"
-    assert swapped["editor"]["agent"] == "Claude"
+    assert swapped["collector"]["agent"] == "Collector Agent"
+    assert swapped["editor"]["agent"] == "Editor Agent"
 
 
 def test_simple_path_spec_is_one_bot(studio):

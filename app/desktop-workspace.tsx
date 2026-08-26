@@ -176,12 +176,8 @@ function handoffSenderLabel(
   item: { handoff_agent?: string | null; handoff_door?: string | null },
   t: (ko: string, en: string, zh: string, ja: string) => string,
 ) {
-  const name = (item.handoff_agent || '').trim();
-  if (name && name !== 'editor' && name !== 'collector' && name !== 'agent') {
-    return name;
-  }
-  if (item.handoff_door === 'grok') return t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
-  if (item.handoff_door === 'agent') return t('수집 봇', 'Collector', '收集机器人', '収集ボット');
+  if (item.handoff_door === 'grok') return t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent');
+  if (item.handoff_door === 'agent') return t('수집 Agent', 'Collector Agent', '收集 Agent', '収集 Agent');
   return t('이 PC', 'This PC', '本机', 'このPC');
 }
 
@@ -849,7 +845,7 @@ export default function DesktopWorkspace() {
       } else {
         await api(`/api/v2/control-jobs/${job.id}/${command}`, { method: 'POST', body: JSON.stringify({ reason: unclaimed ? 'unclaimed' : command }) });
         setMessage(command === 'cancel'
-          ? t('대기 중인 Grok 작업을 취소했습니다.', 'Cancelled the waiting Grok job.', '已取消等待中的 Grok 任务。', '待機中の Grok ジョブをキャンセルしました。')
+          ? t('대기 중인 편집 Agent 작업을 취소했습니다.', 'Cancelled the waiting Editor Agent job.', '已取消等待中的剪辑 Agent 任务。', '待機中の編集 Agent ジョブをキャンセルしました。')
           : t(`작업을 ${command}했습니다.`, `Job ${command} sent.`, `已${command}任务。`, `ジョブを ${command} しました。`));
       }
       await refreshWorkspace(true);
@@ -866,8 +862,8 @@ export default function DesktopWorkspace() {
       }) as { count?: number };
       await refreshWorkspace(true);
       setMessage(t(
-        `대기 중이던 Grok 작업 ${result.count ?? unclaimedJobs.length}개를 취소했습니다. Runner 없이 남아 있던 항목입니다.`,
-        `Cancelled ${result.count ?? unclaimedJobs.length} waiting Grok job(s) that never reached a Runner.`,
+        `대기 중이던 편집 Agent 작업 ${result.count ?? unclaimedJobs.length}개를 취소했습니다. Runner 없이 남아 있던 항목입니다.`,
+        `Cancelled ${result.count ?? unclaimedJobs.length} waiting Editor Agent job(s) that never reached a Runner.`,
         `已取消 ${result.count ?? unclaimedJobs.length} 个未到达 Runner 的等待任务。`,
         `Runner に届いていなかった待機ジョブ ${result.count ?? unclaimedJobs.length} 件をキャンセルしました。`,
       ));
@@ -884,7 +880,7 @@ export default function DesktopWorkspace() {
       await window.grokCrew.resolveRunnerConflict(latestJob.id, action);
       await refreshWorkspace(true);
       setMessage(action === 'retry_current'
-        ? t('현재 타임라인 revision으로 Grok에 다시 요청했습니다.', 'Retried Grok against the current timeline revision.', '已基于当前时间线版本重新请求 Grok。', '現在のタイムライン revision で Grok に再依頼しました。')
+        ? t('현재 타임라인 revision으로 편집 Agent에 다시 요청했습니다.', 'Retried Editor Agent against the current timeline revision.', '已基于当前时间线版本重新请求剪辑 Agent。', '現在のタイムライン revision で編集 Agent に再依頼しました。')
         : t('충돌 편집안을 폐기했습니다.', 'Discarded the conflicted proposal.', '已放弃冲突的编辑方案。', '競合した提案を破棄しました。'));
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Conflict resolution failed.'); }
     finally { setBusy(false); }
@@ -895,7 +891,7 @@ export default function DesktopWorkspace() {
     try {
       await window.grokCrew.answerRunnerInput(latestJob.id, { question_id: inputRequest.question_id, value });
       await refreshWorkspace(true);
-      setMessage(t('선택을 저장하고 같은 Grok 세션으로 보낼 암호화 요청을 만들었습니다.', 'Saved the choice and exported an encrypted follow-up for the same Grok session.', '已保存选择并导出同一 Grok 会话的加密后续请求。', '選択を保存し、同じ Grok セッションへの暗号化フォローアップを書き出しました。'));
+      setMessage(t('선택을 저장하고 같은 편집 Agent 세션으로 보낼 암호화 요청을 만들었습니다.', 'Saved the choice and exported an encrypted follow-up for the same Editor Agent session.', '已保存选择并导出同一剪辑 Agent 会话的加密后续请求。', '選択を保存し、同じ編集 Agent セッションへの暗号化フォローアップを書き出しました。'));
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not send the answer.'); } finally { setBusy(false); }
   };
   const publishNow = async (platform: 'instagram' | 'tiktok' | 'youtube') => {
@@ -981,7 +977,7 @@ export default function DesktopWorkspace() {
                     : version.action_kind === 'restore'
                       ? t('버전 복원', 'Restore', '恢复版本', 'バージョン復元')
                       : version.origin === 'remote_bot'
-                        ? (version.created_by && version.created_by !== 'remote_bot' ? version.created_by : t('편집 봇', 'Editor', '剪辑机器人', '編集ボット'))
+                        ? t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent')
                         : version.origin === 'human'
                           ? t('사용자', 'You', '用户', 'ユーザー')
                           : t('시스템', 'System', '系统', 'システム')}
@@ -1089,7 +1085,7 @@ export default function DesktopWorkspace() {
                   <div className={`desktop-transcript-state ${analysis.transcript_json.status === 'ready' ? 'ready' : ''}`}><span>{analysis.transcript_json.status === 'ready' ? '✓' : 'i'}</span><div><b>{analysis.transcript_json.status === 'ready' ? t('대본 준비됨', 'Transcript ready', '字幕稿已就绪', '文字起こし準備完了') : t('장면 분석만 완료됨', 'Scene analysis complete', '场景分析已完成', 'シーン解析のみ完了')}</b><p>{analysis.transcript_json.status === 'ready' ? (analysis.transcript_json.text || analysisWords.map((word) => word.text).join(' ')) : t('whisper.cpp를 설정하면 음성을 대본으로 변환합니다.', 'Configure whisper.cpp to transcribe speech.', '配置 whisper.cpp 后可将语音转成文字。', 'whisper.cpp を設定すると音声を文字起こしできます。')}</p></div></div>
                 </div>}
               </section>
-              <section className="desktop-card desktop-settings-card"><div className="desktop-card-title"><span>02</span><div><b>{t('Grok 편집 설정', 'Grok edit controls', 'Grok 编辑设置', 'Grok 編集設定')}</b><small>{t('채팅 없이 명확한 선택으로 전달합니다.', 'Clear controls, no prompt writing.', '无需编写提示词。', 'プロンプト入力は不要です。')}</small></div></div><div className="desktop-form-grid">
+              <section className="desktop-card desktop-settings-card"><div className="desktop-card-title"><span>02</span><div><b>{t('편집 Agent 설정', 'Editor Agent controls', '剪辑 Agent 设置', '編集 Agent 設定')}</b><small>{t('채팅 없이 명확한 선택으로 전달합니다.', 'Clear controls, no prompt writing.', '无需编写提示词。', 'プロンプト入力は不要です。')}</small></div></div><div className="desktop-form-grid">
                 <label>{t('콘텐츠 유형', 'Content type', '内容类型', 'コンテンツ種別')}<select value={method.content_type} onChange={(e) => setMethod({ ...method, content_type: e.target.value })}><option value="talking_head">{t('토킹헤드', 'Talking head', '口播', 'トーキングヘッド')}</option><option value="vlog">Vlog</option><option value="product">{t('제품·서비스', 'Product / service', '产品服务', '製品・サービス')}</option><option value="tutorial">{t('튜토리얼', 'Tutorial', '教程', 'チュートリアル')}</option></select></label>
                 <label>{t('목표 길이', 'Target length', '目标时长', '目標尺')}<select value={method.target_length} onChange={(e) => setMethod({ ...method, target_length: Number(e.target.value) })}><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option></select></label>
                 <label>{t('화면비', 'Aspect ratio', '画面比例', 'アスペクト比')}<select value={method.aspect_ratio} onChange={(e) => setMethod({ ...method, aspect_ratio: e.target.value })}><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="16:9">16:9</option></select></label>
@@ -1192,12 +1188,12 @@ export default function DesktopWorkspace() {
         <aside className={`desktop-inspector ${drawer === 'status' ? 'open' : ''}`}>
           {showRemoteDesk ? (
           <section className="desktop-inspector-section">
-            <div className="desktop-inspector-head"><b>{t('Grok 상태', 'Grok status', 'Grok 状态', 'Grok 状態')}</b><div className="desktop-inspector-head-tools">{remoteOpen && !runnerPaired && !github.authenticated && !github.relay_connected && !remoteAttention ? <button type="button" className="desktop-inspector-fold" onClick={() => setRemoteOpen(false)}>{t('접기', 'Hide', '收起', '閉じる')}</button> : null}<span className={`desktop-status-dot ${statusTone(latestJob?.status ?? 'waiting')}`} /></div></div>
-            <div className="desktop-agent-card"><span className="desktop-agent-avatar">G</span><div><b>{runner?.display_name ?? 'Grok Runner'}</b><small>{latestEvent ? `${t('원격', 'Remote', '远程', 'リモート')}: ${latestEvent.stage.replaceAll('_', ' ')}` : t('원격 확인 대기', 'Awaiting verified remote activity', '等待远程确认', 'リモート確認待ち')}</small></div></div>
+            <div className="desktop-inspector-head"><b>{t('편집 Agent 상태', 'Editor Agent status', '剪辑 Agent 状态', '編集 Agent 状態')}</b><div className="desktop-inspector-head-tools">{remoteOpen && !runnerPaired && !github.authenticated && !github.relay_connected && !remoteAttention ? <button type="button" className="desktop-inspector-fold" onClick={() => setRemoteOpen(false)}>{t('접기', 'Hide', '收起', '閉じる')}</button> : null}<span className={`desktop-status-dot ${statusTone(latestJob?.status ?? 'waiting')}`} /></div></div>
+            <div className="desktop-agent-card"><span className="desktop-agent-avatar">E</span><div><b>{runner?.display_name ?? 'Editor Agent'}</b><small>{latestEvent ? `${t('원격', 'Remote', '远程', 'リモート')}: ${latestEvent.stage.replaceAll('_', ' ')}` : t('원격 확인 대기', 'Awaiting verified remote activity', '等待远程确认', 'リモート確認待ち')}</small></div></div>
             {latestJob && <div className="desktop-local-state"><span>{t('로컬 앱', 'Local app', '本地应用', 'ローカルアプリ')}</span><b>{latestJob.status.replaceAll('_', ' ')}</b><small>attempt {latestJob.attempt ?? 1}{latestJob.render_job_id ? ` · render ${latestJob.render_job_id.slice(0, 8)}` : ''}</small></div>}
             {latestEvent ? <div className="desktop-verified"><b>{latestEvent.status}</b><span>{t('마지막 확인', 'Last verified', '最后确认', '最終確認')} {new Date(latestEvent.verified_at).toLocaleString()}</span></div> : <p className="desktop-muted">{t('확인된 원격 활동이 아직 없습니다. 상태를 추측하지 않습니다.', 'No verified remote activity yet. Presence is never guessed.', '暂无已确认的远程活动。', '確認済みのリモート活動はまだありません。')}</p>}
             {inputRequest && <div className="desktop-input-request"><b>{inputRequest.question}</b>{inputRequest.options.map((option) => <button key={option.value} disabled={busy} onClick={() => void answerRunnerInput(option.value)}><span>{option.label}</span>{option.description && <small>{option.description}</small>}</button>)}</div>}
-            {latestJob?.status === 'conflict' && latestJob.conflict_json && <div className="desktop-conflict-card"><b>{t('타임라인 충돌 검토', 'Timeline conflict review', '时间线冲突审核', 'タイムライン競合レビュー')}</b><p>{t(`Grok 기준 v${latestJob.conflict_json.expected_revision}, 현재 v${latestJob.conflict_json.current_revision}`, `Grok used v${latestJob.conflict_json.expected_revision}; current timeline is v${latestJob.conflict_json.current_revision}.`, `Grok 基于 v${latestJob.conflict_json.expected_revision}，当前为 v${latestJob.conflict_json.current_revision}`, `Grok は v${latestJob.conflict_json.expected_revision}、現在は v${latestJob.conflict_json.current_revision} です。`)}</p><small>{latestJob.conflict_json.reason}</small><div><button disabled={busy} onClick={() => void resolveConflict('retry_current')}>{t('현재 버전으로 다시 요청', 'Retry current revision', '基于当前版本重试', '現在版で再試行')}</button><button disabled={busy} onClick={() => void resolveConflict('discard')}>{t('편집안 폐기', 'Discard proposal', '放弃方案', '提案を破棄')}</button></div></div>}
+            {latestJob?.status === 'conflict' && latestJob.conflict_json && <div className="desktop-conflict-card"><b>{t('타임라인 충돌 검토', 'Timeline conflict review', '时间线冲突审核', 'タイムライン競合レビュー')}</b><p>{t(`편집 Agent 기준 v${latestJob.conflict_json.expected_revision}, 현재 v${latestJob.conflict_json.current_revision}`, `Editor Agent used v${latestJob.conflict_json.expected_revision}; current timeline is v${latestJob.conflict_json.current_revision}.`, `剪辑 Agent 基于 v${latestJob.conflict_json.expected_revision}，当前为 v${latestJob.conflict_json.current_revision}`, `編集 Agent は v${latestJob.conflict_json.expected_revision}、現在は v${latestJob.conflict_json.current_revision} です。`)}</p><small>{latestJob.conflict_json.reason}</small><div><button disabled={busy} onClick={() => void resolveConflict('retry_current')}>{t('현재 버전으로 다시 요청', 'Retry current revision', '基于当前版本重试', '現在版で再試行')}</button><button disabled={busy} onClick={() => void resolveConflict('discard')}>{t('편집안 폐기', 'Discard proposal', '放弃方案', '提案を破棄')}</button></div></div>}
             <div className="desktop-github-card"><div><b>GitHub</b><span className={github.authenticated ? 'ok' : ''}>{github.authenticated ? `✓ ${github.login}` : t('로그인 필요', 'Login required', '需要登录', 'ログインが必要')}</span></div><small>{github.relay_connected ? github.remote : t('비공개 relay 저장소가 연결되지 않았습니다.', 'No private relay repository connected.', '尚未连接私有 relay 仓库。', '非公開 relay リポジトリ未接続。')}</small>{!github.authenticated && <><button disabled={busy || !github.oauth_available} onClick={() => void loginGitHub('device')}>{t('브라우저로 GitHub 로그인', 'GitHub browser login', '通过浏览器登录 GitHub', 'ブラウザで GitHub ログイン')}</button><div className="desktop-token-login"><input type="password" autoComplete="off" value={githubToken} onChange={(event) => setGithubToken(event.target.value)} placeholder={t('또는 GitHub 토큰', 'Or GitHub token', '或 GitHub 令牌', 'または GitHub トークン')} /><button disabled={busy || githubToken.length < 20} onClick={() => void loginGitHub('token')}>{t('토큰 연결', 'Connect token', '连接令牌', 'トークン接続')}</button></div></>}</div>
             <div className="desktop-relay-actions"><button onClick={() => void relayAction('pair')}>{t('Runner 페어링', 'Pair Runner', '配对 Runner', 'Runner ペアリング')}</button><button onClick={() => void relayAction('desktop')}>{t('데스크톱 키 내보내기', 'Export desktop key', '导出桌面密钥', 'デスクトップ鍵を書き出す')}</button><button onClick={() => void relayAction('git-connect')}>{github.relay_connected ? t('relay 저장소 변경', 'Change relay repo', '更改 relay 仓库', 'relay を変更') : t('GitHub relay 연결', 'Connect GitHub relay', '连接 GitHub relay', 'GitHub relay 接続')}</button>{latestJob && <button onClick={() => void relayAction('git-push')}>{t('작업 다시 전송', 'Resend job', '重新发送任务', 'ジョブ再送信')}</button>}<button onClick={() => void relayAction('git-pull')}>{t('지금 동기화', 'Sync now', '立即同步', '今すぐ同期')}</button><button onClick={() => void relayAction('request')}>{t('오프라인 요청 내보내기', 'Export offline request', '导出离线请求', 'オフライン要求を書き出す')}</button><button onClick={() => void relayAction('result')}>{t('오프라인 결과 가져오기', 'Import offline result', '导入离线结果', 'オフライン結果を読み込む')}</button></div>
             {latestJob && !['completed', 'cancelled', 'failed', 'conflict', 'paused', 'pause_requested'].includes(latestJob.status) && <div className="desktop-control-actions"><button disabled={busy} onClick={() => void controlRunnerJob('pause')}>{t('일시정지', 'Pause', '暂停', '一時停止')}</button><button className="desktop-danger" disabled={busy} onClick={() => void controlRunnerJob('cancel')}>{t('작업 취소', 'Cancel job', '取消任务', 'ジョブをキャンセル')}</button></div>}
@@ -1207,10 +1203,10 @@ export default function DesktopWorkspace() {
           ) : (
           <section className="desktop-inspector-section desktop-remote-collapsed">
             <div className="desktop-inspector-head"><b>{t('원격 봇', 'Remote bot', '远程机器人', 'リモートボット')}</b></div>
-            <p>{t('로컬에서 바로 자를 수 있습니다. Runner와 GitHub는 Grok에 넘길 때만 연결하세요.', 'Cut locally first. Connect a Runner and GitHub only when you hand work to Grok.', '可以先在本地剪辑。仅在交给 Grok 时再连接 Runner 和 GitHub。', 'まずはローカルで切れます。Grok に渡すときだけ Runner と GitHub を接続してください。')}</p>
+            <p>{t('로컬에서 바로 자를 수 있습니다. Runner와 GitHub는 편집 Agent에 넘길 때만 연결하세요.', 'Cut locally first. Connect a Runner and GitHub only when you hand work to Editor Agent.', '可以先在本地剪辑。仅在交给剪辑 Agent 时再连接 Runner 和 GitHub。', 'まずはローカルで切れます。編集 Agent に渡すときだけ Runner と GitHub を接続してください。')}</p>
             {unclaimedJobs.length ? (
               <div className="desktop-unclaimed-jobs">
-                <b>{t(`대기 중인 Grok 작업 ${unclaimedJobs.length}개`, `${unclaimedJobs.length} waiting Grok job(s)`, `${unclaimedJobs.length} 个等待中的 Grok 任务`, `待機中の Grok ジョブ ${unclaimedJobs.length} 件`)}</b>
+                <b>{t(`대기 중인 편집 Agent 작업 ${unclaimedJobs.length}개`, `${unclaimedJobs.length} waiting Editor Agent job(s)`, `${unclaimedJobs.length} 个等待中的剪辑 Agent 任务`, `待機中の編集 Agent ジョブ ${unclaimedJobs.length} 件`)}</b>
                 <p>{t('Runner가 없어 전송되지 않았습니다. 로컬 편집을 가리려면 취소하세요.', 'No Runner picked these up. Cancel them to keep the local desk clear.', '没有 Runner 接收这些任务。取消后可保持本地编辑界面清爽。', 'Runner が受け取っていません。キャンセルするとローカル編集のままです。')}</p>
                 <div className="desktop-unclaimed-actions">
                   <button type="button" className="desktop-danger" disabled={busy} onClick={() => void cancelUnclaimedJobs()}>{t('대기 작업 취소', 'Cancel waiting jobs', '取消等待任务', '待機ジョブをキャンセル')}</button>
@@ -1309,7 +1305,7 @@ export default function DesktopWorkspace() {
         />
       )}
 
-      <footer className="desktop-command-bar"><div className={`desktop-message ${studioState === 'error' ? 'error' : studioState === 'loading' ? 'loading' : ''}`}><span className="desktop-message-icon">{studioState === 'error' ? '!' : studioState === 'loading' ? '…' : 'i'}</span><p>{message}</p></div><div className="desktop-command-summary"><span>{executionPolicy === 'auto_edit_render' ? t('자동 편집·렌더', 'Auto edit & render', '自动编辑和渲染', '自動編集・レンダー') : t('검토 우선', 'Review first', '审核优先', '確認優先')}</span><span>{Object.values(publishPolicy).filter((value) => value === 'auto').length} {t('개 자동 게시', 'auto publish', '个自动发布', '件の自動公開')}</span><button className="desktop-start" disabled={busy || !project || studioState !== 'ready'} onClick={() => void startGrok()}>{busy ? t('처리 중…', 'Working…', '处理中…', '処理中…') : t('Grok으로 제작 시작', 'Start with Grok', '使用 Grok 开始制作', 'Grokで制作開始')} <b>→</b></button></div></footer>
+      <footer className="desktop-command-bar"><div className={`desktop-message ${studioState === 'error' ? 'error' : studioState === 'loading' ? 'loading' : ''}`}><span className="desktop-message-icon">{studioState === 'error' ? '!' : studioState === 'loading' ? '…' : 'i'}</span><p>{message}</p></div><div className="desktop-command-summary"><span>{executionPolicy === 'auto_edit_render' ? t('자동 편집·렌더', 'Auto edit & render', '自动编辑和渲染', '自動編集・レンダー') : t('검토 우선', 'Review first', '审核优先', '確認優先')}</span><span>{Object.values(publishPolicy).filter((value) => value === 'auto').length} {t('개 자동 게시', 'auto publish', '个自动发布', '件の自動公開')}</span><button className="desktop-start" disabled={busy || !project || studioState !== 'ready'} onClick={() => void startGrok()}>{busy ? t('처리 중…', 'Working…', '处理中…', '処理中…') : t('편집 Agent로 제작 시작', 'Start with Editor Agent', '使用剪辑 Agent 开始制作', '編集 Agent で制作開始')} <b>→</b></button></div></footer>
     </main>
   );
 }

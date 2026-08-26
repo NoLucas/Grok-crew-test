@@ -22,8 +22,8 @@ def test_crew_spec_writes_both_outboxes(studio):
     })
     assert record["crew"] is True
     assert record["status"] == "waiting_for_collector"
-    assert record["collector"]["agent"] == "Claude"
-    assert record["editor"]["agent"] == "Grok"
+    assert record["collector"]["agent"] == "Collector Agent"
+    assert record["editor"]["agent"] == "Editor Agent"
     collect = Path(record["outbox"]["collect"]["path"])
     edit = Path(record["outbox"]["edit"]["path"])
     assert collect.as_posix().endswith(f"handoff-outbox/agents/{record['id']}")
@@ -54,7 +54,8 @@ def test_crew_briefs_split_roles(studio):
     assert "handoff-materials" in collect["text"]
     assert "will not attach footage" in collect["text"]
     assert "Do not put a finished cut" in collect["text"]
-    assert "Codex" in collect["text"]
+    assert "Collector Agent" in collect["text"]
+    assert "Codex" not in collect["text"]
     assert edit["role"] == "edit"
     assert "editor role" in edit["text"]
     assert "handoff-materials" in edit["text"]

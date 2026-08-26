@@ -98,7 +98,7 @@ export default function PrivacyConsole() {
                 value={botLabel}
                 onChange={(event) => setBotLabel(event.target.value)}
                 maxLength={80}
-                placeholder={t("예: 로컬 편집 봇", "e.g. Local editor bot", "例如:本地编辑机器人", "例:ローカル編集ボット")}
+                placeholder={t("예: 로컬 편집 Agent", "e.g. Local Editor Agent", "例如:本地剪辑 Agent", "例:ローカル編集 Agent")}
               />
             </label>
             <button onClick={saveProfile}>

@@ -33,7 +33,7 @@ def test_create_spec_writes_only_that_door_outbox(studio):
     assert payload["schema"] == OUTBOX_SCHEMA
     assert payload["id"] == grok["id"]
     assert payload["door"] == "grok"
-    assert payload["agent"] == "editor"
+    assert payload["agent"] == "Editor Agent"
     assert payload["return"]["inbox"].endswith("handoff-inbox/grok/")
     assert payload["return"]["git_prefix"] == "grok/"
     assert "will not attach footage" in brief
@@ -48,7 +48,7 @@ def test_create_spec_writes_only_that_door_outbox(studio):
     assert agent["id"] not in grok_ids
     assert agent["id"] in agent_ids
     assert grok["id"] not in agent_ids
-    assert status["doors"]["agent"]["pending"][0]["agent"] == "Claude"
+    assert status["doors"]["agent"]["pending"][0]["agent"] == "Collector Agent"
 
 
 def test_attach_spec_project_archives_outbox(studio, tmp_path):

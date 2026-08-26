@@ -201,20 +201,13 @@ function ownedPaths(text: string): string[] {
 }
 
 function visibleBotName(
-  name: string,
+  _name: string,
   role: 'collect' | 'edit',
   t: (ko: string, en: string, zh: string, ja: string) => string,
 ) {
-  const trimmed = name.trim();
-  if (!trimmed || trimmed === 'collector' || trimmed === 'agent') {
-    return role === 'collect'
-      ? t('수집 봇', 'Collector', '收集机器人', '収集ボット')
-      : t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
-  }
-  if (trimmed === 'editor') {
-    return t('편집 봇', 'Editor', '剪辑机器人', '編集ボット');
-  }
-  return trimmed;
+  return role === 'collect'
+    ? t('수집 Agent', 'Collector Agent', '收集 Agent', '収集 Agent')
+    : t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent');
 }
 
 function specMode(item: EditSpec): string {
@@ -275,17 +268,6 @@ export function SpecDesk({
       return current ? applyRecipe(value, current) : value;
     });
   }, [recipes]);
-
-  useEffect(() => {
-    const suggestedCollector = roster?.suggested_collector || '';
-    const suggestedEditor = roster?.suggested_editor || '';
-    if (!suggestedCollector && !suggestedEditor) return;
-    setDraft((value) => ({
-      ...value,
-      collector: value.collector || suggestedCollector,
-      editor: value.editor || suggestedEditor,
-    }));
-  }, [roster?.suggested_collector, roster?.suggested_editor]);
 
   const recipeCards = useMemo(() => {
     const byId = new Map(recipes.map((item) => [item.id, item]));
@@ -368,9 +350,9 @@ export function SpecDesk({
           ? t(`${editorName} 보낼함에 올렸고 git에도 올렸습니다. 내 파일만 자릅니다.`, `Placed in the ${editorName} outbox and pushed to git. ${editorName} cuts your files.`, `已放入 ${editorName} 发件箱并推到 git。只剪你的文件。`, `${editorName} 送信箱に入れ、git にも上げました。自分のファイルだけ切る。`)
           : t(`${editorName} 보낼함에 올렸습니다. 내 파일만 자릅니다.`, `Placed in the editor outbox. ${editorName} cuts your files.`, `已放入编辑发件箱。${editorName} 只剪你的文件。`, `編集送信箱に入れました。${editorName} が自分のファイルだけ切る。`));
       } else if (record.outbox?.collect?.git?.ok && record.outbox?.edit?.git?.ok) {
-        setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. 수집 봇은 outbox/agents, 편집 봇은 outbox/grok 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. The collector reads outbox/agents; the editor reads outbox/grok.', '已放入两个发件箱并推到 git。收集机器人读 outbox/agents，剪辑机器人读 outbox/grok。', '両方の送信箱に入れ、git にも上げました。収集は outbox/agents、編集は outbox/grok を読む。'));
+        setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. Collector Agent는 outbox/agents, Editor Agent는 outbox/grok 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. Collector Agent reads outbox/agents; Editor Agent reads outbox/grok.', '已放入两个发件箱并推到 git。Collector Agent 读 outbox/agents，Editor Agent 读 outbox/grok。', '両方の送信箱に入れ、git にも上げました。Collector Agent は outbox/agents、Editor Agent は outbox/grok を読む。'));
       } else {
-        setOutboxNotice(t('두 보낼함에 올렸습니다. 수집 봇은 handoff-outbox/agents, 편집 봇은 handoff-outbox/grok.', 'Placed in both outboxes. Collector: handoff-outbox/agents. Editor: handoff-outbox/grok.', '已放入两个发件箱。收集：handoff-outbox/agents。剪辑：handoff-outbox/grok。', '両方の送信箱に入れました。収集は handoff-outbox/agents、編集は handoff-outbox/grok。'));
+        setOutboxNotice(t('두 보낼함에 올렸습니다. Collector Agent는 handoff-outbox/agents, Editor Agent는 handoff-outbox/grok.', 'Placed in both outboxes. Collector Agent: handoff-outbox/agents. Editor Agent: handoff-outbox/grok.', '已放入两个发件箱。Collector Agent：handoff-outbox/agents。Editor Agent：handoff-outbox/grok。', '両方の送信箱に入れました。Collector Agent は handoff-outbox/agents、Editor Agent は handoff-outbox/grok。'));
       }
       await onRefresh();
     } catch (caught) {
@@ -418,7 +400,7 @@ export function SpecDesk({
       if (!imported.length) {
         setError(demo
           ? t('예시 자료를 만들지 못했습니다.', 'Could not write demo materials.', '无法写入示例素材。', 'デモ素材を作れませんでした。')
-          : t('아직 수집 봇이 넘긴 자료가 없습니다.', 'No collector materials yet.', '还没有收集到的素材。', '収集素材はまだありません。'));
+          : t('아직 Collector Agent가 넘긴 자료가 없습니다.', 'No Collector Agent materials yet.', '还没有 Collector Agent 的素材。', 'Collector Agent の素材はまだありません。'));
       }
       await onRefresh();
     } catch (caught) {
@@ -445,7 +427,7 @@ export function SpecDesk({
       }
       setError(demo
         ? t('예시 컷을 만들지 못했습니다.', 'Could not write the demo cut.', '无法写入示例剪辑。', 'デモカットを作れませんでした。')
-        : t(`아직 ${inboundEditorName}이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.`, `No ${inboundEditorName} cut yet. The editor returns it after materials arrive.`, `还没有 ${inboundEditorName} 的剪辑。素材到了之后交回。`, `${inboundEditorName} のカットはまだありません。素材のあと編集ボットが返します。`));
+        : t(`아직 ${inboundEditorName}이 넘긴 컷이 없습니다. 자료가 온 뒤 Editor Agent가 돌려줍니다.`, `No ${inboundEditorName} cut yet. Editor Agent returns it after materials arrive.`, `还没有 ${inboundEditorName} 的剪辑。素材到了之后 Editor Agent 交回。`, `${inboundEditorName} のカットはまだありません。素材のあと Editor Agent が返します。`));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('받지 못했습니다.', 'Could not receive the package.', '无法接收。', '受け取れませんでした。'));
     } finally {
@@ -463,7 +445,7 @@ export function SpecDesk({
       <div className="desktop-spec-hero">
         <span>✦</span>
         <h1>{t('스타일을 고르면 규격이 채워집니다', 'Pick a style. The spec fills in.', '选风格，规格会填好。', 'スタイルを選ぶと仕様が埋まる。')}</h1>
-        <p>{t('인스타·틱톡·유튜브 레시피를 고르고, 화면은 내 파일인지 수집인지 정하세요. 역할 이름은 체크인한 봇을 따릅니다. 이 책상은 사이트를 긁지 않습니다.', 'Choose Instagram, TikTok, or YouTube, then say whether the pictures are yours or collected. Role names follow the bots that check in. This desk does not scrape sites.', '先选 Instagram、TikTok 或 YouTube，再决定画面从哪来。角色名跟着签到的机器人变。这个工作台不抓网站。', 'Instagram・TikTok・YouTube のレシピを選び、画面の出どころを決める。役割名はチェックインしたボットに従う。このデスクはサイトを掻かない。')}</p>
+        <p>{t('인스타·틱톡·유튜브 레시피를 고르고, 화면은 내 파일인지 수집인지 정하세요. 역할 이름은 수집 Agent / 편집 Agent입니다. 이 책상은 사이트를 긁지 않습니다.', 'Choose Instagram, TikTok, or YouTube, then say whether the pictures are yours or collected. Role names are Collector Agent and Editor Agent. This desk does not scrape sites.', '先选 Instagram、TikTok 或 YouTube，再决定画面从哪来。角色名是收集 Agent / 剪辑 Agent。这个工作台不抓网站。', 'Instagram・TikTok・YouTube のレシピを選び、画面の出どころを決める。役割名は収集 Agent / 編集 Agent。このデスクはサイトを掻かない。')}</p>
       </div>
 
       <form className="desktop-spec-form" onSubmit={(event) => { event.preventDefault(); void saveSpec(); }}>
@@ -507,9 +489,9 @@ export function SpecDesk({
           <legend>{t('화면은 어디서', 'Where do the pictures come from', '画面从哪来', '画面はどこから')}</legend>
           <div className="desktop-spec-source-grid">
             {([
-              ['own', t('내 파일', 'My files', '我的文件', '自分のファイル'), t(`이 컴퓨터의 영상만 ${editorName}이 자릅니다. 수집 봇은 부르지 않습니다.`, `${editorName} cuts files already on this computer. No collector.`, `${editorName} 只剪这台电脑上的文件。不叫收集机器人。`, `このPCの映像だけ ${editorName} が切る。収集ボットは呼ばない。`)],
-              ['collect', t('수집', 'Collect', '收集', '収集'), t('수집 봇이 쓸 수 있는 출처에서 클립을 모읍니다. 이 PC는 사이트를 긁지 않습니다.', 'The collector gathers allowed clips. This PC does not scrape.', '收集机器人从你能用的来源找片段。这台电脑不抓站。', '収集ボットが使える出典から集める。このPCは掻かない。')],
-              ['own_and_collect', t('둘 다', 'Both', '两者', '両方'), t('내 파일이 본편입니다. 수집 봇은 B롤과 커버만 보탭니다.', 'Your files are the A-roll. The collector adds b-roll and covers only.', '你的文件是主画面。收集机器人只补 B-roll 和封面。', '自分のファイルが本編。収集は Bロールとカバーだけ足す。')],
+              ['own', t('내 파일', 'My files', '我的文件', '自分のファイル'), t(`이 컴퓨터의 영상만 ${editorName}이 자릅니다. Collector Agent는 부르지 않습니다.`, `${editorName} cuts files already on this computer. No Collector Agent.`, `${editorName} 只剪这台电脑上的文件。不叫 Collector Agent。`, `このPCの映像だけ ${editorName} が切る。Collector Agent は呼ばない。`)],
+              ['collect', t('수집', 'Collect', '收集', '収集'), t('Collector Agent가 쓸 수 있는 출처에서 클립을 모읍니다. 이 PC는 사이트를 긁지 않습니다.', 'Collector Agent gathers allowed clips. This PC does not scrape.', 'Collector Agent 从你能用的来源找片段。这台电脑不抓站。', 'Collector Agent が使える出典から集める。このPCは掻かない。')],
+              ['own_and_collect', t('둘 다', 'Both', '两者', '両方'), t('내 파일이 본편입니다. Collector Agent는 B롤과 커버만 보탭니다.', 'Your files are the A-roll. Collector Agent adds b-roll and covers only.', '你的文件是主画面。Collector Agent 只补 B-roll 和封面。', '自分のファイルが本編。Collector Agent は Bロールとカバーだけ足す。')],
             ] as const).map(([id, label, hint]) => (
               <button
                 key={id}
@@ -528,13 +510,13 @@ export function SpecDesk({
         <p className="desktop-spec-meta">
           {connectedBots.filter((bot) => bot.presence === 'active').length
             ? t(`지금 연결된 봇 ${connectedBots.filter((bot) => bot.presence === 'active').length}명`, `${connectedBots.filter((bot) => bot.presence === 'active').length} bot(s) checked in`, `当前已连接 ${connectedBots.filter((bot) => bot.presence === 'active').length} 个机器人`, `接続中のボット ${connectedBots.filter((bot) => bot.presence === 'active').length} 人`)
-            : t('아직 체크인한 봇이 없습니다. 이름을 적거나, 봇이 들어오면 여기 이름이 바뀝니다.', 'No bot has checked in yet. Type a name, or wait for a bot to join.', '还没有机器人签到。可以先写名字，签到后名称会变。', 'まだチェックインしたボットはいない。名前を書くか、ボットが入ると名前が変わる。')}
+            : t('아직 체크인한 봇이 없습니다. 역할 이름은 수집 Agent / 편집 Agent입니다.', 'No bot has checked in yet. Role names stay Collector Agent / Editor Agent.', '还没有机器人签到。角色名是收集 Agent / 剪辑 Agent。', 'まだチェックインしたボットはいない。役割名は収集 Agent / 編集 Agent。')}
         </p>
         {needsCollector ? (
           <>
             <label className="desktop-spec-field">
-              <span>{t('수집 봇', 'Collector', '收集机器人', '収集ボット')}</span>
-              <input list="connected-bot-names" value={draft.collector} onChange={(event) => setDraft({ ...draft, collector: event.target.value })} placeholder={collectorName} />
+              <span>{t('수집 Agent', 'Collector Agent', '收集 Agent', '収集 Agent')}</span>
+              <input value={collectorName} readOnly />
             </label>
             <label className="desktop-spec-field desktop-spec-wide">
               <span>{t('찾아올 것', 'Find', '要找什么', '探してくるもの')}</span>
@@ -553,13 +535,8 @@ export function SpecDesk({
           </>
         ) : null}
         <label className="desktop-spec-field">
-          <span>{t('편집 봇', 'Editor', '剪辑机器人', '編集ボット')}</span>
-          <input list="connected-bot-names" value={draft.editor} onChange={(event) => setDraft({ ...draft, editor: event.target.value })} placeholder={editorName} />
-          <datalist id="connected-bot-names">
-            {connectedBots.map((bot) => (
-              <option key={bot.bot_id || bot.display_name} value={bot.display_name || ''} />
-            ))}
-          </datalist>
+          <span>{t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent')}</span>
+          <input value={editorName} readOnly />
         </label>
 
         {needsOwned ? (
