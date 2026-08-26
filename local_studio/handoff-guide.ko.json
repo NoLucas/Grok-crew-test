@@ -2,8 +2,26 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 사용자는 규격만 적습니다. 봇이 소스 영상과 편집을 만들어, 이 PC로 네트워크 호출을 하지 않고 전용 git 브랜치로 넘깁니다.",
   "roles": {
-    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 원본 파일을 붙이지 않습니다.",
-    "bot": "소스를 구하고 편집한 뒤, 영상 파일과 edit_spec_id가 들어 있는 bundle.json 패키지를 push합니다."
+    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 Grok 또는 다른 에이전트 중 하나만 고릅니다. 원본 파일을 붙이지 않습니다.",
+    "grok_door": "Grok만. 패키지는 grok/ 아래. Runner 페어링도 이 문만. agents/ 는 쓰지 마세요.",
+    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor 등 Grok이 아닌 에이전트. 패키지는 agents/ 아래. grok/ 와 Runner는 쓰지 마세요.",
+    "bot": "소스를 구하고 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 push합니다."
+  },
+  "doors": {
+    "grok": {
+      "inbox": "local_studio/workspace/handoff-inbox/grok/",
+      "git_prefix": "grok/",
+      "bundle_project_door": "grok",
+      "created_by": "grok",
+      "runner": true
+    },
+    "agent": {
+      "inbox": "local_studio/workspace/handoff-inbox/agents/",
+      "git_prefix": "agents/",
+      "bundle_project_door": "agent",
+      "created_by": "에이전트 이름",
+      "runner": false
+    }
   },
   "why_this_exists": "Local Studio는 설계상 127.0.0.1에만 바인딩되며 다른 기기나 컨테이너에서 접근할 수 없습니다(README.md, CONTRIBUTING.md 참고). 이 채널은 원격 API가 아니라 오프라인 인계이며, 이 저장소가 원격 봇으로부터 받아들이는 유일한 것은 아래 지정된 브랜치로의 git push입니다.",
   "channel": {
@@ -11,7 +29,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "오직 이 저장소의 main 브랜치에만 커밋을 push하세요. 로컬 운영자 PC의 IP나 호스트명에 접속을 시도하지 마세요 — 이 저장소만이 허용된 채널입니다.",
-    "folder_naming": "제출 하나당 최상위 폴더 하나, 이름은 '<UTC 타임스탬프>-<짧은 슬러그>' 형식입니다 (예: 2026-08-23T07-19-00Z-payoff-hook). 폴더명은 제출마다 고유해야 하며 중복 감지에 사용됩니다."
+    "folder_naming": "제출 하나당 grok/ 또는 agents/ 아래 폴더 하나, 이름은 '<UTC 타임스탬프>-<짧은 슬러그>' 형식입니다 (예: grok/2026-08-23T07-19-00Z-payoff-hook). 폴더명은 문마다 고유해야 합니다. Grok 받기는 agents/ 를 가져오지 않고, 다른 에이전트 받기는 grok/ 를 가져오지 않습니다."
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -33,6 +51,8 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "문자열", "word_timings": "선택 사항, bot-guide.json 참고" }], "render_settings": "선택 사항, Production의 Finish Rack과 같은 필드(platform, quality, caption_bg, music_track 등)" },
         "caption": "Instagram 캡션, 최대 2200자",
         "edit_spec_id": "운영자 규격을 이행할 때 필수 — 받은 글에 있는 id를 그대로 넣습니다",
+        "door": "필수: grok 또는 agent. 인박스 폴더와 규격과 같아야 합니다",
+        "created_by": "Grok 문이면 grok, 다른 에이전트 문이면 당신 이름",
         "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
       },
       "jobs": [

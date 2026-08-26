@@ -2,8 +2,26 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。操作者只写规格。机器人提供原片和剪辑，再通过专用 git 分支交接，而不是连接这台电脑。",
   "roles": {
-    "operator": "只写规格（标题、目标、时长、字幕、风格）。不要附上原片。",
-    "bot": "准备原片并剪辑，然后推送包含视频文件和带 edit_spec_id 的 bundle.json 的包裹。"
+    "operator": "只写规格（标题、目标、时长、字幕、风格）。只选一扇门：Grok 或其他代理。不要附上原片。",
+    "grok_door": "仅 Grok。包裹放在 grok/ 下。Runner 配对也只用这扇门。不要用 agents/。",
+    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
+    "bot": "准备原片并剪辑，然后推送包含视频文件和带 edit_spec_id、project.door 的 bundle.json 的包裹。"
+  },
+  "doors": {
+    "grok": {
+      "inbox": "local_studio/workspace/handoff-inbox/grok/",
+      "git_prefix": "grok/",
+      "bundle_project_door": "grok",
+      "created_by": "grok",
+      "runner": true
+    },
+    "agent": {
+      "inbox": "local_studio/workspace/handoff-inbox/agents/",
+      "git_prefix": "agents/",
+      "bundle_project_door": "agent",
+      "created_by": "你的代理名称",
+      "runner": false
+    }
   },
   "why_this_exists": "Local Studio 按设计只绑定 127.0.0.1,无法从另一台机器或容器访问(参见 README.md 和 CONTRIBUTING.md)。这个通道是离线交接,不是远程 API——本仓库从远程机器人那里接受的唯一内容,就是向下面指定的分支执行一次 git push。",
   "channel": {
@@ -11,7 +29,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "只能向本仓库的 main 分支 push 提交。绝不要尝试连接本地运营者机器所属的任何 IP 地址或主机名——本仓库是唯一被允许的通道。",
-    "folder_naming": "每次提交一个顶层文件夹,命名为 '<UTC 时间戳>-<短标签>'(例如 2026-08-23T07-19-00Z-payoff-hook)。文件夹名必须在每次提交中唯一,用于检测重复提交。"
+    "folder_naming": "每次提交在 grok/ 或 agents/ 下建一个文件夹,命名为 '<UTC 时间戳>-<短标签>'(例如 grok/2026-08-23T07-19-00Z-payoff-hook)。文件夹名在同一扇门内必须唯一。Grok 接收不会导入 agents/，其他代理接收不会导入 grok/。"
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -33,6 +51,8 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "字符串", "word_timings": "可选,参见 bot-guide.json" }], "render_settings": "可选,字段与 Production 的 Finish Rack 相同(platform、quality、caption_bg、music_track 等)" },
         "caption": "Instagram 文案,最多 2200 字符",
         "edit_spec_id": "履行操作者规格时必填 — 复制对方发来的 id",
+        "door": "必填：grok 或 agent。必须与收件箱文件夹和规格一致",
+        "created_by": "Grok 门写 grok；其他代理门写你的名字",
         "handoff_auto_upload_requested": "布尔值,可选——参见下方 auto_upload_policy"
       },
       "jobs": [

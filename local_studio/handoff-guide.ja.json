@@ -2,8 +2,26 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドボット向けの契約です。操作者は仕様だけ書きます。ボットが素材と編集を作り、このPCへ接続せず専用 git ブランチで渡します。",
   "roles": {
-    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。原版は付けない。",
-    "bot": "素材を用意して編集し、動画ファイルと edit_spec_id 入りの bundle.json を push する。"
+    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは Grok か他エージェントのどちらか一方。原版は付けない。",
+    "grok_door": "Grok のみ。パッケージは grok/ の下。Runner ペアリングもこのドアだけ。agents/ は使わない。",
+    "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。パッケージは agents/ の下。grok/ と Runner は使わない。",
+    "bot": "素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を push する。"
+  },
+  "doors": {
+    "grok": {
+      "inbox": "local_studio/workspace/handoff-inbox/grok/",
+      "git_prefix": "grok/",
+      "bundle_project_door": "grok",
+      "created_by": "grok",
+      "runner": true
+    },
+    "agent": {
+      "inbox": "local_studio/workspace/handoff-inbox/agents/",
+      "git_prefix": "agents/",
+      "bundle_project_door": "agent",
+      "created_by": "エージェント名",
+      "runner": false
+    }
   },
   "why_this_exists": "Local Studio は設計上 127.0.0.1 にのみバインドされ、別のマシンやコンテナからはアクセスできません(README.md と CONTRIBUTING.md を参照)。このチャネルはリモート API ではなくオフラインの引き継ぎであり、本リポジトリがリモートボットから受け付けるのは、下記に指定されたブランチへの git push だけです。",
   "channel": {
@@ -11,7 +29,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "本リポジトリの main ブランチにのみコミットを push してください。ローカル運用者のマシンに属する IP アドレスやホスト名に接続を試みないでください——このリポジトリだけが許可されたチャネルです。",
-    "folder_naming": "1回の提出につきトップレベルフォルダを1つ、'<UTC タイムスタンプ>-<短いスラッグ>' の形式で命名します(例: 2026-08-23T07-19-00Z-payoff-hook)。フォルダ名は提出ごとに一意である必要があり、重複検出に使われます。"
+    "folder_naming": "1回の提出につき grok/ または agents/ の下にフォルダを1つ、'<UTC タイムスタンプ>-<短いスラッグ>' の形式で命名します(例: grok/2026-08-23T07-19-00Z-payoff-hook)。フォルダ名はドアごとに一意である必要があります。Grok の受け取りは agents/ を取り込まず、他エージェントの受け取りは grok/ を取り込みません。"
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -33,6 +51,8 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "文字列", "word_timings": "任意、bot-guide.json を参照" }], "render_settings": "任意。Production の Finish Rack と同じフィールド(platform、quality、caption_bg、music_track など)" },
         "caption": "Instagram キャプションのテキスト、最大2200文字",
         "edit_spec_id": "操作者の仕様を満たすときは必須 — 渡された id をそのまま入れる",
+        "door": "必須: grok または agent。受信箱フォルダと仕様と一致させる",
+        "created_by": "Grok ドアなら grok、他エージェントドアなら自分の名前",
         "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
       },
       "jobs": [

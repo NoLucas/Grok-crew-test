@@ -2,27 +2,27 @@
 
 <p align="center"><strong>English</strong> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**Grok Crew is a short-form desk on your computer. You write the brief. A Grok bot brings the footage and the cut.**
+**Grok Crew is a short-form desk on your computer. You write the brief. There are two doors: Grok, and every other agent.**
 
-You do not have to drop a source file here. You say how it should feel — length, captions, what to keep. A bot on **another computer** makes the video and the edit, then hands the folder over. This PC receives it and shows the timeline. You post to Instagram, TikTok, or YouTube only if you choose to.
+You do not have to drop a source file here. You say how it should feel — length, captions, what to keep — and which door should do the work. A bot on **another computer** makes the video and the edit, then hands the folder to that door only. This PC receives it and shows the timeline. You post to Instagram, TikTok, or YouTube only if you choose to.
 
 It is not a website that holds your footage. The bot never opens this PC. It only pushes a package.
 
 ```
-your brief  →  bot finds/makes source + cut  →  this PC receives it  →  post only if you say so
+your brief  →  Grok door or other-agent door  →  that door's inbox  →  this PC receives it  →  post only if you say so
 ```
 
 ## Who it is for
 
 - People who want to specify the Reel, not hunt for the raw file on this machine
-- Creators who let a Grok bot on another computer do the sourcing and the first cut
+- Creators who let Grok, or Claude / Codex / ChatGPT, do the sourcing and the first cut — on separate doors, never mixed
 - Anyone who still wants the finished file to land on this PC, not in a cloud editor
 
 You do not need an account to start.
 
 ## What you see
 
-The first screen asks you to **write the brief**. Save it, copy the text, and give that text to Grok on another computer. When the bot has pushed a package, click **Receive the bot cut**. **See a sample delivery** shows the same arrival using a bundled clip.
+The first screen has **two doors**. Write the brief on the Grok door or the other-agent door, copy that text, and give it only to that helper. Grok packages land in `handoff-inbox/grok`. Claude, Codex, ChatGPT, and the rest land in `handoff-inbox/agents`. Each **Receive** button imports only its own door. **See a sample on this door** shows the same arrival using a bundled clip.
 
 Then you work in three tabs:
 

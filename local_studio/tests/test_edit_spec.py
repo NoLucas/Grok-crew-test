@@ -18,10 +18,32 @@ def test_spec_requires_title_and_goal(studio):
 def test_spec_marks_bot_as_source_owner(studio):
     record = create_spec({"title": "Hook reel", "goal": "Keep only the ask", "language": "en"})
     assert record["status"] == "waiting_for_bot"
+    assert record["door"] == "grok"
     assert record["spec"]["source"]["owner"] == "bot"
     brief = spec_brief(record["id"])
     assert record["id"] in brief["text"]
     assert "will not attach footage" in brief["text"]
+    assert "Grok-only door" in brief["text"]
+    assert "handoff-inbox/grok" in brief["text"]
+    assert "Do not use the agents/ folder" in brief["text"]
+
+
+def test_agent_door_brief_excludes_grok_inbox(studio):
+    record = create_spec({
+        "title": "Agent reel",
+        "goal": "Keep only the ask",
+        "language": "en",
+        "door": "agent",
+        "agent": "Claude",
+    })
+    assert record["door"] == "agent"
+    brief = spec_brief(record["id"])
+    assert brief["door"] == "agent"
+    assert "other-agent door" in brief["text"]
+    assert "handoff-inbox/agents" in brief["text"]
+    assert "Do not use the Grok door" in brief["text"]
+    assert "Desktop Runner pairing is only" not in brief["text"]
+    assert "Claude" in brief["text"]
 
 
 def test_media_relpaths_include_broll():
@@ -69,21 +91,80 @@ def test_demo_package_then_pull(studio, tmp_path, monkeypatch):
     monkeypatch.setattr(first_run, "bundled_sample_candidates", lambda: [source])
     record = create_spec({"title": "Demo spec", "goal": "Show the arrival", "language": "ko"})
     written = write_demo_package(record["id"])
+    assert written["door"] == "grok"
+    assert written["path"].endswith(f"/grok/{written['folder']}")
     pulled = pull_handoff({})
+    assert pulled["door"] == "grok"
     assert any(item.get("ok") for item in pulled["processed"])
     assert written["folder"] in {item.get("folder") for item in pulled["imported"]}
+
+
+def test_agent_demo_is_invisible_to_grok_pull(studio, tmp_path, monkeypatch):
+    source = tmp_path / "sample.mp4"
+    source.write_bytes(b"demo-bytes")
+    monkeypatch.setattr(first_run, "bundled_sample_candidates", lambda: [source])
+    record = create_spec({
+        "title": "Agent demo",
+        "goal": "Stay off the Grok door",
+        "language": "en",
+        "door": "agent",
+        "agent": "Codex",
+    })
+    written = write_demo_package(record["id"])
+    assert written["door"] == "agent"
+    assert "/agents/" in written["path"].replace("\\", "/")
+    grok_pull = pull_handoff({"door": "grok"})
+    assert written["folder"] not in {item.get("folder") for item in grok_pull["imported"]}
+    assert written["folder"] not in {item.get("folder") for item in grok_pull["processed"]}
+    agent_pull = pull_handoff({"door": "agent", "edit_spec_id": record["id"]})
+    assert written["folder"] in {item.get("folder") for item in agent_pull["imported"]}
+
+
+def test_grok_pull_rejects_agent_spec(studio):
+    record = create_spec({"title": "Agent only", "goal": "Not Grok", "door": "agent", "language": "en"})
+    with pytest.raises(ValueError, match="agent door"):
+        pull_handoff({"door": "grok", "edit_spec_id": record["id"]})
+
+
+def test_apply_rejects_door_mismatch(studio, tmp_path):
+    record = create_spec({"title": "Grok spec", "goal": "Grok only", "language": "en", "door": "grok"})
+    folder = tmp_path / "agents" / "wrong-door"
+    folder.mkdir(parents=True)
+    (folder / "source.mp4").write_bytes(b"x" * 32)
+    (folder / "bundle.json").write_text(json.dumps({
+        "schema": "local-video-workspace.project-bundle/v1",
+        "project": {
+            "title": "Wrong door",
+            "source_path": "inputs/handoff/pkg/source.mp4",
+            "output_path": "outputs/handoff/pkg.mp4",
+            "edit_spec_id": record["id"],
+            "door": "agent",
+            "created_by": "Claude",
+            "timeline": {"clips": [{"in": 0, "out": 4, "keep": True, "caption": ""}]},
+        },
+        "jobs": [{"kind": "render", "approved": True, "payload": {}}],
+    }), encoding="utf-8")
+    result = apply_package_local(folder, expected_door="grok")
+    assert result["ok"] is False
+    assert "agent" in result["reason"]
 
 
 def test_http_spec_brief_and_handoff_status(live_server):
     create = Request(
         f"{live_server}/api/v2/edit-specs",
-        data=json.dumps({"title": "HTTP spec", "goal": "Bot brings the file", "language": "en"}).encode(),
+        data=json.dumps({"title": "HTTP spec", "goal": "Bot brings the file", "language": "en", "door": "grok"}).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     created = json.loads(urlopen(create).read().decode())
     spec_id = created["edit_spec"]["id"]
+    assert created["edit_spec"]["door"] == "grok"
     brief = json.loads(urlopen(f"{live_server}/api/v2/edit-specs/{spec_id}/brief").read().decode())
     assert "will not attach footage" in brief["text"]
+    assert brief["door"] == "grok"
     status = json.loads(urlopen(f"{live_server}/api/v2/handoff").read().decode())
     assert status["source_owner"] == "bot"
+    assert "grok" in status["doors"]
+    assert "agent" in status["doors"]
+    assert status["doors"]["grok"]["inbox_dir"].endswith("/grok")
+    assert status["doors"]["agent"]["inbox_dir"].endswith("/agents")

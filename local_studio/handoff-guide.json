@@ -2,8 +2,26 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. The operator only writes an edit spec. The bot supplies the source video and the cut, then hands both off through a dedicated git branch — never a network call to this PC.",
   "roles": {
-    "operator": "Write the spec only (title, goal, length, captions, look). Do not attach footage.",
-    "bot": "Find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id."
+    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: Grok or other-agent. Do not attach footage.",
+    "grok_door": "Only Grok. Packages go under grok/. Runner pairing is this door only. Do not use agents/.",
+    "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent. Packages go under agents/. Do not use grok/ or Runner pairing.",
+    "bot": "Find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
+  },
+  "doors": {
+    "grok": {
+      "inbox": "local_studio/workspace/handoff-inbox/grok/",
+      "git_prefix": "grok/",
+      "bundle_project_door": "grok",
+      "created_by": "grok",
+      "runner": true
+    },
+    "agent": {
+      "inbox": "local_studio/workspace/handoff-inbox/agents/",
+      "git_prefix": "agents/",
+      "bundle_project_door": "agent",
+      "created_by": "your agent name",
+      "runner": false
+    }
   },
   "why_this_exists": "Local Studio binds to 127.0.0.1 only and is not reachable from another machine or container by design (see README.md and CONTRIBUTING.md). This channel is an offline handoff, not a remote API — the only thing this repository accepts from a remote bot is a git push to the branch named below.",
   "channel": {
@@ -11,7 +29,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "Push commits only to this repository's main branch. Never attempt to reach an IP address or hostname belonging to the local operator's machine — this repository is the only sanctioned channel.",
-    "folder_naming": "One top-level folder per submission, named '<UTC timestamp>-<short-slug>' (e.g. 2026-08-23T07-19-00Z-payoff-hook). The folder name must be unique per submission; it is used to detect duplicates."
+    "folder_naming": "One folder per submission under grok/ or agents/, named '<UTC timestamp>-<short-slug>' (e.g. grok/2026-08-23T07-19-00Z-payoff-hook). The folder name must be unique per door; it is used to detect duplicates. A Grok pull never imports agents/, and an other-agent pull never imports grok/."
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -33,6 +51,8 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "string", "word_timings": "optional, see bot-guide.json" }], "render_settings": "optional, same fields Production's Finish Rack uses (platform, quality, caption_bg, music_track, ...)" },
         "caption": "Instagram caption text, up to 2200 characters",
         "edit_spec_id": "required when fulfilling an operator spec — copy the id from the brief the operator sent",
+        "door": "required: grok or agent. Must match the inbox folder and the spec.",
+        "created_by": "grok on the Grok door; your agent name on the other-agent door",
         "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
       },
       "jobs": [

@@ -73,8 +73,9 @@ type Version = {
   restored_from_revision?: number | null;
 };
 type FirstRun = { sample_available?: boolean; sample_open?: boolean; sample_path?: string; has_projects?: boolean };
-type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string };
-type HandoffStatus = { pending_count?: number; git_configured?: boolean; inbox_dir?: string };
+type EditSpec = { id: string; status: string; project_id?: string | null; title: string; goal: string; door?: string; agent?: string };
+type DoorInboxStatus = { pending_count?: number; inbox_dir?: string };
+type HandoffStatus = { pending_count?: number; git_configured?: boolean; inbox_dir?: string; doors?: { grok?: DoorInboxStatus; agent?: DoorInboxStatus } };
 type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;
@@ -918,7 +919,7 @@ export default function DesktopWorkspace() {
           {studioState === 'error' && project ? <div className="desktop-banner error" role="alert"><div><b>{t('Local Studio에 연결하지 못했습니다', 'Could not reach Local Studio', '无法连接 Local Studio', 'Local Studio に接続できません')}</b><p>{t('사이드카가 꺼져 있으면 프로젝트와 렌더를 읽을 수 없습니다.', 'The sidecar is offline, so projects and renders cannot load.', '侧车离线时无法读取项目和渲染。', 'サイドカーが停止しているとプロジェクトとレンダーを読めません。')}</p></div><button type="button" className="desktop-secondary" onClick={() => void refreshWorkspace()}>{t('다시 연결', 'Reconnect', '重新连接', '再接続')}</button></div> : null}
           {studioState === 'loading' && !project ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('작업 공간을 불러오는 중', 'Loading the workspace', '正在加载工作区', 'ワークスペースを読み込み中')}</h1><p>{t('Local Studio의 프로젝트와 게시 영수증을 확인합니다.', 'Checking Local Studio projects and publish receipts.', '正在检查本地工作室项目和发布回执。', 'Local Studio のプロジェクトと公開レシートを確認しています。')}</p></div>
           : studioState === 'error' && !project ? <div className="desktop-empty"><span>!</span><h1>{t('데스크톱이 로컬 서비스에 닿지 않습니다', 'The desktop cannot reach the local service', '桌面无法连接本地服务', 'デスクトップがローカルサービスに届きません')}</h1><p>{t('npm run local 또는 데스크톱 앱을 실행한 뒤 다시 연결하세요.', 'Start npm run local or the desktop app, then reconnect.', '请先运行 npm run local 或桌面应用，然后重试。', 'npm run local かデスクトップアプリを起動してから再接続してください。')}</p><button type="button" className="desktop-primary" onClick={() => void refreshWorkspace()}>{t('다시 시도', 'Try again', '重试', '再試行')}</button></div>
-          : !project || !timeline ? <SpecDesk
+          : !project ? <SpecDesk
               specs={workspace.edit_specs ?? []}
               handoff={workspace.handoff}
               busy={busy}
@@ -935,7 +936,9 @@ export default function DesktopWorkspace() {
                 await refreshProject(projectId);
                 setMessage(t('봇이 넘긴 소스와 편집을 열었습니다.', 'Opened the source and cut the bot handed over.', '已打开机器人交来的素材和剪辑。', 'ボットが渡した素材と編集を開きました。'));
               }}
-            /> : <>
+            />
+          : !timeline ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('타임라인을 불러오는 중', 'Loading the timeline', '正在加载时间线', 'タイムラインを読み込み中')}</h1><p>{t('프로젝트가 열려 있습니다. 규격 화면으로 돌아가지 않습니다.', 'A project is open. The spec desk stays hidden.', '项目已打开。不会回到规格页。', 'プロジェクトは開いています。仕様デスクには戻りません。')}</p><button type="button" className="desktop-secondary" onClick={() => void refreshProject(project.id)}>{t('다시 읽기', 'Reload', '重新读取', '再読み込み')}</button></div>
+          : <>
             <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips"><span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
               <section className="desktop-card desktop-source-card">

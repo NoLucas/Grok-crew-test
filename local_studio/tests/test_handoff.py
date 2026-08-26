@@ -99,6 +99,26 @@ def test_pending_folders_excludes_git_dir_and_processed(tmp_path):
     assert result == ["pkg-b"]
 
 
+def test_pending_folders_lists_door_inboxes(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "grok" / "g-pkg").mkdir(parents=True)
+    (tmp_path / "agents" / "a-pkg").mkdir(parents=True)
+    (tmp_path / "grok" / ".processed").mkdir()
+    names = [p.name for p in hw.pending_folders(tmp_path, processed=set())]
+    assert names == ["g-pkg", "a-pkg"]
+
+
+def test_process_folder_skips_agent_package_in_grok_inbox(tmp_path):
+    folder = tmp_path / "grok" / "20260826-agent"
+    folder.mkdir(parents=True)
+    (folder / "source.mp4").write_bytes(b"src")
+    (folder / "bundle.json").write_text(
+        '{"schema":"local-video-workspace.project-bundle/v1","project":{"title":"X","source_path":"inputs/handoff/pkg/source.mp4","door":"agent"}}',
+        encoding="utf-8",
+    )
+    hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False)
+
+
 # -- folders_for_cycle(): caps packages processed per poll (frequency limit) -
 
 def test_folders_for_cycle_caps_to_max_per_cycle(tmp_path):

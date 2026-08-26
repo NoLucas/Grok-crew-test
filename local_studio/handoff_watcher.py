@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from grok_crew import LocalStudioClient
-from handoff_inbox import media_relpaths
+from handoff_inbox import infer_package_door, media_relpaths
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -100,9 +100,28 @@ def sync_mirror(remote: str, branch: str) -> Path:
     return MIRROR_DIR
 
 
+RESERVED_MIRROR_NAMES = {".git", ".processed", "grok", "agents"}
+
+
 def pending_folders(mirror: Path, processed: set[str]) -> list[Path]:
-    folders = [item for item in sorted(mirror.iterdir()) if item.is_dir() and item.name != ".git"]
-    return [folder for folder in folders if folder.name not in processed]
+    folders: list[Path] = []
+    for item in sorted(mirror.iterdir()):
+        if not item.is_dir() or item.name in RESERVED_MIRROR_NAMES:
+            continue
+        if item.name not in processed:
+            folders.append(item)
+    for door_name in ("grok", "agents"):
+        door_dir = mirror / door_name
+        if not door_dir.is_dir():
+            continue
+        for item in sorted(door_dir.iterdir()):
+            if not item.is_dir() or item.name in {".git", ".processed"}:
+                continue
+            key = f"{door_name}/{item.name}"
+            if key in processed or item.name in processed:
+                continue
+            folders.append(item)
+    return folders
 
 
 def folders_for_cycle(folders: list[Path], max_per_cycle: int) -> list[Path]:
@@ -179,6 +198,21 @@ def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, 
         log(f"Skipping {folder.name}: bundle.project.source_path is required.")
         return
     try:
+        package_door = infer_package_door(project, folder)
+        location = folder.parent.name.lower()
+        if location == "agents":
+            location_door = "agent"
+        elif location == "grok":
+            location_door = "grok"
+        else:
+            location_door = "grok"
+        if package_door != location_door:
+            log(f"Skipping {folder.name}: package door {package_door} does not match this inbox ({location_door}).")
+            return
+    except ValueError as exc:
+        log(f"Skipping {folder.name}: {exc}")
+        return
+    try:
         for relative in media_relpaths(project):
             copy_media(folder, workspace, relative)
     except RuntimeError as exc:
@@ -239,6 +273,10 @@ def run_once(args: argparse.Namespace) -> None:
     for folder in folders:
         process_folder(client, folder, workspace, allow_auto_upload=args.allow_auto_upload)
         heartbeat(client, "handoff_processed", {"package": folder.name})
+        try:
+            processed.add(str(folder.relative_to(mirror)))
+        except ValueError:
+            processed.add(folder.name)
         processed.add(folder.name)
         state["processed"] = sorted(processed)
         save_state(state)

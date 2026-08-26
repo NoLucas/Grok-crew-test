@@ -33,6 +33,7 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- Two handoff doors. The operator writes a spec on the Grok door or the other-agent door. Grok packages land in `handoff-inbox/grok`; Claude, Codex, ChatGPT, and other agents land in `handoff-inbox/agents`. A Grok pull never imports the other door. Runner pairing stays Grok-only. Desktop shows the spec desk only when no project is open.
 - Desktop first screen stays local-first: Runner/GitHub controls stay collapsed until pairing, a live job, or the operator opens them. Opening a project lands on Edit (program monitor + timeline) instead of Setup.
 - Unclaimed `queued` Grok jobs no longer force the Runner/GitHub inspector open. The collapsed desk shows a cancel control, and `POST /api/v2/control-jobs/cancel-unclaimed` (or cancel on a job with no `runner_id`) marks those jobs `cancelled` immediately so a leftover click cannot hold the first screen.
 - Draft-proxy status for every Timeline v2 video sits under the program monitor (and still in the inspector), so the list stays visible when the Status drawer hides the right column under 1050px. Monitor actions show `ready/total`. Final render still uses originals.
