@@ -192,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     spec_sub.add_parser("recipes", help="List the named style recipes this desk fills in.")
     spec_create = spec_sub.add_parser("create", help="Save an edit spec from JSON.")
     spec_create.add_argument("--file", required=True)
-    spec_create.add_argument("--door", choices=("grok", "agent"), default="", help="Grok door or other-agent door. Overrides the JSON file.")
+    spec_create.add_argument("--door", choices=("editor", "collector", "grok", "agent"), default="", help="Editor or collector door. grok/agent still accepted. Overrides the JSON file.")
     spec_create.add_argument("--crew", action="store_true", help="One spec for a collector and an editor.")
     spec_create.add_argument("--recipe", default="", help="instagram_reel, tiktok_tight, youtube_short, or youtube_long.")
     spec_create.add_argument("--source-mode", choices=("collect", "own", "own_and_collect"), default="", help="Where the clips come from.")
@@ -214,12 +214,12 @@ def build_parser() -> argparse.ArgumentParser:
     materials_pull.add_argument("--demo", action="store_true")
     materials_pull.add_argument("--spec-id", default="")
     handoff_push = handoff_sub.add_parser("push-outbox", help="Copy pending outbox specs onto the git handoff remote.")
-    handoff_push.add_argument("--door", choices=("grok", "agent"), default="")
+    handoff_push.add_argument("--door", choices=("editor", "collector", "grok", "agent"), default="")
     handoff_push.add_argument("--spec-id", default="")
     handoff_pull = handoff_sub.add_parser("pull", help="Import pending packages from one door only.")
     handoff_pull.add_argument("--demo", action="store_true", help="Write a sample package as if that door sent source and a cut.")
     handoff_pull.add_argument("--spec-id", default="")
-    handoff_pull.add_argument("--door", choices=("grok", "agent"), default="", help="Pull only this door. Defaults to the spec's door, or grok.")
+    handoff_pull.add_argument("--door", choices=("editor", "collector", "grok", "agent"), default="", help="Pull only this door. Defaults to the spec's door, or editor.")
     return parser
 
 

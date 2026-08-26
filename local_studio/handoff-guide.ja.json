@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドボット向けの契約です。操作者は仕様だけ書きます。ボットが素材と編集を作り、このPCへ接続せず専用 git ブランチで渡します。",
   "roles": {
-    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは編集（フォルダ grok/）か収集・他エージェント（フォルダ agents/）のどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
-    "grok_door": "編集ドア。フォルダ名は grok/ のまま。割り当てた編集ボットだけ。Runner ペアリングもこのドアだけ。agents/ は使わない。",
-    "other_agent_door": "収集・他エージェントドア。フォルダ名は agents/ のまま。割り当てた収集ボット、またはクルー以外の他エージェント。grok/ と Runner は使わない。",
+    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。ドアは編集（フォルダ editor/）か収集・他エージェント（フォルダ collector/）のどちらか一方。保存するとそのドアの送信箱に spec.json が入る。原版は付けない。",
+    "grok_door": "編集ドア。フォルダ名は editor/。残った grok/ は読み取りだけ。割り当てた編集ボットだけ。Runner ペアリングもこのドアだけ。collector/ は使わない。",
+    "other_agent_door": "収集・他エージェントドア。フォルダ名は collector/。残った agents/ は読み取りだけ。割り当てた収集ボット、またはクルー以外の他エージェント。editor/ と Runner は使わない。",
     "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
   },
   "style_recipes": {
@@ -19,8 +19,8 @@
   "crew": {
     "purpose": "仕様は一つ、ボットは二人。収集ボットが素材を集め、編集ボットがそのクリップだけ切る。このデスクはサイトを掻かない。",
     "collector": {
-      "door": "agent",
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "door": "collector",
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "source clips"],
@@ -28,11 +28,11 @@
       "do_not": "完成カットを受信箱に入れない。操作者が使ってよい出典だけ集める。ログイン壁の Instagram/TikTok は掻かない。owned クリップは消さない。"
     },
     "editor": {
-      "door": "grok",
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "door": "editor",
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
       "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
-      "return": "local_studio/workspace/handoff-inbox/grok/",
-      "git_return": "grok/"
+      "return": "local_studio/workspace/handoff-inbox/editor/",
+      "git_return": "editor/"
     }
   },
   "outbox": {
@@ -41,24 +41,24 @@
     "local_root": "local_studio/workspace/handoff-outbox/",
     "git_root": "outbox/",
     "files": ["spec.json", "brief.txt"],
-    "rule": "自分のドアだけ読む。完成パッケージは同じドアの受信箱（grok/ または agents/）へ返す。outbox/ に映像を置かない。"
+    "rule": "自分のドアだけ読む。完成パッケージは同じドアの受信箱（editor/ または collector/）へ返す。outbox/ に映像を置かない。"
   },
   "doors": {
-    "grok": {
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
-      "git_outbox": "outbox/grok/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/grok/",
-      "git_prefix": "grok/",
-      "bundle_project_door": "grok",
+    "editor": {
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
+      "git_outbox": "outbox/editor/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/editor/",
+      "git_prefix": "editor/",
+      "bundle_project_door": "editor",
       "created_by": "割り当てた編集ボット名",
       "runner": true
     },
-    "agent": {
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
-      "git_outbox": "outbox/agents/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/agents/",
-      "git_prefix": "agents/",
-      "bundle_project_door": "agent",
+    "collector": {
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
+      "git_outbox": "outbox/collector/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/collector/",
+      "git_prefix": "collector/",
+      "bundle_project_door": "collector",
       "created_by": "割り当てた収集ボットまたは他エージェント名",
       "runner": false
     }
@@ -69,7 +69,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "本リポジトリの main ブランチにのみコミットを push してください。ローカル運用者のマシンに属する IP アドレスやホスト名に接続を試みないでください——このリポジトリだけが許可されたチャネルです。",
-    "folder_naming": "出す仕様は outbox/grok/{edit_spec_id}/ または outbox/agents/{edit_spec_id}/（spec.json + brief.txt）。戻すカットは grok/ または agents/ の下、名前は '<UTC タイムスタンプ>-<短いスラッグ>'（例: grok/2026-08-23T07-19-00Z-payoff-hook）。outbox/ に映像を置かない。Grok の受け取りは agents/ を取り込まず、他エージェントの受け取りは grok/ を取り込みません。"
+    "folder_naming": "出す仕様は outbox/editor/{edit_spec_id}/ または outbox/collector/{edit_spec_id}/（spec.json + brief.txt）。戻すカットは editor/ または collector/ の下、名前は '<UTC タイムスタンプ>-<短いスラッグ>'（例: editor/2026-08-23T07-19-00Z-payoff-hook）。残った grok/ と agents/ 受信箱は読み取りだけ。outbox/ に映像を置かない。編集の受け取りは collector/ を取り込まず、収集の受け取りは editor/ を取り込みません。"
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -91,7 +91,7 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "文字列", "word_timings": "任意、bot-guide.json を参照" }], "render_settings": "任意。Production の Finish Rack と同じフィールド(platform、quality、caption_bg、music_track など)" },
         "caption": "Instagram キャプションのテキスト、最大2200文字",
         "edit_spec_id": "操作者の仕様を満たすときは必須 — 渡された id をそのまま入れる",
-        "door": "必須: grok または agent。受信箱フォルダと仕様と一致させる",
+        "door": "必須: editor または collector。grok と agent は別名として受け付ける。受信箱フォルダと仕様と一致させる",
         "created_by": "デスクが送り主を見分ける名前。チェックインしたボット名、または操作者が書いた名前。Grok や Claude と決めつけない。",
         "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
       },

@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. The operator only writes an edit spec. The bot supplies the source video and the cut, then hands both off through a dedicated git branch — never a network call to this PC.",
   "roles": {
-    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: editor (folder grok/) or collector / other-agent (folder agents/). Saving puts spec.json in that door's outbox. Do not attach footage.",
-    "grok_door": "Editor door. Folder names stay grok/. Whoever is assigned as editor. Runner pairing is this door only. Do not use agents/.",
-    "other_agent_door": "Collector / other-agent door. Folder names stay agents/. Whoever is assigned as collector, or a non-crew other-agent. Do not use grok/ or Runner pairing.",
+    "operator": "Write the spec only (title, goal, length, captions, look). Choose one door: editor (folder editor/) or collector / other-agent (folder collector/). Saving puts spec.json in that door's outbox. Do not attach footage.",
+    "grok_door": "Editor door. Folder name is editor/. Leftover grok/ folders are still read. Whoever is assigned as editor. Runner pairing is this door only. Do not use collector/.",
+    "other_agent_door": "Collector / other-agent door. Folder name is collector/. Leftover agents/ folders are still read. Whoever is assigned as collector, or a non-crew other-agent. Do not use editor/ or Runner pairing.",
     "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
   },
   "style_recipes": {
@@ -19,8 +19,8 @@
   "crew": {
     "purpose": "One spec, two bots. The collector gathers source clips. The editor cuts those clips. This desk does not scrape websites.",
     "collector": {
-      "door": "agent",
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "door": "collector",
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "source clips"],
@@ -28,11 +28,11 @@
       "do_not": "Do not put a finished cut in any inbox. Collect only sources the operator may use. Do not scrape login-walled Instagram or TikTok. Do not replace owned clips."
     },
     "editor": {
-      "door": "grok",
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "door": "editor",
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
       "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
-      "return": "local_studio/workspace/handoff-inbox/grok/",
-      "git_return": "grok/"
+      "return": "local_studio/workspace/handoff-inbox/editor/",
+      "git_return": "editor/"
     }
   },
   "outbox": {
@@ -41,24 +41,24 @@
     "local_root": "local_studio/workspace/handoff-outbox/",
     "git_root": "outbox/",
     "files": ["spec.json", "brief.txt"],
-    "rule": "Read only your door. Return the finished package to the matching inbox (grok/ or agents/), never into outbox/."
+    "rule": "Read only your door. Return the finished package to the matching inbox (editor/ or collector/), never into outbox/."
   },
   "doors": {
-    "grok": {
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
-      "git_outbox": "outbox/grok/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/grok/",
-      "git_prefix": "grok/",
-      "bundle_project_door": "grok",
+    "editor": {
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
+      "git_outbox": "outbox/editor/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/editor/",
+      "git_prefix": "editor/",
+      "bundle_project_door": "editor",
       "created_by": "the assigned editor name",
       "runner": true
     },
-    "agent": {
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
-      "git_outbox": "outbox/agents/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/agents/",
-      "git_prefix": "agents/",
-      "bundle_project_door": "agent",
+    "collector": {
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
+      "git_outbox": "outbox/collector/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/collector/",
+      "git_prefix": "collector/",
+      "bundle_project_door": "collector",
       "created_by": "the assigned collector or other-agent name",
       "runner": false
     }
@@ -69,7 +69,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "Push commits only to this repository's main branch. Never attempt to reach an IP address or hostname belonging to the local operator's machine — this repository is the only sanctioned channel.",
-    "folder_naming": "Outbound specs live under outbox/grok/{edit_spec_id}/ or outbox/agents/{edit_spec_id}/ (spec.json + brief.txt). Inbound cuts stay under grok/ or agents/, named '<UTC timestamp>-<short-slug>' (e.g. grok/2026-08-23T07-19-00Z-payoff-hook). Never put media under outbox/. A Grok pull never imports agents/, and an other-agent pull never imports grok/."
+    "folder_naming": "Outbound specs live under outbox/editor/{edit_spec_id}/ or outbox/collector/{edit_spec_id}/ (spec.json + brief.txt). Inbound cuts stay under editor/ or collector/, named '<UTC timestamp>-<short-slug>' (e.g. editor/2026-08-23T07-19-00Z-payoff-hook). Leftover grok/ and agents/ inbound folders are still read. Never put media under outbox/. An editor pull never imports collector/, and a collector pull never imports editor/."
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -91,7 +91,7 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "string", "word_timings": "optional, see bot-guide.json" }], "render_settings": "optional, same fields Production's Finish Rack uses (platform, quality, caption_bg, music_track, ...)" },
         "caption": "Instagram caption text, up to 2200 characters",
         "edit_spec_id": "required when fulfilling an operator spec — copy the id from the brief the operator sent",
-        "door": "required: grok or agent. Must match the inbox folder and the spec.",
+        "door": "required: editor or collector. grok and agent are accepted as aliases. Must match the inbox folder and the spec.",
         "created_by": "How the desk labels the sender. Use the assigned bot name — the name that checked in, or the name the operator typed. Do not assume Grok or Claude.",
         "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
       },

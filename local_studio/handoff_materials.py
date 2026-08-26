@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import get_spec, normalize_agent, set_spec_status, source_mode_of
+from edit_spec import COLLECTOR_DOOR, EDITOR_DOOR, get_spec, normalize_agent, set_spec_status, source_mode_of
 from style_recipes import needs_collector, normalize_license, normalize_origin
 
 MATERIALS_SCHEMA = "grok-crew.materials/v1"
@@ -146,12 +146,12 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
     if not clips:
         return {"ok": False, "folder": folder.name, "reason": "collector package must include at least one video clip"}
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
-    agent = normalize_agent(manifest.get("agent") or collector.get("agent") or "collector", "agent")
+    agent = normalize_agent(manifest.get("agent") or collector.get("agent") or "collector", COLLECTOR_DOOR)
     written = {
         "schema": MATERIALS_SCHEMA,
         "edit_spec_id": resolved_id,
         "role": "collect",
-        "door": "agent",
+        "door": COLLECTOR_DOOR,
         "agent": agent,
         "clips": clips,
         "notes": str(manifest.get("notes") or ""),
@@ -167,7 +167,7 @@ def apply_materials_folder(folder: Path, spec_id: str | None = None) -> dict[str
     set_spec_status(resolved_id, "waiting_for_editor")
     from handoff_outbox import archive_outbox
 
-    archive_outbox(resolved_id, door="agent")
+    archive_outbox(resolved_id, door=COLLECTOR_DOOR)
     return {
         "ok": True,
         "folder": dest.name,
@@ -234,7 +234,7 @@ def write_owned_materials(spec_id: str, paths: list[Any] | tuple[Any, ...] | str
         "schema": MATERIALS_SCHEMA,
         "edit_spec_id": spec_id,
         "role": "owned",
-        "door": "grok",
+        "door": EDITOR_DOOR,
         "agent": "operator",
         "clips": clips,
         "notes": str(existing.get("notes") or "Operator-owned clips. The editor cuts these."),
@@ -274,7 +274,7 @@ def write_demo_materials(spec_id: str) -> dict[str, Any]:
     if source_mode_of(spec) == "own":
         return write_owned_materials(spec_id, [str(sample)])
     collector = spec.get("collector") if isinstance(spec.get("collector"), dict) else {}
-    agent = normalize_agent(collector.get("agent") or "collector", "agent")
+    agent = normalize_agent(collector.get("agent") or "collector", COLLECTOR_DOOR)
     folder = materials_folder(spec_id)
     folder.mkdir(parents=True, exist_ok=True)
     existing = _read_manifest(folder) or {}
@@ -287,7 +287,7 @@ def write_demo_materials(spec_id: str) -> dict[str, Any]:
         "schema": MATERIALS_SCHEMA,
         "edit_spec_id": spec_id,
         "role": "collect",
-        "door": "agent",
+        "door": COLLECTOR_DOOR,
         "agent": agent,
         "clips": owned + [{
             "file": "source.mp4",

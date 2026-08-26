@@ -94,11 +94,11 @@ type HandoffStatus = {
   pending_count?: number;
   git_configured?: boolean;
   inbox_dir?: string;
-  doors?: { grok?: DoorInboxStatus; agent?: DoorInboxStatus };
+  doors?: { editor?: DoorInboxStatus; collector?: DoorInboxStatus; grok?: DoorInboxStatus; agent?: DoorInboxStatus };
   outbox?: {
     pending_count?: number;
     git_configured?: boolean;
-    doors?: { grok?: OutboxDoorStatus; agent?: OutboxDoorStatus };
+    doors?: { editor?: OutboxDoorStatus; collector?: OutboxDoorStatus; grok?: OutboxDoorStatus; agent?: OutboxDoorStatus };
   };
   materials?: { pending_count?: number; unknown_license_count?: number; has_unknown_license?: boolean };
 };
@@ -176,8 +176,8 @@ function handoffSenderLabel(
   item: { handoff_agent?: string | null; handoff_door?: string | null },
   t: (ko: string, en: string, zh: string, ja: string) => string,
 ) {
-  if (item.handoff_door === 'grok') return t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent');
-  if (item.handoff_door === 'agent') return t('수집 Agent', 'Collector Agent', '收集 Agent', '収集 Agent');
+  if (item.handoff_door === 'editor' || item.handoff_door === 'grok') return t('편집 Agent', 'Editor Agent', '剪辑 Agent', '編集 Agent');
+  if (item.handoff_door === 'collector' || item.handoff_door === 'agent') return t('수집 Agent', 'Collector Agent', '收集 Agent', '収集 Agent');
   return t('이 PC', 'This PC', '本机', 'このPC');
 }
 
@@ -311,15 +311,16 @@ export default function DesktopWorkspace() {
 
   useEffect(() => { const initial = window.setTimeout(() => void refreshWorkspace(), 0); const interval = window.setInterval(() => void refreshWorkspace(true), 5000); return () => { window.clearTimeout(initial); window.clearInterval(interval); }; }, [refreshWorkspace]);
 
-  const grokPending = workspace.handoff?.doors?.grok?.pending_count ?? 0;
+  const editorInbox = workspace.handoff?.doors?.editor ?? workspace.handoff?.doors?.grok;
+  const editorPending = editorInbox?.pending_count ?? 0;
   const pullKeyRef = useRef('');
   const pullingRef = useRef(false);
   useEffect(() => {
-    if (studioState !== 'ready' || grokPending < 1 || pullingRef.current) return;
-    const key = `${grokPending}:${workspace.handoff?.doors?.grok?.inbox_dir ?? ''}`;
+    if (studioState !== 'ready' || editorPending < 1 || pullingRef.current) return;
+    const key = `${editorPending}:${editorInbox?.inbox_dir ?? ''}`;
     if (pullKeyRef.current === key) return;
     pullingRef.current = true;
-    void api('/api/v2/handoff/pull', { method: 'POST', body: JSON.stringify({ door: 'grok' }) })
+    void api('/api/v2/handoff/pull', { method: 'POST', body: JSON.stringify({ door: 'editor' }) })
       .then(async (result) => {
         pullKeyRef.current = key;
         const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string }; agent?: string }> : [];
@@ -331,7 +332,7 @@ export default function DesktopWorkspace() {
         setSelectedProjectId(projectId);
         setActivePanel('edit');
         await refreshProject(projectId);
-        const name = handoffSenderLabel({ handoff_agent: imported[0]?.agent, handoff_door: 'grok' }, t);
+        const name = handoffSenderLabel({ handoff_agent: imported[0]?.agent, handoff_door: 'editor' }, t);
         setMessage(t(`${name} 쪽에서 넘긴 컷을 열었습니다.`, `Opened the cut from ${name}.`, `已打开 ${name} 交来的剪辑。`, `${name} が渡したカットを開きました。`));
       })
       .catch(() => {
@@ -340,7 +341,7 @@ export default function DesktopWorkspace() {
       .finally(() => {
         pullingRef.current = false;
       });
-  }, [api, grokPending, refreshProject, refreshWorkspace, studioState, t, workspace.handoff?.doors?.grok?.inbox_dir]);
+  }, [api, editorInbox?.inbox_dir, editorPending, refreshProject, refreshWorkspace, studioState, t]);
   useEffect(() => {
     if (!window.grokCrew) return;
     void window.grokCrew.githubStatus().then(setGithub).catch(() => undefined);
@@ -1062,7 +1063,7 @@ export default function DesktopWorkspace() {
           )
           : !timeline ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('타임라인을 불러오는 중', 'Loading the timeline', '正在加载时间线', 'タイムラインを読み込み中')}</h1><p>{t('프로젝트가 열려 있습니다. 규격 화면으로 돌아가지 않습니다.', 'A project is open. The spec desk stays hidden.', '项目已打开。不会回到规格页。', 'プロジェクトは開いています。仕様デスクには戻りません。')}</p><button type="button" className="desktop-secondary" onClick={() => void refreshProject(project.id)}>{t('다시 읽기', 'Reload', '重新读取', '再読み込み')}</button></div>
           : <>
-            <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips">{project.handoff_agent ? <span className={project.handoff_door === 'grok' ? 'is-grok' : 'is-agent'}>{project.handoff_door === 'grok' ? t('편집 문', 'Editor door', '剪辑门', '編集ドア') : t('수집 문', 'Collector door', '收集门', '収集ドア')} · {handoffSenderLabel(project, t)}</span> : null}<span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
+            <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips">{project.handoff_agent ? <span className={project.handoff_door === 'editor' || project.handoff_door === 'grok' ? 'is-editor' : 'is-collector'}>{project.handoff_door === 'editor' || project.handoff_door === 'grok' ? t('편집 문', 'Editor door', '剪辑门', '編集ドア') : t('수집 문', 'Collector door', '收集门', '収集ドア')} · {handoffSenderLabel(project, t)}</span> : null}<span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
               <section className="desktop-card desktop-source-card">
                 <div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div>

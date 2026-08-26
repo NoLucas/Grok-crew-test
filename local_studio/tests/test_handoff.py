@@ -101,18 +101,21 @@ def test_pending_folders_excludes_git_dir_and_processed(tmp_path):
 
 def test_pending_folders_lists_door_inboxes(tmp_path):
     (tmp_path / ".git").mkdir()
+    (tmp_path / "editor" / "e-pkg").mkdir(parents=True)
+    (tmp_path / "collector" / "c-pkg").mkdir(parents=True)
     (tmp_path / "grok" / "g-pkg").mkdir(parents=True)
     (tmp_path / "agents" / "a-pkg").mkdir(parents=True)
+    (tmp_path / "editor" / ".processed").mkdir()
     (tmp_path / "grok" / ".processed").mkdir()
     names = [p.name for p in hw.pending_folders(tmp_path, processed=set())]
-    assert names == ["g-pkg", "a-pkg"]
+    assert names == ["e-pkg", "c-pkg", "g-pkg", "a-pkg"]
 
 
 def test_pending_folders_skips_outbox_tree(tmp_path):
     (tmp_path / "outbox" / "grok" / "spec-id").mkdir(parents=True)
     (tmp_path / "outbox" / "grok" / "spec-id" / "spec.json").write_text("{}", encoding="utf-8")
     (tmp_path / "grok" / "cut-pkg").mkdir(parents=True)
-    names = [f"{p.parent.name}/{p.name}" if p.parent.name in {"grok", "agents"} else p.name for p in hw.pending_folders(tmp_path, processed=set())]
+    names = [f"{p.parent.name}/{p.name}" if p.parent.name in {"editor", "collector", "grok", "agents", "agent"} else p.name for p in hw.pending_folders(tmp_path, processed=set())]
     assert names == ["grok/cut-pkg"]
     assert all("outbox" not in name for name in names)
 

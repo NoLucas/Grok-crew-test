@@ -1,7 +1,7 @@
 {
   "schema": "local-video-workspace.bot-contract/v1",
   "scope": "127.0.0.1 only",
-  "handoff_channel": "A remote or cloud-hosted bot that cannot reach 127.0.0.1 on this PC must not attempt to. On a crew spec the collector reads outbox/agents/ and drops clips under materials/{id}/; the editor reads outbox/grok/ and returns the cut under grok/. See local_studio/handoff-guide.json (or handoff-guide.ko.json, handoff-guide.zh.json, handoff-guide.ja.json): https://github.com/NoLucas/handoff-inbox (main branch).",
+  "handoff_channel": "A remote or cloud-hosted bot that cannot reach 127.0.0.1 on this PC must not attempt to. On a crew spec the collector reads outbox/collector/ and drops clips under materials/{id}/; the editor reads outbox/editor/ and returns the cut under editor/. Leftover grok/ and agents/ folders are still read. See local_studio/handoff-guide.json (or handoff-guide.ko.json, handoff-guide.zh.json, handoff-guide.ja.json): https://github.com/NoLucas/handoff-inbox (main branch).",
   "allowed": [
     "create_project",
     "read_project",

@@ -2,9 +2,9 @@
   "schema": "local-video-workspace.handoff-guide/v1",
   "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 사용자는 규격만 적습니다. 봇이 소스 영상과 편집을 만들어, 이 PC로 네트워크 호출을 하지 않고 전용 git 브랜치로 넘깁니다.",
   "roles": {
-    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 편집(폴더 grok/) 또는 수집·다른 에이전트(폴더 agents/) 중 하나만 고릅니다. 저장하면 그 문 보낼함에 spec.json 이 올라갑니다. 원본 파일을 붙이지 않습니다.",
-    "grok_door": "편집 문. 폴더 이름은 grok/ 그대로. 지정된 편집 봇만. Runner 페어링도 이 문만. agents/ 는 쓰지 마세요.",
-    "other_agent_door": "수집·다른 에이전트 문. 폴더 이름은 agents/ 그대로. 지정된 수집 봇, 또는 크루가 아닌 다른 에이전트. grok/ 와 Runner는 쓰지 마세요.",
+    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 문은 편집(폴더 editor/) 또는 수집·다른 에이전트(폴더 collector/) 중 하나만 고릅니다. 저장하면 그 문 보낼함에 spec.json 이 올라갑니다. 원본 파일을 붙이지 않습니다.",
+    "grok_door": "편집 문. 폴더 이름은 editor/. 남은 grok/ 폴더는 읽기만 합니다. 지정된 편집 봇만. Runner 페어링도 이 문만. collector/ 는 쓰지 마세요.",
+    "other_agent_door": "수집·다른 에이전트 문. 폴더 이름은 collector/. 남은 agents/ 폴더는 읽기만 합니다. 지정된 수집 봇, 또는 크루가 아닌 다른 에이전트. editor/ 와 Runner는 쓰지 마세요.",
     "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다."
   },
   "style_recipes": {
@@ -19,8 +19,8 @@
   "crew": {
     "purpose": "규격 하나, 봇 둘. 수집 봇이 자료를 모으고 편집 봇이 그 클립만 자릅니다. 이 책상은 사이트를 긁지 않습니다.",
     "collector": {
-      "door": "agent",
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "door": "collector",
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
       "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
       "git_drop": "materials/{edit_spec_id}/",
       "files": ["manifest.json", "소스 클립"],
@@ -28,11 +28,11 @@
       "do_not": "끝난 컷을 인박스에 넣지 마세요. 운영자가 쓸 수 있는 출처만 모으세요. 로그인 막힌 인스타/틱톡은 긁지 마세요. owned 클립은 지우지 마세요."
     },
     "editor": {
-      "door": "grok",
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "door": "editor",
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
       "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
-      "return": "local_studio/workspace/handoff-inbox/grok/",
-      "git_return": "grok/"
+      "return": "local_studio/workspace/handoff-inbox/editor/",
+      "git_return": "editor/"
     }
   },
   "outbox": {
@@ -41,24 +41,24 @@
     "local_root": "local_studio/workspace/handoff-outbox/",
     "git_root": "outbox/",
     "files": ["spec.json", "brief.txt"],
-    "rule": "자기 문만 읽으세요. 끝난 패키지는 같은 문 인박스(grok/ 또는 agents/)로 돌리세요. outbox/ 에는 영상을 넣지 마세요."
+    "rule": "자기 문만 읽으세요. 끝난 패키지는 같은 문 인박스(editor/ 또는 collector/)로 돌리세요. outbox/ 에는 영상을 넣지 마세요."
   },
   "doors": {
-    "grok": {
-      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
-      "git_outbox": "outbox/grok/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/grok/",
-      "git_prefix": "grok/",
-      "bundle_project_door": "grok",
+    "editor": {
+      "outbox": "local_studio/workspace/handoff-outbox/editor/{edit_spec_id}/",
+      "git_outbox": "outbox/editor/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/editor/",
+      "git_prefix": "editor/",
+      "bundle_project_door": "editor",
       "created_by": "지정된 편집 봇 이름",
       "runner": true
     },
-    "agent": {
-      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
-      "git_outbox": "outbox/agents/{edit_spec_id}/",
-      "inbox": "local_studio/workspace/handoff-inbox/agents/",
-      "git_prefix": "agents/",
-      "bundle_project_door": "agent",
+    "collector": {
+      "outbox": "local_studio/workspace/handoff-outbox/collector/{edit_spec_id}/",
+      "git_outbox": "outbox/collector/{edit_spec_id}/",
+      "inbox": "local_studio/workspace/handoff-inbox/collector/",
+      "git_prefix": "collector/",
+      "bundle_project_door": "collector",
       "created_by": "지정된 수집 봇 또는 다른 에이전트 이름",
       "runner": false
     }
@@ -69,7 +69,7 @@
     "repository": "https://github.com/NoLucas/handoff-inbox.git",
     "branch": "main",
     "rule": "오직 이 저장소의 main 브랜치에만 커밋을 push하세요. 로컬 운영자 PC의 IP나 호스트명에 접속을 시도하지 마세요 — 이 저장소만이 허용된 채널입니다.",
-    "folder_naming": "보낼 규격은 outbox/grok/{edit_spec_id}/ 또는 outbox/agents/{edit_spec_id}/ (spec.json + brief.txt). 돌아온 컷은 grok/ 또는 agents/ 아래, 이름은 '<UTC 타임스탬프>-<짧은 슬러그>' (예: grok/2026-08-23T07-19-00Z-payoff-hook). outbox/ 에는 영상을 넣지 마세요. Grok 받기는 agents/ 를 가져오지 않고, 다른 에이전트 받기는 grok/ 를 가져오지 않습니다."
+    "folder_naming": "보낼 규격은 outbox/editor/{edit_spec_id}/ 또는 outbox/collector/{edit_spec_id}/ (spec.json + brief.txt). 돌아온 컷은 editor/ 또는 collector/ 아래, 이름은 '<UTC 타임스탬프>-<짧은 슬러그>' (예: editor/2026-08-23T07-19-00Z-payoff-hook). 남은 grok/ 와 agents/ 인박스는 읽기만 합니다. outbox/ 에는 영상을 넣지 마세요. 편집 받기는 collector/ 를 가져오지 않고, 수집 받기는 editor/ 를 가져오지 않습니다."
   },
   "limits": {
     "media_extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
@@ -91,7 +91,7 @@
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "문자열", "word_timings": "선택 사항, bot-guide.json 참고" }], "render_settings": "선택 사항, Production의 Finish Rack과 같은 필드(platform, quality, caption_bg, music_track 등)" },
         "caption": "Instagram 캡션, 최대 2200자",
         "edit_spec_id": "운영자 규격을 이행할 때 필수 — 받은 글에 있는 id를 그대로 넣습니다",
-        "door": "필수: grok 또는 agent. 인박스 폴더와 규격과 같아야 합니다",
+        "door": "필수: editor 또는 collector. grok와 agent는 별칭으로 받습니다. 인박스 폴더와 규격과 같아야 합니다",
         "created_by": "이 데스크가 보낸 사람을 구분하는 이름. 체크인한 봇 이름, 또는 운영자가 적은 이름. Grok이나 Claude로 단정하지 마세요.",
         "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
       },

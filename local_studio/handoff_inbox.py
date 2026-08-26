@@ -2,8 +2,8 @@
 
 Two doors, never mixed:
 
-- Grok door: local_studio/workspace/handoff-inbox/grok/
-- Other-agent door: local_studio/workspace/handoff-inbox/agents/
+- Editor door: local_studio/workspace/handoff-inbox/editor/
+- Collector door: local_studio/workspace/handoff-inbox/collector/
 
 A remote bot never calls this PC. It pushes a folder. The operator (or this
 sidecar, on the operator's click) copies media into the workspace and imports
@@ -20,7 +20,19 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import attach_spec_project, get_spec, normalize_agent, normalize_door, resolve_sender
+from edit_spec import (
+    COLLECTOR_DOOR,
+    COLLECTOR_DOOR_ALIASES,
+    EDITOR_DOOR,
+    EDITOR_DOOR_ALIASES,
+    attach_spec_project,
+    door_folder,
+    door_folder_aliases,
+    get_spec,
+    normalize_agent,
+    normalize_door,
+    resolve_sender,
+)
 from handoff_materials import find_materials_clip, materials_status
 from handoff_outbox import outbox_status
 
@@ -29,15 +41,14 @@ ALLOWED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
 MAX_MEDIA_BYTES = int(os.getenv("HANDOFF_MAX_MEDIA_BYTES", str(2 * 1024 ** 3)))
 MAX_BUNDLE_BYTES = int(os.getenv("HANDOFF_MAX_BUNDLE_BYTES", str(4 * 1024 * 1024)))
 DEFAULT_MAX_PACKAGES_PER_CYCLE = 5
-DOOR_FOLDERS = {"grok": "grok", "agent": "agents"}
-RESERVED_INBOX_NAMES = {".git", ".processed", "grok", "agents"}
+RESERVED_INBOX_NAMES = {".git", ".processed", "editor", "collector", "grok", "agents", "agent"}
 
 
 def local_inbox_dir() -> Path:
     path = (config.WORKSPACE_DIR / "handoff-inbox").resolve()
     path.mkdir(parents=True, exist_ok=True)
     (path / ".processed").mkdir(parents=True, exist_ok=True)
-    for folder in DOOR_FOLDERS.values():
+    for folder in ("editor", "collector"):
         door_dir = path / folder
         door_dir.mkdir(parents=True, exist_ok=True)
         (door_dir / ".processed").mkdir(parents=True, exist_ok=True)
@@ -46,7 +57,7 @@ def local_inbox_dir() -> Path:
 
 def door_inbox_dir(door: str) -> Path:
     normalized = normalize_door(door, required=True)
-    path = (local_inbox_dir() / DOOR_FOLDERS[normalized]).resolve()
+    path = (local_inbox_dir() / door_folder(normalized)).resolve()
     path.mkdir(parents=True, exist_ok=True)
     (path / ".processed").mkdir(parents=True, exist_ok=True)
     return path
@@ -57,17 +68,17 @@ def infer_package_door(project: dict[str, Any], folder: Path | None = None) -> s
     if raw not in (None, ""):
         return normalize_door(raw, required=True)
     created = str(project.get("created_by") or "").strip().lower().replace("_", "-")
-    if created in {"grok", "grok-bot", "grokbot"}:
-        return "grok"
-    if created in {"agent", "agents", "claude", "codex", "chatgpt", "gemini", "cursor"}:
-        return "agent"
+    if created in EDITOR_DOOR_ALIASES:
+        return EDITOR_DOOR
+    if created:
+        return COLLECTOR_DOOR
     if folder is not None:
         parent = folder.parent.name.lower()
-        if parent == "grok":
-            return "grok"
-        if parent == "agents":
-            return "agent"
-    return "grok"
+        if parent in EDITOR_DOOR_ALIASES or parent in {EDITOR_DOOR, "grok"}:
+            return EDITOR_DOOR
+        if parent in COLLECTOR_DOOR_ALIASES or parent in {COLLECTOR_DOOR, "agents", "agent"}:
+            return COLLECTOR_DOOR
+    return EDITOR_DOOR
 
 
 def media_relpaths(project: dict[str, Any]) -> list[str]:
@@ -171,7 +182,7 @@ def apply_package_local(
     if spec_record:
         spec_door = normalize_door(spec_record.get("door") or spec_payload.get("door"))
         if spec_payload.get("crew"):
-            if package_door == "agent":
+            if package_door == COLLECTOR_DOOR:
                 return {
                     "ok": False,
                     "folder": folder.name,
@@ -223,15 +234,30 @@ def pending_inbox_folders(inbox: Path | None = None) -> list[Path]:
     root = inbox or local_inbox_dir()
     reserved = {".git", ".processed"}
     if root.name == "handoff-inbox":
-        reserved |= {"grok", "agents"}
+        reserved |= RESERVED_INBOX_NAMES
     return [item for item in sorted(root.iterdir()) if item.is_dir() and item.name not in reserved]
 
 
 def pending_inbox_folders_for_door(door: str) -> list[Path]:
     normalized = normalize_door(door, required=True)
-    folders = pending_inbox_folders(door_inbox_dir(normalized))
-    if normalized == "grok":
-        folders = pending_inbox_folders(local_inbox_dir()) + folders
+    inbox = local_inbox_dir()
+    seen: set[str] = set()
+    folders: list[Path] = []
+    for alias in door_folder_aliases(normalized):
+        door_dir = inbox / alias
+        if not door_dir.is_dir():
+            continue
+        for folder in pending_inbox_folders(door_dir):
+            if folder.name in seen:
+                continue
+            seen.add(folder.name)
+            folders.append(folder)
+    if normalized == EDITOR_DOOR:
+        for folder in pending_inbox_folders(inbox):
+            if folder.name in seen:
+                continue
+            seen.add(folder.name)
+            folders.append(folder)
     return folders
 
 
@@ -244,7 +270,7 @@ def _archive_folder(folder: Path, door: str) -> None:
 
 def pull_local_inbox(
     *,
-    door: str = "grok",
+    door: str = EDITOR_DOOR,
     max_per_cycle: int = DEFAULT_MAX_PACKAGES_PER_CYCLE,
 ) -> dict[str, Any]:
     normalized = normalize_door(door, required=True)
@@ -279,7 +305,7 @@ def write_demo_package(spec_id: str | None = None, door: str | None = None) -> d
     if sample is None:
         raise ValueError("The bundled sample clip is missing, so a demo package cannot be written.")
     title = "Bot-delivered cut"
-    resolved_door = normalize_door(door) if door else "grok"
+    resolved_door = normalize_door(door) if door else EDITOR_DOOR
     agent = normalize_agent(None, resolved_door)
     if spec_id:
         record = get_spec(spec_id)
@@ -333,24 +359,24 @@ def _door_status(door: str) -> dict[str, Any]:
 
 def handoff_status() -> dict[str, Any]:
     inbox = local_inbox_dir()
-    grok = _door_status("grok")
-    agent = _door_status("agent")
+    editor = _door_status(EDITOR_DOOR)
+    collector = _door_status(COLLECTOR_DOOR)
     remote = str(os.getenv("HANDOFF_REPO_REMOTE") or "").strip()
     return {
         "schema": "grok-crew.handoff-status/v1",
         "inbox_dir": str(inbox),
-        "pending_count": grok["pending_count"] + agent["pending_count"],
-        "pending": grok["pending"] + agent["pending"],
-        "doors": {"grok": grok, "agent": agent},
+        "pending_count": editor["pending_count"] + collector["pending_count"],
+        "pending": editor["pending"] + collector["pending"],
+        "doors": {EDITOR_DOOR: editor, COLLECTOR_DOOR: collector},
         "outbox": outbox_status(),
         "materials": materials_status(),
         "git_configured": bool(remote),
         "git_remote_set": bool(remote),
         "source_owner": "bot",
         "note": (
-            "A crew spec: collector reads outbox/agents and drops clips in handoff-materials. "
-            "Editor reads outbox/grok, cuts those clips, and returns the cut to handoff-inbox/grok. "
-            "A Grok pull never imports the collector inbox."
+            "A crew spec: collector reads outbox/collector and drops clips in handoff-materials. "
+            "Editor reads outbox/editor, cuts those clips, and returns the cut to handoff-inbox/editor. "
+            "An editor pull never imports the collector inbox. Leftover grok/ and agents/ folders are still read."
         ),
     }
 
@@ -371,7 +397,7 @@ def resolve_pull_door(payload: dict[str, Any]) -> str:
             if not spec.get("crew"):
                 raise ValueError(f"That spec belongs to the {spec_door} door, not {door}.")
         return door
-    return spec_door or "grok"
+    return spec_door or EDITOR_DOOR
 
 
 def pull_handoff(body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -382,7 +408,7 @@ def pull_handoff(body: dict[str, Any] | None = None) -> dict[str, Any]:
     written = None
     record = get_spec(spec_id) if spec_id else None
     spec = record.get("spec") if record and isinstance(record.get("spec"), dict) else {}
-    if demo and spec.get("crew") and door == "agent":
+    if demo and spec.get("crew") and door == COLLECTOR_DOOR:
         from handoff_materials import pull_materials
 
         return pull_materials({"demo": True, "edit_spec_id": spec_id})

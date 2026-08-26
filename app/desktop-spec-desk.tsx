@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from './language';
 
-type DoorId = 'grok' | 'agent';
+type DoorId = 'editor' | 'collector';
 type SourceMode = 'collect' | 'own' | 'own_and_collect';
 
 type StyleRecipe = {
@@ -86,6 +86,8 @@ type HandoffStatus = {
   pending_count?: number;
   git_configured?: boolean;
   doors?: {
+    editor?: DoorStatus;
+    collector?: DoorStatus;
     grok?: DoorStatus;
     agent?: DoorStatus;
   };
@@ -93,6 +95,8 @@ type HandoffStatus = {
     pending_count?: number;
     git_configured?: boolean;
     doors?: {
+      editor?: OutboxDoor;
+      collector?: OutboxDoor;
       grok?: OutboxDoor;
       agent?: OutboxDoor;
     };
@@ -350,9 +354,9 @@ export function SpecDesk({
           ? t(`${editorName} 보낼함에 올렸고 git에도 올렸습니다. 내 파일만 자릅니다.`, `Placed in the ${editorName} outbox and pushed to git. ${editorName} cuts your files.`, `已放入 ${editorName} 发件箱并推到 git。只剪你的文件。`, `${editorName} 送信箱に入れ、git にも上げました。自分のファイルだけ切る。`)
           : t(`${editorName} 보낼함에 올렸습니다. 내 파일만 자릅니다.`, `Placed in the editor outbox. ${editorName} cuts your files.`, `已放入编辑发件箱。${editorName} 只剪你的文件。`, `編集送信箱に入れました。${editorName} が自分のファイルだけ切る。`));
       } else if (record.outbox?.collect?.git?.ok && record.outbox?.edit?.git?.ok) {
-        setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. Collector Agent는 outbox/agents, Editor Agent는 outbox/grok 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. Collector Agent reads outbox/agents; Editor Agent reads outbox/grok.', '已放入两个发件箱并推到 git。Collector Agent 读 outbox/agents，Editor Agent 读 outbox/grok。', '両方の送信箱に入れ、git にも上げました。Collector Agent は outbox/agents、Editor Agent は outbox/grok を読む。'));
+        setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. Collector Agent는 outbox/collector, Editor Agent는 outbox/editor 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. Collector Agent reads outbox/collector; Editor Agent reads outbox/editor.', '已放入两个发件箱并推到 git。Collector Agent 读 outbox/collector，Editor Agent 读 outbox/editor。', '両方の送信箱に入れ、git にも上げました。Collector Agent は outbox/collector、Editor Agent は outbox/editor を読む。'));
       } else {
-        setOutboxNotice(t('두 보낼함에 올렸습니다. Collector Agent는 handoff-outbox/agents, Editor Agent는 handoff-outbox/grok.', 'Placed in both outboxes. Collector Agent: handoff-outbox/agents. Editor Agent: handoff-outbox/grok.', '已放入两个发件箱。Collector Agent：handoff-outbox/agents。Editor Agent：handoff-outbox/grok。', '両方の送信箱に入れました。Collector Agent は handoff-outbox/agents、Editor Agent は handoff-outbox/grok。'));
+        setOutboxNotice(t('두 보낼함에 올렸습니다. Collector Agent는 handoff-outbox/collector, Editor Agent는 handoff-outbox/editor.', 'Placed in both outboxes. Collector Agent: handoff-outbox/collector. Editor Agent: handoff-outbox/editor.', '已放入两个发件箱。Collector Agent：handoff-outbox/collector。Editor Agent：handoff-outbox/editor。', '両方の送信箱に入れました。Collector Agent は handoff-outbox/collector、Editor Agent は handoff-outbox/editor。'));
       }
       await onRefresh();
     } catch (caught) {
@@ -417,12 +421,12 @@ export function SpecDesk({
       const specId = activeSpecId || editing[0]?.id || collecting[0]?.id || '';
       const result = await request('/api/v2/handoff/pull', {
         method: 'POST',
-        body: JSON.stringify({ demo, door: 'grok', edit_spec_id: specId }),
+        body: JSON.stringify({ demo, door: 'editor', edit_spec_id: specId }),
       });
       const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string; handoff_agent?: string }; agent?: string; door?: string }> : [];
       const projectId = imported[0]?.project?.id;
       if (projectId) {
-        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || inboundEditorName) });
+        await onImported(projectId, { door: 'editor', agent: String(imported[0]?.agent || inboundEditorName) });
         return;
       }
       setError(demo
@@ -604,7 +608,7 @@ export function SpecDesk({
 
       <div className="desktop-spec-doors">
         {needsCollector ? (
-          <section className="desktop-spec-door is-agent">
+          <section className="desktop-spec-door is-collector">
             <div className="desktop-spec-door-head">
               <span>{t('수집', 'Collect', '收集', '収集')}</span>
               <div>
@@ -627,11 +631,11 @@ export function SpecDesk({
               </button>
             </div>
             <p className="desktop-spec-meta">
-              {t(`보낼함 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 자료 ${materialsCount} · 수집 대기 ${collecting.length}`, `${handoff?.outbox?.doors?.agent?.pending_count ?? 0} in collector outbox · ${materialsCount} materials · ${collecting.length} waiting`, `发件箱 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 等待收集 ${collecting.length}`, `送信箱 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 収集待ち ${collecting.length}`)}
+              {t(`보낼함 ${handoff?.outbox?.doors?.collector?.pending_count ?? handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 자료 ${materialsCount} · 수집 대기 ${collecting.length}`, `${handoff?.outbox?.doors?.collector?.pending_count ?? handoff?.outbox?.doors?.agent?.pending_count ?? 0} in collector outbox · ${materialsCount} materials · ${collecting.length} waiting`, `发件箱 ${handoff?.outbox?.doors?.collector?.pending_count ?? handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 等待收集 ${collecting.length}`, `送信箱 ${handoff?.outbox?.doors?.collector?.pending_count ?? handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 収集待ち ${collecting.length}`)}
             </p>
           </section>
         ) : (
-          <section className="desktop-spec-door is-agent">
+          <section className="desktop-spec-door is-collector">
             <div className="desktop-spec-door-head">
               <span>{t('수집', 'Collect', '收集', '収集')}</span>
               <div>
@@ -642,7 +646,7 @@ export function SpecDesk({
           </section>
         )}
 
-        <section className="desktop-spec-door is-grok">
+        <section className="desktop-spec-door is-editor">
           <div className="desktop-spec-door-head">
             <span>{editorName}</span>
             <div>
@@ -665,14 +669,14 @@ export function SpecDesk({
             </button>
           </div>
           <p className="desktop-spec-meta">
-            {t(`보낼함 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 편집 대기 ${editing.length} · 받은 컷 ${received.length} · 인박스 ${handoff?.doors?.grok?.pending_count ?? 0}`, `${handoff?.outbox?.doors?.grok?.pending_count ?? 0} in editor outbox · ${editing.length} waiting · ${received.length} received · ${handoff?.doors?.grok?.pending_count ?? 0} inbound`, `发件箱 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 等待剪辑 ${editing.length} · 已收 ${received.length} · 收件 ${handoff?.doors?.grok?.pending_count ?? 0}`, `送信箱 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 編集待ち ${editing.length} · 受取 ${received.length} · 受信 ${handoff?.doors?.grok?.pending_count ?? 0}`)}
+            {t(`보낼함 ${handoff?.outbox?.doors?.editor?.pending_count ?? handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 편집 대기 ${editing.length} · 받은 컷 ${received.length} · 인박스 ${handoff?.doors?.editor?.pending_count ?? handoff?.doors?.grok?.pending_count ?? 0}`, `${handoff?.outbox?.doors?.editor?.pending_count ?? handoff?.outbox?.doors?.grok?.pending_count ?? 0} in editor outbox · ${editing.length} waiting · ${received.length} received · ${handoff?.doors?.editor?.pending_count ?? handoff?.doors?.grok?.pending_count ?? 0} inbound`, `发件箱 ${handoff?.outbox?.doors?.editor?.pending_count ?? handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 等待剪辑 ${editing.length} · 已收 ${received.length} · 收件 ${handoff?.doors?.editor?.pending_count ?? handoff?.doors?.grok?.pending_count ?? 0}`, `送信箱 ${handoff?.outbox?.doors?.editor?.pending_count ?? handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 編集待ち ${editing.length} · 受取 ${received.length} · 受信 ${handoff?.doors?.editor?.pending_count ?? handoff?.doors?.grok?.pending_count ?? 0}`)}
           </p>
         </section>
       </div>
 
       {error ? <p className="desktop-spec-error" role="alert">{error}</p> : null}
       <p className="desktop-spec-meta">
-        {t('수집 보낼함: handoff-outbox/agents · 자료함: handoff-materials · 편집 보낼함: handoff-outbox/grok · 컷 인박스: handoff-inbox/grok', 'Collector outbox: handoff-outbox/agents · Materials: handoff-materials · Editor outbox: handoff-outbox/grok · Cut inbox: handoff-inbox/grok', '收集发件箱：handoff-outbox/agents · 资料箱：handoff-materials · 剪辑发件箱：handoff-outbox/grok · 成片收件箱：handoff-inbox/grok', '収集送信箱: handoff-outbox/agents · 素材箱: handoff-materials · 編集送信箱: handoff-outbox/grok · カット受信箱: handoff-inbox/grok')}
+        {t('수집 보낼함: handoff-outbox/collector · 자료함: handoff-materials · 편집 보낼함: handoff-outbox/editor · 컷 인박스: handoff-inbox/editor', 'Collector outbox: handoff-outbox/collector · Materials: handoff-materials · Editor outbox: handoff-outbox/editor · Cut inbox: handoff-inbox/editor', '收集发件箱：handoff-outbox/collector · 资料箱：handoff-materials · 剪辑发件箱：handoff-outbox/editor · 成片收件箱：handoff-inbox/editor', '収集送信箱: handoff-outbox/collector · 素材箱: handoff-materials · 編集送信箱: handoff-outbox/editor · カット受信箱: handoff-inbox/editor')}
       </p>
 
       <details className="desktop-spec-advanced">

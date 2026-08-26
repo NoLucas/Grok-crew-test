@@ -26,8 +26,8 @@ def test_crew_spec_writes_both_outboxes(studio):
     assert record["editor"]["agent"] == "Editor Agent"
     collect = Path(record["outbox"]["collect"]["path"])
     edit = Path(record["outbox"]["edit"]["path"])
-    assert collect.as_posix().endswith(f"handoff-outbox/agents/{record['id']}")
-    assert edit.as_posix().endswith(f"handoff-outbox/grok/{record['id']}")
+    assert collect.as_posix().endswith(f"handoff-outbox/collector/{record['id']}")
+    assert edit.as_posix().endswith(f"handoff-outbox/editor/{record['id']}")
     collect_payload = json.loads((collect / "spec.json").read_text(encoding="utf-8"))
     edit_payload = json.loads((edit / "spec.json").read_text(encoding="utf-8"))
     assert collect_payload["role"] == "collect"
@@ -35,8 +35,8 @@ def test_crew_spec_writes_both_outboxes(studio):
     assert edit_payload["role"] == "edit"
     assert edit_payload["return"]["kind"] == "cut"
     status = outbox_status()
-    assert record["id"] in {item["id"] for item in status["doors"]["agent"]["pending"]}
-    assert record["id"] in {item["id"] for item in status["doors"]["grok"]["pending"]}
+    assert record["id"] in {item["id"] for item in status["doors"]["collector"]["pending"]}
+    assert record["id"] in {item["id"] for item in status["doors"]["editor"]["pending"]}
 
 
 def test_crew_briefs_split_roles(studio):
@@ -59,8 +59,8 @@ def test_crew_briefs_split_roles(studio):
     assert edit["role"] == "edit"
     assert "editor role" in edit["text"]
     assert "handoff-materials" in edit["text"]
-    assert "handoff-inbox/grok" in edit["text"]
-    assert "Do not use the agents/ folder" in edit["text"]
+    assert "handoff-inbox/editor" in edit["text"]
+    assert "Do not use the collector/ folder" in edit["text"]
 
 
 def test_materials_then_editor_cut(studio, tmp_path, monkeypatch):
@@ -85,13 +85,13 @@ def test_materials_then_editor_cut(studio, tmp_path, monkeypatch):
     assert (folder / "source.mp4").read_bytes() == b"collected-bytes"
     from edit_spec import get_spec
     assert get_spec(record["id"])["status"] == "waiting_for_editor"
-    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "agents" / record["id"]).exists()
-    assert record["id"] not in {item["id"] for item in outbox_status()["doors"]["agent"]["pending"]}
+    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "collector" / record["id"]).exists()
+    assert record["id"] not in {item["id"] for item in outbox_status()["doors"]["collector"]["pending"]}
 
     pulled = pull_handoff({"demo": True, "door": "grok", "edit_spec_id": record["id"]})
     assert any(item.get("ok") for item in pulled["imported"])
     assert get_spec(record["id"])["status"] == "received"
-    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "grok" / record["id"]).exists()
+    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "editor" / record["id"]).exists()
     assert materials_status()["pending_count"] == 0
 
 
@@ -129,7 +129,7 @@ def test_watcher_skips_materials_tree(tmp_path):
     (tmp_path / "materials" / "spec-id" / "manifest.json").write_text("{}", encoding="utf-8")
     (tmp_path / "grok" / "cut-pkg").mkdir(parents=True)
     names = [
-        f"{p.parent.name}/{p.name}" if p.parent.name in {"grok", "agents"} else p.name
+        f"{p.parent.name}/{p.name}" if p.parent.name in {"editor", "collector", "grok", "agents", "agent"} else p.name
         for p in hw.pending_folders(tmp_path, processed=set())
     ]
     assert names == ["grok/cut-pkg"]

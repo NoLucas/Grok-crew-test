@@ -2,12 +2,14 @@
 
 Two doors, never mixed:
 
-- Grok: local_studio/workspace/handoff-outbox/grok/{spec_id}/
-- Other agents: local_studio/workspace/handoff-outbox/agents/{spec_id}/
+- Editor: local_studio/workspace/handoff-outbox/editor/{spec_id}/
+- Collector: local_studio/workspace/handoff-outbox/collector/{spec_id}/
 
-A remote bot never calls this PC. It reads spec.json from its door (local folder
-or git prefix outbox/grok, outbox/agents), then returns a package to the matching
-inbox. Git push is optional and never blocks saving a spec.
+Leftover grok/ and agents/ folders are still read. New writes go only to
+editor/ and collector/. A remote bot never calls this PC. It reads spec.json
+from its door (local folder or git prefix outbox/editor, outbox/collector),
+then returns a package to the matching inbox. Git push is optional and never
+blocks saving a spec.
 """
 
 from __future__ import annotations
@@ -20,18 +22,27 @@ from pathlib import Path
 from typing import Any
 
 import config
-from edit_spec import default_agent_for_door, get_spec, normalize_door, spec_brief
+from edit_spec import (
+    COLLECTOR_DOOR,
+    DOORS,
+    EDITOR_DOOR,
+    default_agent_for_door,
+    door_folder,
+    door_folder_aliases,
+    get_spec,
+    normalize_door,
+    spec_brief,
+)
 
 OUTBOX_SCHEMA = "grok-crew.outbox-spec/v1"
-DOOR_FOLDERS = {"grok": "grok", "agent": "agents"}
-RESERVED = {".git", ".processed", "grok", "agents", "outbox"}
+RESERVED = {".git", ".processed", "editor", "collector", "grok", "agents", "agent", "outbox"}
 
 
 def local_outbox_dir() -> Path:
     path = (config.WORKSPACE_DIR / "handoff-outbox").resolve()
     path.mkdir(parents=True, exist_ok=True)
     (path / ".processed").mkdir(parents=True, exist_ok=True)
-    for folder in DOOR_FOLDERS.values():
+    for folder in (door_folder(EDITOR_DOOR), door_folder(COLLECTOR_DOOR)):
         door_dir = path / folder
         door_dir.mkdir(parents=True, exist_ok=True)
         (door_dir / ".processed").mkdir(parents=True, exist_ok=True)
@@ -40,7 +51,7 @@ def local_outbox_dir() -> Path:
 
 def door_outbox_dir(door: str) -> Path:
     normalized = normalize_door(door, required=True)
-    path = (local_outbox_dir() / DOOR_FOLDERS[normalized]).resolve()
+    path = (local_outbox_dir() / door_folder(normalized)).resolve()
     path.mkdir(parents=True, exist_ok=True)
     (path / ".processed").mkdir(parents=True, exist_ok=True)
     return path
@@ -51,7 +62,7 @@ def outbox_folder(spec_id: str, door: str) -> Path:
 
 
 def _package(record: dict[str, Any], brief_text: str, *, door: str, agent: str, role: str = "") -> dict[str, Any]:
-    folder = DOOR_FOLDERS[door]
+    folder = door_folder(door)
     if role == "collect":
         returned = {
             "kind": "materials",
@@ -83,7 +94,7 @@ def _package(record: dict[str, Any], brief_text: str, *, door: str, agent: str, 
         "id": record["id"],
         "door": door,
         "agent": agent,
-        "role": role or ("edit" if door == "grok" else "collect" if (record.get("spec") or {}).get("crew") else ""),
+        "role": role or ("edit" if door == EDITOR_DOOR else "collect" if (record.get("spec") or {}).get("crew") else ""),
         "status": record.get("status") or "waiting_for_bot",
         "created_at": record.get("created_at"),
         "spec": record.get("spec") or {},
@@ -117,7 +128,7 @@ def write_outbox(
         "agent": payload["agent"],
         "role": payload.get("role") or "",
         "edit_spec_id": record["id"],
-        "git_prefix": f"outbox/{DOOR_FOLDERS[resolved_door]}/{folder.name}",
+        "git_prefix": f"outbox/{door_folder(resolved_door)}/{folder.name}",
     }
     if push_git:
         result["git"] = push_outbox({**result, "path": str(folder)}, door=resolved_door)
@@ -127,8 +138,8 @@ def write_outbox(
 
 
 def write_crew_outbox(record: dict[str, Any], *, push_git: bool = True) -> dict[str, Any]:
-    collect = write_outbox(record, door="agent", role="collect", push_git=push_git)
-    edit = write_outbox(record, door="grok", role="edit", push_git=push_git)
+    collect = write_outbox(record, door=COLLECTOR_DOOR, role="collect", push_git=push_git)
+    edit = write_outbox(record, door=EDITOR_DOOR, role="edit", push_git=push_git)
     return {
         "crew": True,
         "collect": collect,
@@ -139,8 +150,19 @@ def write_crew_outbox(record: dict[str, Any], *, push_git: bool = True) -> dict[
 
 
 def pending_outbox_folders(door: str) -> list[Path]:
-    root = door_outbox_dir(door)
-    return [item for item in sorted(root.iterdir()) if item.is_dir() and item.name not in {".git", ".processed"}]
+    root = local_outbox_dir()
+    seen: set[str] = set()
+    folders: list[Path] = []
+    for alias in door_folder_aliases(door):
+        door_dir = root / alias
+        if not door_dir.is_dir():
+            continue
+        for item in sorted(door_dir.iterdir()):
+            if not item.is_dir() or item.name in {".git", ".processed"} or item.name in seen:
+                continue
+            seen.add(item.name)
+            folders.append(item)
+    return folders
 
 
 def _read_outbox_item(folder: Path) -> dict[str, Any]:
@@ -173,55 +195,58 @@ def _door_outbox_status(door: str) -> dict[str, Any]:
     return {
         "door": door,
         "outbox_dir": str(door_outbox_dir(door)),
-        "git_prefix": f"outbox/{DOOR_FOLDERS[door]}/",
+        "git_prefix": f"outbox/{door_folder(door)}/",
         "pending_count": len(folders),
         "pending": [_read_outbox_item(item) for item in folders],
     }
 
 
 def outbox_status() -> dict[str, Any]:
-    grok = _door_outbox_status("grok")
-    agent = _door_outbox_status("agent")
+    editor = _door_outbox_status(EDITOR_DOOR)
+    collector = _door_outbox_status(COLLECTOR_DOOR)
     remote = str(os.getenv("HANDOFF_REPO_REMOTE") or "").strip()
     return {
         "schema": "grok-crew.outbox-status/v1",
         "outbox_dir": str(local_outbox_dir()),
-        "pending_count": grok["pending_count"] + agent["pending_count"],
-        "doors": {"grok": grok, "agent": agent},
+        "pending_count": editor["pending_count"] + collector["pending_count"],
+        "doors": {EDITOR_DOOR: editor, COLLECTOR_DOOR: collector},
         "git_configured": bool(remote),
         "note": (
-            "On a crew spec the collector reads handoff-outbox/agents and drops clips "
-            "in handoff-materials. The editor reads handoff-outbox/grok, then those clips, "
-            "and returns the cut to handoff-inbox/grok."
+            "On a crew spec the collector reads handoff-outbox/collector and drops clips "
+            "in handoff-materials. The editor reads handoff-outbox/editor, then those clips, "
+            "and returns the cut to handoff-inbox/editor. Leftover grok/ and agents/ folders are still read."
         ),
     }
 
 
 def find_outbox_folder(spec_id: str, door: str | None = None) -> Path | None:
-    doors = [normalize_door(door, required=True)] if door else ["grok", "agent"]
+    doors = [normalize_door(door, required=True)] if door else list(DOORS)
     for item in doors:
-        folder = outbox_folder(spec_id, item)
-        if folder.is_dir():
-            return folder
-        processed = door_outbox_dir(item) / ".processed" / spec_id
-        if processed.is_dir():
-            return None
+        for alias in door_folder_aliases(item):
+            folder = local_outbox_dir() / alias / spec_id
+            if folder.is_dir():
+                return folder
+            processed = local_outbox_dir() / alias / ".processed" / spec_id
+            if processed.is_dir():
+                return None
     return None
 
 
 def archive_outbox(spec_id: str, door: str | None = None) -> dict[str, Any] | None:
-    doors = [normalize_door(door, required=True)] if door else ["grok", "agent"]
+    doors = [normalize_door(door, required=True)] if door else list(DOORS)
     archived: list[dict[str, Any]] = []
     for item in doors:
-        folder = outbox_folder(spec_id, item)
-        if not folder.is_dir():
-            continue
-        processed = door_outbox_dir(item) / ".processed" / folder.name
-        if processed.exists():
-            shutil.rmtree(processed)
-        shutil.move(str(folder), str(processed))
-        git = _remove_outbox_from_git(spec_id, item)
-        archived.append({"folder": folder.name, "door": item, "path": str(processed), "git": git})
+        for alias in door_folder_aliases(item):
+            folder = local_outbox_dir() / alias / spec_id
+            if not folder.is_dir():
+                continue
+            processed = local_outbox_dir() / alias / ".processed" / folder.name
+            processed.parent.mkdir(parents=True, exist_ok=True)
+            if processed.exists():
+                shutil.rmtree(processed)
+            shutil.move(str(folder), str(processed))
+            git = _remove_outbox_from_git(spec_id, item)
+            archived.append({"folder": folder.name, "door": item, "path": str(processed), "git": git})
     if not archived:
         return None
     if len(archived) == 1:
@@ -280,23 +305,23 @@ def push_outbox(item: dict[str, Any] | None = None, *, door: str | None = None) 
         mirror = _ensure_mirror(remote, branch)
         copied: list[str] = []
         if item and item.get("path") and item.get("folder"):
-            resolved = normalize_door(door or item.get("door") or "grok", required=True)
-            dest = mirror / "outbox" / DOOR_FOLDERS[resolved] / str(item["folder"])
+            resolved = normalize_door(door or item.get("door") or EDITOR_DOOR, required=True)
+            dest = mirror / "outbox" / door_folder(resolved) / str(item["folder"])
             dest.parent.mkdir(parents=True, exist_ok=True)
             if dest.exists():
                 shutil.rmtree(dest)
             shutil.copytree(item["path"], dest)
-            copied.append(f"outbox/{DOOR_FOLDERS[resolved]}/{item['folder']}")
+            copied.append(f"outbox/{door_folder(resolved)}/{item['folder']}")
         else:
-            doors = [normalize_door(door, required=True)] if door else ["grok", "agent"]
+            doors = [normalize_door(door, required=True)] if door else list(DOORS)
             for item_door in doors:
                 for folder in pending_outbox_folders(item_door):
-                    dest = mirror / "outbox" / DOOR_FOLDERS[item_door] / folder.name
+                    dest = mirror / "outbox" / door_folder(item_door) / folder.name
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     if dest.exists():
                         shutil.rmtree(dest)
                     shutil.copytree(folder, dest)
-                    copied.append(f"outbox/{DOOR_FOLDERS[item_door]}/{folder.name}")
+                    copied.append(f"outbox/{door_folder(item_door)}/{folder.name}")
         if not copied:
             return {"ok": True, "remote": remote, "branch": branch, "copied": [], "note": "No pending outbox specs to push."}
         _commit_and_push(mirror, branch, f"Outbox {', '.join(copied)}")
@@ -312,14 +337,19 @@ def _remove_outbox_from_git(spec_id: str, door: str) -> dict[str, Any]:
     branch = str(os.getenv("HANDOFF_BRANCH") or "handoff-inbox").strip() or "handoff-inbox"
     try:
         mirror = _ensure_mirror(remote, branch)
-        dest = mirror / "outbox" / DOOR_FOLDERS[door] / spec_id
-        if not dest.exists():
+        removed: list[str] = []
+        for alias in door_folder_aliases(door):
+            dest = mirror / "outbox" / alias / spec_id
+            if not dest.exists():
+                continue
+            remove = _run_git(["rm", "-r", "-q", str(dest.relative_to(mirror))], cwd=mirror)
+            if remove.returncode != 0:
+                raise RuntimeError(remove.stderr.strip() or "Could not remove the fulfilled spec from git.")
+            removed.append(f"outbox/{alias}/{spec_id}")
+        if not removed:
             return {"ok": True, "skipped": True, "reason": "already absent from git outbox"}
-        remove = _run_git(["rm", "-r", "-q", str(dest.relative_to(mirror))], cwd=mirror)
-        if remove.returncode != 0:
-            raise RuntimeError(remove.stderr.strip() or "Could not remove the fulfilled spec from git.")
-        _commit_and_push(mirror, branch, f"Fulfilled outbox {DOOR_FOLDERS[door]}/{spec_id}")
-        return {"ok": True, "removed": f"outbox/{DOOR_FOLDERS[door]}/{spec_id}"}
+        _commit_and_push(mirror, branch, f"Fulfilled outbox {', '.join(removed)}")
+        return {"ok": True, "removed": removed[0] if len(removed) == 1 else removed}
     except (RuntimeError, OSError) as exc:
         return {"ok": False, "reason": str(exc)}
 

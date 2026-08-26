@@ -100,7 +100,8 @@ def sync_mirror(remote: str, branch: str) -> Path:
     return MIRROR_DIR
 
 
-RESERVED_MIRROR_NAMES = {".git", ".processed", "grok", "agents", "outbox", "materials"}
+RESERVED_MIRROR_NAMES = {".git", ".processed", "editor", "collector", "grok", "agents", "agent", "outbox", "materials"}
+DOOR_MIRROR_FOLDERS = ("editor", "collector", "grok", "agents", "agent")
 
 
 def pending_folders(mirror: Path, processed: set[str]) -> list[Path]:
@@ -110,7 +111,7 @@ def pending_folders(mirror: Path, processed: set[str]) -> list[Path]:
             continue
         if item.name not in processed:
             folders.append(item)
-    for door_name in ("grok", "agents"):
+    for door_name in DOOR_MIRROR_FOLDERS:
         door_dir = mirror / door_name
         if not door_dir.is_dir():
             continue
@@ -198,14 +199,14 @@ def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, 
         log(f"Skipping {folder.name}: bundle.project.source_path is required.")
         return
     try:
+        from edit_spec import EDITOR_DOOR, normalize_door
+
         package_door = infer_package_door(project, folder)
         location = folder.parent.name.lower()
-        if location == "agents":
-            location_door = "agent"
-        elif location == "grok":
-            location_door = "grok"
-        else:
-            location_door = "grok"
+        try:
+            location_door = normalize_door(location, required=True)
+        except ValueError:
+            location_door = EDITOR_DOOR
         if package_door != location_door:
             log(f"Skipping {folder.name}: package door {package_door} does not match this inbox ({location_door}).")
             return

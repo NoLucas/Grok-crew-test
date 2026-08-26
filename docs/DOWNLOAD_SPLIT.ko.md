@@ -34,7 +34,7 @@
 | 사이트 버튼 | 크게 **내 컴퓨터에 설치**, 작게 **봇에게 줄 파일**, 막히면 **그림 설명서** |
 | 책상 안 | 연 뒤에도 **봇에게 줄 파일 받기** |
 | 봇 zip 역할 | 이미 켜진 책상에 체크인하는 글 + 스크립트. 두 번째 창을 띄우지 않음 |
-| 뒤 폴더 | `handoff-outbox/grok`, `handoff-outbox/agents`는 그대로. 사람에게 보여 주지 않음 |
+| 뒤 폴더 | `handoff-outbox/editor`, `handoff-outbox/collector`. 예전 `grok/`·`agents/`는 읽기만. 사람에게 보여 주지 않음 |
 
 ## 사람이 보는 최종 경로
 

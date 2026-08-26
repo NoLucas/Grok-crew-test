@@ -63,10 +63,10 @@ def test_own_mode_skips_collector_outbox(studio, tmp_path):
     assert record["source_mode"] == "own"
     assert record["status"] == "waiting_for_editor"
     assert record["spec"]["source"]["owner"] == "operator"
-    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "agents" / record["id"]).exists()
-    assert (config.WORKSPACE_DIR / "handoff-outbox" / "grok" / record["id"] / "spec.json").is_file()
-    assert record["id"] not in {item["id"] for item in outbox_status()["doors"]["agent"]["pending"]}
-    assert record["id"] in {item["id"] for item in outbox_status()["doors"]["grok"]["pending"]}
+    assert not (config.WORKSPACE_DIR / "handoff-outbox" / "collector" / record["id"]).exists()
+    assert (config.WORKSPACE_DIR / "handoff-outbox" / "editor" / record["id"] / "spec.json").is_file()
+    assert record["id"] not in {item["id"] for item in outbox_status()["doors"]["collector"]["pending"]}
+    assert record["id"] in {item["id"] for item in outbox_status()["doors"]["editor"]["pending"]}
     folder = config.WORKSPACE_DIR / "handoff-materials" / record["id"]
     payload = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
     assert payload["clips"][0]["origin"] == "owned"
@@ -92,7 +92,7 @@ def test_own_and_collect_keeps_owned_when_collector_arrives(studio, tmp_path):
     })
     assert record["crew"] is True
     assert record["status"] == "waiting_for_collector"
-    assert (config.WORKSPACE_DIR / "handoff-outbox" / "agents" / record["id"]).exists()
+    assert (config.WORKSPACE_DIR / "handoff-outbox" / "collector" / record["id"]).exists()
     incoming = tmp_path / "collected"
     incoming.mkdir()
     (incoming / "broll.mp4").write_bytes(b"b-roll")

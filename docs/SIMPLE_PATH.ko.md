@@ -98,7 +98,7 @@
 - [x] `edit_spec.py`에 `spec_invite(id, language)`를 둔다. 제목, 레시피 한 줄, 인박스 절대경로, 루프백 CLI 한 줄.
 - [x] `GET /api/v2/edit-specs/{id}/invite`를 `handlers.py`에 붙인다.
 - [x] 짧은 책상의 복사가 저장 뒤 이 글을 클립보드에 넣는다. 성공하면 “봇 창에 붙여 넣으세요.”
-- [x] 테스트: 한 봇 규격을 만들고 초대문에 제목과 `handoff-inbox/grok`이 있는지. `local_studio/grok_crew.py` 클론 경로가 없는지.
+- [x] 테스트: 한 봇 규격을 만들고 초대문에 제목과 `handoff-inbox/editor`이 있는지. `local_studio/grok_crew.py` 클론 경로가 없는지.
 
 건드리는 곳: `local_studio/edit_spec.py`, `handlers.py`, `tests/test_edit_spec.py`, 짧은 책상.
 
@@ -112,7 +112,7 @@ A판 UI가 실수로 `crew: true`를 보내면 다시 길어진다.
 
 - [x] 짧은 책장 POST 본문에 `source_mode: "bot"`을 명시한다. `crew`는 넣지 않거나 false.
 - [x] 파일을 고른 뒤에만 `source_mode: "own"`이거나, 아예 봇 없이 타임라인만 연다. 기본 경로는 후자다.
-- [x] `normalize_spec` 기본은 이미 `bot`이다. 테스트를 잠근다: crew 없이 저장 → `waiting_for_bot`, 보낼함은 `handoff-outbox/grok`만.
+- [x] `normalize_spec` 기본은 이미 `bot`이다. 테스트를 잠근다: crew 없이 저장 → `waiting_for_bot`, 보낼함은 `handoff-outbox/editor`만.
 - [x] 자세히 책장의 collect 기본은 유지한다. 짧은 책장이 덮지 않는다.
 
 완료: 짧은 책장으로 저장한 규격은 수집 보낼함이 비어 있다.
@@ -121,7 +121,7 @@ A판 UI가 실수로 `crew: true`를 보내면 다시 길어진다.
 
 할 일:
 
-- [x] `desktop-workspace.tsx`의 5초 새로고침에서 `handoff.doors.grok.pending_count > 0`이면 `POST /api/v2/handoff/pull` `{ door: "grok" }`를 한 번 호출한다.
+- [x] `desktop-workspace.tsx`의 5초 새로고침에서 `handoff.doors.editor.pending_count > 0`이면 `POST /api/v2/handoff/pull` `{ door: "editor" }`를 한 번 호출한다.
 - [x] 가져온 `project.id`가 있으면 그 프로젝트를 연다. “○○이 넘긴 컷을 열었습니다.”
 - [x] 같은 폴더를 5초마다 두 번 pull하지 않게, 진행 중 플래그를 둔다.
 - [x] 짧은 책장에는 받기 버튼을 두지 않는다. 자세히 책장의 받기·예시는 그대로 둬도 된다.
@@ -200,7 +200,7 @@ A 없이 F만 하면 받은 사람이 다시 긴 책장을 본다. F 없이 A–
 - 짧은 책장에 수집/편집 이름을 다시 넣기
 - 기본 저장을 `crew: true` / `collect`로 보내기
 - 자동 pull을 `agents/` 문까지 넓히기
-- 초대문에 git clone, `handoff-outbox/agents`, purpose 선택지를 사람 문장으로 설명하기
+- 초대문에 git clone, `handoff-outbox/collector`, purpose 선택지를 사람 문장으로 설명하기
 - 다운로드 페이지에 봇 zip을 기본 버튼으로 두기
 - Instagram 앱, Mac 공증, loopback을 인터넷에 열기
 - 문 폴더 이름 `grok/` · `agents/` 변경
