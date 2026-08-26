@@ -13,6 +13,9 @@ type EditSpec = {
   goal: string;
   door?: string;
   agent?: string;
+  crew?: boolean;
+  collector?: { agent?: string; door?: string };
+  editor?: { agent?: string; door?: string };
   spec?: {
     platform?: string;
     duration_seconds?: { min?: number; max?: number };
@@ -20,6 +23,9 @@ type EditSpec = {
     look?: string;
     door?: string;
     agent?: string;
+    crew?: boolean;
+    collector?: { agent?: string };
+    editor?: { agent?: string };
   };
 };
 
@@ -32,6 +38,7 @@ type OutboxItem = {
   id?: string;
   title?: string;
   agent?: string;
+  role?: string;
   path?: string;
 };
 
@@ -40,6 +47,11 @@ type OutboxDoor = {
   outbox_dir?: string;
   git_prefix?: string;
   pending?: OutboxItem[];
+};
+
+type MaterialsStatus = {
+  pending_count?: number;
+  pending?: Array<{ id?: string; agent?: string; clip_count?: number }>;
 };
 
 type HandoffStatus = {
@@ -57,6 +69,7 @@ type HandoffStatus = {
       agent?: OutboxDoor;
     };
   };
+  materials?: MaterialsStatus;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -74,7 +87,7 @@ type SpecDeskProps = {
   request: (path: string, init?: RequestInit) => Promise<JsonObject>;
 };
 
-type DoorDraft = {
+type CrewDraft = {
   title: string;
   goal: string;
   platform: string;
@@ -84,10 +97,10 @@ type DoorDraft = {
   look: string;
   must_keep: string;
   must_drop: string;
-  agent: string;
+  collector: string;
 };
 
-const emptyDraft = (door: DoorId): DoorDraft => ({
+const emptyDraft = (): CrewDraft => ({
   title: '',
   goal: '',
   platform: 'reels_tiktok_shorts',
@@ -97,55 +110,43 @@ const emptyDraft = (door: DoorId): DoorDraft => ({
   look: '',
   must_keep: '',
   must_drop: '',
-  agent: door === 'grok' ? 'Grok' : '',
+  collector: 'Claude',
 });
 
-function specDoor(item: EditSpec): DoorId {
-  const value = item.door || item.spec?.door || 'grok';
-  return value === 'agent' ? 'agent' : 'grok';
+function isCrew(item: EditSpec): boolean {
+  return Boolean(item.crew || item.spec?.crew);
 }
 
-function DoorCard({
-  door,
+export function SpecDesk({
   specs,
-  pendingCount,
-  outbox,
-  gitConfigured,
+  handoff,
   busy,
   studioReady,
+  sampleAvailable,
+  onOpenSample,
+  onOpenOwnFootage,
   onImported,
   onRefresh,
   request,
-}: {
-  door: DoorId;
-  specs: EditSpec[];
-  pendingCount: number;
-  outbox?: OutboxDoor;
-  gitConfigured: boolean;
-  busy: boolean;
-  studioReady: boolean;
-  onImported: (projectId: string, sender?: { door: DoorId; agent: string }) => Promise<void>;
-  onRefresh: () => Promise<void>;
-  request: (path: string, init?: RequestInit) => Promise<JsonObject>;
-}) {
+}: SpecDeskProps) {
   const { language, t } = useLanguage();
-  const [draft, setDraft] = useState<DoorDraft>(() => emptyDraft(door));
-  const [brief, setBrief] = useState('');
+  const [draft, setDraft] = useState<CrewDraft>(emptyDraft);
+  const [collectBrief, setCollectBrief] = useState('');
+  const [editBrief, setEditBrief] = useState('');
   const [activeSpecId, setActiveSpecId] = useState('');
   const [saving, setSaving] = useState(false);
   const [pulling, setPulling] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState('');
   const [error, setError] = useState('');
   const [outboxNotice, setOutboxNotice] = useState('');
 
-  const waiting = useMemo(
-    () => specs.filter((item) => item.status === 'waiting_for_bot' && specDoor(item) === door),
-    [specs, door],
-  );
-  const received = useMemo(
-    () => specs.filter((item) => item.status === 'received' && specDoor(item) === door),
-    [specs, door],
-  );
+  const crewSpecs = useMemo(() => specs.filter((item) => isCrew(item)), [specs]);
+  const collecting = crewSpecs.filter((item) => item.status === 'waiting_for_collector');
+  const editing = crewSpecs.filter((item) => item.status === 'waiting_for_editor' || item.status === 'waiting_for_bot');
+  const received = crewSpecs.filter((item) => item.status === 'received');
+  const active = crewSpecs.find((item) => item.id === activeSpecId) || collecting[0] || editing[0] || received[0];
+  const collectorName = active?.collector?.agent || active?.spec?.collector?.agent || draft.collector || 'Claude';
+  const materialsCount = handoff?.materials?.pending_count ?? 0;
 
   const saveSpec = async () => {
     setSaving(true);
@@ -164,20 +165,26 @@ function DoorCard({
           must_drop: draft.must_drop.trim(),
           upload: false,
           language,
-          door,
-          agent: door === 'grok' ? 'Grok' : draft.agent.trim() || 'agent',
+          crew: true,
+          collector: draft.collector.trim() || 'Claude',
+          editor: 'Grok',
         }),
       });
-      const record = created.edit_spec as EditSpec & { outbox?: { path?: string; git_prefix?: string; git?: { ok?: boolean; skipped?: boolean; reason?: string } } };
-      const printed = await request(`/api/v2/edit-specs/${record.id}/brief`);
+      const record = created.edit_spec as EditSpec & {
+        outbox?: {
+          collect?: { path?: string; git?: { ok?: boolean } };
+          edit?: { path?: string; git?: { ok?: boolean } };
+        };
+      };
+      const collectPrinted = await request(`/api/v2/edit-specs/${record.id}/brief?role=collect`);
+      const editPrinted = await request(`/api/v2/edit-specs/${record.id}/brief?role=edit`);
       setActiveSpecId(record.id);
-      setBrief(String(printed.text || ''));
-      const outboxPath = record.outbox?.path || '';
-      const git = record.outbox?.git;
-      if (outboxPath && git?.ok) {
-        setOutboxNotice(t(`보낼함에 올렸고 git에도 올렸습니다. 봇은 ${record.outbox?.git_prefix} 에서 spec.json 을 읽습니다.`, `Placed in the outbox and pushed to git. The bot reads spec.json under ${record.outbox?.git_prefix}.`, `已放入发件箱并推到 git。机器人从 ${record.outbox?.git_prefix} 读取 spec.json。`, `送信箱に入れ、git にも上げました。ボットは ${record.outbox?.git_prefix} の spec.json を読みます。`));
-      } else if (outboxPath) {
-        setOutboxNotice(t(`보낼함에 올렸습니다. ${outboxPath}`, `Placed in the outbox. ${outboxPath}`, `已放入发件箱。${outboxPath}`, `送信箱に入れました。${outboxPath}`));
+      setCollectBrief(String(collectPrinted.text || ''));
+      setEditBrief(String(editPrinted.text || ''));
+      if (record.outbox?.collect?.git?.ok && record.outbox?.edit?.git?.ok) {
+        setOutboxNotice(t('두 보낼함에 올렸고 git에도 올렸습니다. 수집 봇은 outbox/agents, 편집 봇은 outbox/grok 에서 spec.json 을 읽습니다.', 'Placed in both outboxes and pushed to git. The collector reads outbox/agents; the editor reads outbox/grok.', '已放入两个发件箱并推到 git。收集机器人读 outbox/agents，剪辑机器人读 outbox/grok。', '両方の送信箱に入れ、git にも上げました。収集は outbox/agents、編集は outbox/grok を読む。'));
+      } else {
+        setOutboxNotice(t('두 보낼함에 올렸습니다. 수집 봇은 handoff-outbox/agents, 편집 봇은 handoff-outbox/grok.', 'Placed in both outboxes. Collector: handoff-outbox/agents. Editor: handoff-outbox/grok.', '已放入两个发件箱。收集：handoff-outbox/agents。剪辑：handoff-outbox/grok。', '両方の送信箱に入れました。収集は handoff-outbox/agents、編集は handoff-outbox/grok。'));
       }
       await onRefresh();
     } catch (caught) {
@@ -187,43 +194,58 @@ function DoorCard({
     }
   };
 
-  const copyBrief = async () => {
-    if (!brief) return;
+  const copyBrief = async (text: string, key: string) => {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(brief);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      window.setTimeout(() => setCopied(''), 2000);
     } catch {
       setError(t('복사하지 못했습니다. 글을 직접 선택하세요.', 'Could not copy. Select the text instead.', '无法复制。请自行选择文字。', 'コピーできません。テキストを選択してください。'));
     }
   };
 
-  const receiveBotCut = async (demo: boolean) => {
+  const receiveMaterials = async (demo: boolean) => {
     setPulling(true);
     setError('');
     try {
+      const specId = activeSpecId || collecting[0]?.id || editing[0]?.id || '';
+      const result = await request('/api/v2/handoff/materials/pull', {
+        method: 'POST',
+        body: JSON.stringify({ demo, edit_spec_id: specId }),
+      });
+      const imported = Array.isArray(result.imported) ? result.imported : [];
+      if (!imported.length) {
+        setError(demo
+          ? t('예시 자료를 만들지 못했습니다.', 'Could not write demo materials.', '无法写入示例素材。', 'デモ素材を作れませんでした。')
+          : t('아직 수집 봇이 넘긴 자료가 없습니다.', 'No collector materials yet.', '还没有收集到的素材。', '収集素材はまだありません。'));
+      }
+      await onRefresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('자료를 받지 못했습니다.', 'Could not receive materials.', '无法接收素材。', '素材を受け取れませんでした。'));
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  const receiveCut = async (demo: boolean) => {
+    setPulling(true);
+    setError('');
+    try {
+      const specId = activeSpecId || editing[0]?.id || collecting[0]?.id || '';
       const result = await request('/api/v2/handoff/pull', {
         method: 'POST',
-        body: JSON.stringify({
-          demo,
-          door,
-          edit_spec_id: activeSpecId || waiting[0]?.id || '',
-        }),
+        body: JSON.stringify({ demo, door: 'grok', edit_spec_id: specId }),
       });
       const imported = Array.isArray(result.imported) ? result.imported as Array<{ project?: { id?: string; handoff_agent?: string }; agent?: string; door?: string }> : [];
       const projectId = imported[0]?.project?.id;
       if (projectId) {
-        const agent = String(imported[0]?.agent || imported[0]?.project?.handoff_agent || (door === 'grok' ? 'Grok' : 'agent'));
-        await onImported(projectId, { door, agent });
+        await onImported(projectId, { door: 'grok', agent: String(imported[0]?.agent || 'Grok') });
         return;
       }
-      if (demo) {
-        setError(t('예시 패키지를 만들지 못했습니다.', 'Could not write the demo package.', '无法写入示例包。', 'デモパッケージを作れませんでした。'));
-      } else {
-        setError(door === 'grok'
-          ? t('아직 Grok이 넘긴 폴더가 없습니다. 글을 복사해 다른 컴퓨터의 Grok에게 주세요.', 'No Grok package yet. Copy the brief and give it to Grok on another computer.', '还没有 Grok 包。请复制说明并交给另一台电脑上的 Grok。', 'Grok の包はまだありません。文をコピーして別のパソコンの Grok に渡してください。')
-          : t('아직 다른 에이전트가 넘긴 폴더가 없습니다. 글을 복사해 Claude·Codex·ChatGPT에게 주세요.', 'No other-agent package yet. Copy the brief and give it to Claude, Codex, or ChatGPT.', '还没有其他代理包。请复制说明并交给 Claude、Codex 或 ChatGPT。', '他エージェントの包はまだありません。文をコピーして Claude・Codex・ChatGPT に渡してください。'));
-      }
+      setError(demo
+        ? t('예시 컷을 만들지 못했습니다.', 'Could not write the demo cut.', '无法写入示例剪辑。', 'デモカットを作れませんでした。')
+        : t('아직 Grok이 넘긴 컷이 없습니다. 자료가 온 뒤 편집 봇이 돌려줍니다.', 'No editor cut yet. The editor returns it after materials arrive.', '还没有剪辑。素材到了之后由剪辑机器人交回。', 'カットはまだありません。素材のあと編集ボットが返します。'));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('받지 못했습니다.', 'Could not receive the package.', '无法接收。', '受け取れませんでした。'));
     } finally {
@@ -232,20 +254,13 @@ function DoorCard({
   };
 
   const locked = busy || saving || pulling || !studioReady;
-  const grokDoor = door === 'grok';
 
   return (
-    <section className={`desktop-spec-door ${grokDoor ? 'is-grok' : 'is-agent'}`}>
-      <div className="desktop-spec-door-head">
-        <span>{grokDoor ? 'Grok' : t('다른 에이전트', 'Other agents', '其他代理', '他のエージェント')}</span>
-        <div>
-          <b>{grokDoor
-            ? t('Grok 전용 문', 'Grok-only door', 'Grok 专用门', 'Grok 専用ドア')
-            : t('다른 에이전트 전용 문', 'Other-agent door', '其他代理专用门', '他エージェント専用ドア')}</b>
-          <small>{grokDoor
-            ? t('Grok만 이 규격을 이행합니다. Runner 페어링도 이 문입니다. agents/ 폴더는 쓰지 마세요.', 'Only Grok fulfills this spec. Runner pairing is this door only. Do not use the agents/ folder.', '只有 Grok 履行此规格。Runner 配对也只用这扇门。不要用 agents/ 文件夹。', 'Grok だけがこの仕様を履行します。Runner ペアリングもこのドアだけ。agents/ は使わない。')
-            : t('Claude, Codex, ChatGPT, Gemini, Cursor. Grok 문과 Runner는 쓰지 마세요.', 'Claude, Codex, ChatGPT, Gemini, Cursor. Do not use the Grok door or Runner.', 'Claude、Codex、ChatGPT、Gemini、Cursor。不要用 Grok 门和 Runner。', 'Claude、Codex、ChatGPT、Gemini、Cursor。Grok ドアと Runner は使わない。')}</small>
-        </div>
+    <div className="desktop-spec-desk">
+      <div className="desktop-spec-hero">
+        <span>✦</span>
+        <h1>{t('봇 두 명이 한 규격을 이어받습니다', 'Two bots share one spec.', '两个机器人接力同一份规格。', 'ボット二人で一つの仕様を引き継ぐ。')}</h1>
+        <p>{t('수집 봇이 자료를 모아 자료함에 두고, Grok이 그 클립만 잘라 인박스로 돌려줍니다. 이 책상은 사이트를 긁지 않습니다. 로그인 벽 뒤의 영상은 수집 봇이 운영자가 쓸 수 있는 것만 가져옵니다.', 'The collector drops clips in the materials box. Grok cuts only those clips and returns the cut. This desk does not scrape sites. The collector may only gather sources you are allowed to use.', '收集机器人把素材放进资料箱，Grok 只剪那些片段再交回收件箱。这个工作台不抓网站。收集机器人只能拿你有权使用的来源。', '収集ボットが素材箱にクリップを置き、Grok はそのクリップだけ切って受信箱に返す。このデスクはサイトを掻かない。収集は使える出典だけ。')}</p>
       </div>
 
       <form className="desktop-spec-form" onSubmit={(event) => { event.preventDefault(); void saveSpec(); }}>
@@ -257,19 +272,17 @@ function DoorCard({
           <span>{t('어떻게 만들까', 'How should it feel', '做成什么样', 'どう作るか')}</span>
           <textarea value={draft.goal} onChange={(event) => setDraft({ ...draft, goal: event.target.value })} placeholder={t('가장 센 대사만 남긴 세로 숏폼. 첫 2초에 훅.', 'A vertical short that keeps only the strongest lines. Hook in the first two seconds.', '只留最有力的几句，竖屏短视频。前两秒要有钩子。', '一番強いセリフだけ残した縦型ショート。最初の2秒でフック。')} rows={3} required />
         </label>
-        {!grokDoor ? (
-          <label className="desktop-spec-field">
-            <span>{t('에이전트 이름', 'Agent name', '代理名称', 'エージェント名')}</span>
-            <input list="agent-names" value={draft.agent} onChange={(event) => setDraft({ ...draft, agent: event.target.value })} placeholder="Claude / Codex / ChatGPT" />
-            <datalist id="agent-names">
-              <option value="Claude" />
-              <option value="Codex" />
-              <option value="ChatGPT" />
-              <option value="Gemini" />
-              <option value="Cursor" />
-            </datalist>
-          </label>
-        ) : null}
+        <label className="desktop-spec-field">
+          <span>{t('수집 봇', 'Collector', '收集机器人', '収集ボット')}</span>
+          <input list="collector-names" value={draft.collector} onChange={(event) => setDraft({ ...draft, collector: event.target.value })} placeholder="Claude / Codex / ChatGPT" />
+          <datalist id="collector-names">
+            <option value="Claude" />
+            <option value="Codex" />
+            <option value="ChatGPT" />
+            <option value="Gemini" />
+            <option value="Cursor" />
+          </datalist>
+        </label>
         <div className="desktop-spec-row">
           <label className="desktop-spec-field">
             <span>{t('형태', 'Shape', '形态', '形')}</span>
@@ -308,107 +321,72 @@ function DoorCard({
           <button type="submit" className="desktop-primary" disabled={locked}>
             {saving
               ? t('저장 중…', 'Saving…', '保存中…', '保存中…')
-              : grokDoor
-                ? t('규격 저장하고 Grok 보낼함에 올리기', 'Save to the Grok outbox', '保存规格并放入 Grok 发件箱', '仕様を保存して Grok 送信箱へ')
-                : t('규격 저장하고 다른 에이전트 보낼함에 올리기', 'Save to the other-agent outbox', '保存规格并放入其他代理发件箱', '仕様を保存して他エージェント送信箱へ')}
+              : t('규격 저장하고 두 보낼함에 올리기', 'Save to both outboxes', '保存规格并放入两个发件箱', '仕様を保存して両方の送信箱へ')}
           </button>
         </div>
       </form>
 
       {outboxNotice ? <p className="desktop-spec-outbox" role="status">{outboxNotice}</p> : null}
 
-      {brief ? (
-        <div className="desktop-spec-brief">
-          <div className="desktop-card-title">
-            <span>02</span>
+      <div className="desktop-spec-doors">
+        <section className="desktop-spec-door is-agent">
+          <div className="desktop-spec-door-head">
+            <span>{t('수집', 'Collect', '收集', '収集')}</span>
             <div>
-              <b>{grokDoor
-                ? t('봇은 보낼함의 spec.json 을 읽습니다', 'The bot reads spec.json from this outbox', '机器人从发件箱读取 spec.json', 'ボットはこの送信箱の spec.json を読む')
-                : t('그 에이전트는 보낼함의 spec.json 을 읽습니다', 'That agent reads spec.json from this outbox', '该代理从发件箱读取 spec.json', 'そのエージェントはこの送信箱の spec.json を読む')}</b>
-              <small>{t('글을 복사하는 것은 예비입니다. 원본 파일은 보내지 않습니다.', 'Copying the text is a backup. Do not send a source file.', '复制文字只是备用。不要发送原片。', '文のコピーは予備。原版は送らない。')}</small>
+              <b>{t(`${collectorName}가 자료를 모읍니다`, `${collectorName} gathers the clips`, `${collectorName} 收集素材`, `${collectorName} が素材を集める`)}</b>
+              <small>{t('사이트를 이 PC에서 긁지 않습니다. 클립과 manifest.json 만 자료함에 둡니다. 컷은 만들지 않습니다.', 'This PC does not scrape. Drop clips and manifest.json in the materials box. Do not make the cut.', '这台电脑不抓站。只把片段和 manifest.json 放进资料箱。不要做成品剪辑。', 'このPCは掻かない。クリップと manifest.json だけ素材箱へ。カットは作らない。')}</small>
             </div>
           </div>
-          <textarea readOnly value={brief} rows={8} />
-        </div>
-      ) : null}
+          {collectBrief ? <textarea readOnly value={collectBrief} rows={7} /> : null}
+          <div className="desktop-spec-actions">
+            {collectBrief ? (
+              <button type="button" className="desktop-secondary" onClick={() => void copyBrief(collectBrief, 'collect')}>
+                {copied === 'collect' ? t('복사됨', 'Copied', '已复制', 'コピー済み') : t('수집 글 복사', 'Copy collector brief', '复制收集说明', '収集文をコピー')}
+              </button>
+            ) : null}
+            <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveMaterials(false)}>
+              {t('수집한 자료 받기', 'Receive collected clips', '接收收集的素材', '収集素材を受け取る')}
+            </button>
+            <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveMaterials(true)}>
+              {t('수집 예시 보기', 'See a collector sample', '查看收集示例', '収集の例を見る')}
+            </button>
+          </div>
+          <p className="desktop-spec-meta">
+            {t(`보낼함 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 자료 ${materialsCount} · 수집 대기 ${collecting.length}`, `${handoff?.outbox?.doors?.agent?.pending_count ?? 0} in collector outbox · ${materialsCount} materials · ${collecting.length} waiting`, `发件箱 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 等待收集 ${collecting.length}`, `送信箱 ${handoff?.outbox?.doors?.agent?.pending_count ?? 0} · 素材 ${materialsCount} · 収集待ち ${collecting.length}`)}
+          </p>
+        </section>
 
-      <div className="desktop-spec-actions">
-        {brief ? (
-          <button type="button" className="desktop-primary" onClick={() => void copyBrief()}>
-            {copied ? t('복사됨', 'Copied', '已复制', 'コピー済み') : t('글 복사', 'Copy the brief', '复制说明', '文をコピー')}
-          </button>
-        ) : null}
-        <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveBotCut(false)}>
-          {grokDoor
-            ? t('Grok이 넘긴 편집 받기', 'Receive the Grok cut', '接收 Grok 剪辑', 'Grok の編集を受け取る')
-            : t('다른 에이전트가 넘긴 편집 받기', 'Receive the other-agent cut', '接收其他代理剪辑', '他エージェントの編集を受け取る')}
-        </button>
-        <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveBotCut(true)}>
-          {t('이 문으로 예시 도착 보기', 'See a sample on this door', '查看此门的示例送达', 'このドアの届き方を見る')}
-        </button>
+        <section className="desktop-spec-door is-grok">
+          <div className="desktop-spec-door-head">
+            <span>Grok</span>
+            <div>
+              <b>{t('Grok이 그 자료만 편집합니다', 'Grok edits those clips only', 'Grok 只剪那些素材', 'Grok はその素材だけ編集する')}</b>
+              <small>{t('자료함의 클립을 잘라 인박스로 돌려줍니다. Runner 페어링도 이 역할입니다.', 'Cuts the materials-box clips and returns them to the inbox. Runner pairing is this role only.', '剪资料箱里的片段并交回收件箱。Runner 配对也只用这个角色。', '素材箱のクリップを切って受信箱に返す。Runner ペアリングもこの役割だけ。')}</small>
+            </div>
+          </div>
+          {editBrief ? <textarea readOnly value={editBrief} rows={7} /> : null}
+          <div className="desktop-spec-actions">
+            {editBrief ? (
+              <button type="button" className="desktop-secondary" onClick={() => void copyBrief(editBrief, 'edit')}>
+                {copied === 'edit' ? t('복사됨', 'Copied', '已复制', 'コピー済み') : t('편집 글 복사', 'Copy editor brief', '复制剪辑说明', '編集文をコピー')}
+              </button>
+            ) : null}
+            <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveCut(false)}>
+              {t('Grok이 넘긴 편집 받기', 'Receive the Grok cut', '接收 Grok 剪辑', 'Grok の編集を受け取る')}
+            </button>
+            <button type="button" className="desktop-secondary" disabled={locked} onClick={() => void receiveCut(true)}>
+              {t('편집 예시 도착 보기', 'See an editor sample', '查看剪辑示例', '編集の届き方を見る')}
+            </button>
+          </div>
+          <p className="desktop-spec-meta">
+            {t(`보낼함 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 편집 대기 ${editing.length} · 받은 컷 ${received.length} · 인박스 ${handoff?.doors?.grok?.pending_count ?? 0}`, `${handoff?.outbox?.doors?.grok?.pending_count ?? 0} in editor outbox · ${editing.length} waiting · ${received.length} received · ${handoff?.doors?.grok?.pending_count ?? 0} inbound`, `发件箱 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 等待剪辑 ${editing.length} · 已收 ${received.length} · 收件 ${handoff?.doors?.grok?.pending_count ?? 0}`, `送信箱 ${handoff?.outbox?.doors?.grok?.pending_count ?? 0} · 編集待ち ${editing.length} · 受取 ${received.length} · 受信 ${handoff?.doors?.grok?.pending_count ?? 0}`)}
+          </p>
+        </section>
       </div>
 
       {error ? <p className="desktop-spec-error" role="alert">{error}</p> : null}
       <p className="desktop-spec-meta">
-        {t(`보낼함 ${outbox?.pending_count ?? 0} · 대기 ${waiting.length} · 받은 컷 ${received.length} · 받을 폴더 ${pendingCount}`, `${outbox?.pending_count ?? 0} in outbox · ${waiting.length} waiting · ${received.length} received · ${pendingCount} inbound`, `发件箱 ${outbox?.pending_count ?? 0} · 等待 ${waiting.length} · 已收 ${received.length} · 收件 ${pendingCount}`, `送信箱 ${outbox?.pending_count ?? 0} · 待ち ${waiting.length} · 受取 ${received.length} · 受信 ${pendingCount}`)}
-        {gitConfigured ? ` · ${t('git 연결됨', 'git is set', '已设置 git', 'git 設定済み')}` : ''}
-        {received[0]?.agent ? ` · ${received.map((item) => item.agent).filter(Boolean).slice(0, 3).join(', ')}` : ''}
-      </p>
-    </section>
-  );
-}
-
-export function SpecDesk({
-  specs,
-  handoff,
-  busy,
-  studioReady,
-  sampleAvailable,
-  onOpenSample,
-  onOpenOwnFootage,
-  onImported,
-  onRefresh,
-  request,
-}: SpecDeskProps) {
-  const { t } = useLanguage();
-
-  return (
-    <div className="desktop-spec-desk">
-      <div className="desktop-spec-hero">
-        <span>✦</span>
-        <h1>{t('규격을 저장하면 그 문 보낼함에 올라갑니다', 'Save the spec. It goes in that door\'s outbox.', '保存规格后会进入那扇门的发件箱。', '仕様を保存すると、そのドアの送信箱に入る。')}</h1>
-        <p>{t('봇이 자기 문 보낼함에서 spec.json 을 가져가 소스와 컷을 만들고, 같은 문 인박스로 돌려줍니다. Grok과 다른 에이전트는 섞이지 않습니다. 글을 복사하는 것은 예비입니다.', 'The bot picks spec.json from its outbox, makes the source and the cut, and returns them to the same door\'s inbox. Grok and other agents stay apart. Copying the text is only a backup.', '机器人从自己的发件箱取 spec.json，做好素材和剪辑后再交回同一扇门的收件箱。Grok 和其他代理不会混用。复制文字只是备用。', 'ボットは自分の送信箱から spec.json を取り、素材とカットを作って同じドアの受信箱に返す。Grok と他エージェントは混ざらない。文のコピーは予備。')}</p>
-      </div>
-
-      <div className="desktop-spec-doors">
-        <DoorCard
-          door="grok"
-          specs={specs}
-          pendingCount={handoff?.doors?.grok?.pending_count ?? 0}
-          outbox={handoff?.outbox?.doors?.grok}
-          gitConfigured={Boolean(handoff?.git_configured || handoff?.outbox?.git_configured)}
-          busy={busy}
-          studioReady={studioReady}
-          onImported={onImported}
-          onRefresh={onRefresh}
-          request={request}
-        />
-        <DoorCard
-          door="agent"
-          specs={specs}
-          pendingCount={handoff?.doors?.agent?.pending_count ?? 0}
-          outbox={handoff?.outbox?.doors?.agent}
-          gitConfigured={Boolean(handoff?.git_configured || handoff?.outbox?.git_configured)}
-          busy={busy}
-          studioReady={studioReady}
-          onImported={onImported}
-          onRefresh={onRefresh}
-          request={request}
-        />
-      </div>
-
-      <p className="desktop-spec-meta">
-        {t('보낼함: handoff-outbox/grok · handoff-outbox/agents · 인박스: handoff-inbox/grok · handoff-inbox/agents', 'Outbox: handoff-outbox/grok · handoff-outbox/agents · Inbox: handoff-inbox/grok · handoff-inbox/agents', '发件箱：handoff-outbox/grok · handoff-outbox/agents · 收件箱：handoff-inbox/grok · handoff-inbox/agents', '送信箱: handoff-outbox/grok · handoff-outbox/agents · 受信箱: handoff-inbox/grok · handoff-inbox/agents')}
+        {t('수집 보낼함: handoff-outbox/agents · 자료함: handoff-materials · 편집 보낼함: handoff-outbox/grok · 컷 인박스: handoff-inbox/grok', 'Collector outbox: handoff-outbox/agents · Materials: handoff-materials · Editor outbox: handoff-outbox/grok · Cut inbox: handoff-inbox/grok', '收集发件箱：handoff-outbox/agents · 资料箱：handoff-materials · 剪辑发件箱：handoff-outbox/grok · 成片收件箱：handoff-inbox/grok', '収集送信箱: handoff-outbox/agents · 素材箱: handoff-materials · 編集送信箱: handoff-outbox/grok · カット受信箱: handoff-inbox/grok')}
       </p>
 
       <details className="desktop-spec-advanced">

@@ -7,6 +7,24 @@
     "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor など Grok 以外。読むのは outbox/agents/。返すパッケージは agents/ の下。grok/ と Runner は使わない。",
     "bot": "自分のドアの送信箱から spec.json を読み、素材を用意して編集し、動画ファイルと edit_spec_id・project.door 入りの bundle.json を同じドアの受信箱へ push する。"
   },
+  "crew": {
+    "purpose": "仕様は一つ、ボットは二人。収集ボットが素材を集め、編集ボットがそのクリップだけ切る。このデスクはサイトを掻かない。",
+    "collector": {
+      "door": "agent",
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
+      "git_drop": "materials/{edit_spec_id}/",
+      "files": ["manifest.json", "source clips"],
+      "do_not": "完成カットを受信箱に入れない。操作者が使ってよい出典だけ集める。"
+    },
+    "editor": {
+      "door": "grok",
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
+      "return": "local_studio/workspace/handoff-inbox/grok/",
+      "git_return": "grok/"
+    }
+  },
   "outbox": {
     "purpose": "操作者が仕様を保存すると、このPCがそのドアの送信箱に spec.json と brief.txt を書く。ボットは自分のドアだけ読む。127.0.0.1 には接続しない。同じドアの受信箱がカットを受け取ると、送信箱フォルダは .processed/ へ移る。",
     "schema": "grok-crew.outbox-spec/v1",

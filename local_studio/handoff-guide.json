@@ -7,6 +7,24 @@
     "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor, or another non-Grok agent. Read outbox/agents/. Return packages under agents/. Do not use grok/ or Runner pairing.",
     "bot": "Read spec.json from your door's outbox, find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id and project.door."
   },
+  "crew": {
+    "purpose": "One spec, two bots. The collector gathers source clips. The editor cuts those clips. This desk does not scrape websites.",
+    "collector": {
+      "door": "agent",
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
+      "git_drop": "materials/{edit_spec_id}/",
+      "files": ["manifest.json", "source clips"],
+      "do_not": "Do not put a finished cut in any inbox. Collect only sources the operator may use."
+    },
+    "editor": {
+      "door": "grok",
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
+      "return": "local_studio/workspace/handoff-inbox/grok/",
+      "git_return": "grok/"
+    }
+  },
   "outbox": {
     "purpose": "The operator saves a spec. This PC writes spec.json and brief.txt into that door's outbox. The bot picks up only its door. It never calls 127.0.0.1. After the matching inbox receives the cut, the outbox folder moves to .processed/.",
     "schema": "grok-crew.outbox-spec/v1",

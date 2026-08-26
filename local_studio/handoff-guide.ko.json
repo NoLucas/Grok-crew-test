@@ -7,6 +7,24 @@
     "other_agent_door": "Claude, Codex, ChatGPT, Gemini, Cursor 등 Grok이 아닌 에이전트. 보낼함은 outbox/agents/. 끝난 패키지는 agents/ 아래. grok/ 와 Runner는 쓰지 마세요.",
     "bot": "자기 문 보낼함의 spec.json 을 읽고, 소스를 구해 편집한 뒤, 영상 파일과 edit_spec_id·project.door가 들어 있는 bundle.json 패키지를 같은 문 인박스로 push합니다."
   },
+  "crew": {
+    "purpose": "규격 하나, 봇 둘. 수집 봇이 자료를 모으고 편집 봇이 그 클립만 자릅니다. 이 책상은 사이트를 긁지 않습니다.",
+    "collector": {
+      "door": "agent",
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
+      "git_drop": "materials/{edit_spec_id}/",
+      "files": ["manifest.json", "소스 클립"],
+      "do_not": "끝난 컷을 인박스에 넣지 마세요. 운영자가 쓸 수 있는 출처만 모으세요."
+    },
+    "editor": {
+      "door": "grok",
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
+      "return": "local_studio/workspace/handoff-inbox/grok/",
+      "git_return": "grok/"
+    }
+  },
   "outbox": {
     "purpose": "운영자가 규격을 저장하면 이 PC가 그 문 보낼함에 spec.json 과 brief.txt 를 씁니다. 봇은 자기 문만 읽습니다. 127.0.0.1 에는 접속하지 않습니다. 같은 문 인박스가 컷을 받으면 보낼함 폴더는 .processed/ 로 옮겨집니다.",
     "schema": "grok-crew.outbox-spec/v1",

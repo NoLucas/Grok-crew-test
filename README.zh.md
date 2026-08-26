@@ -9,7 +9,7 @@
 它不是托管素材的网站。机器人打不开这台电脑，只推送一个包裹。
 
 ```
-你的规格  →  那扇门的发件箱  →  机器人取走 spec.json  →  那扇门的收件箱  →  这台电脑接收  →  你说可以才发布
+你的规格  →  收集发件箱 + 剪辑发件箱  →  收集机器人把片段放进资料箱  →  Grok 只剪那些片段  →  剪辑收件箱  →  这台电脑接收  →  你说可以才发布
 ```
 
 ## 给谁用
@@ -22,7 +22,7 @@
 
 ## 你会看到什么
 
-首屏有**两扇门**。在 Grok 门或其他代理门保存规格后，会进入那扇门的发件箱（`handoff-outbox/grok` 或 `handoff-outbox/agents`）。机器人读取那里的 `spec.json`——git 上则是 `outbox/grok/` / `outbox/agents/`——打不开这台电脑。完成后的 Grok 包裹放进 `handoff-inbox/grok`。Claude、Codex、ChatGPT 等放进 `handoff-inbox/agents`。每个**接收**按钮只导入自己的门，并从发件箱归档该规格。复制文字只是备用。**查看此门的示例送达**会用内置片段演示同一次到达。
+首屏是**两个机器人接力同一份规格**。收集机器人（Claude、Codex、ChatGPT 等）读取 `handoff-outbox/agents`，把片段放进 `handoff-materials`。Grok 读取 `handoff-outbox/grok`，只剪那些片段，再交回 `handoff-inbox/grok`。这个工作台不抓网站。复制说明只是备用。**查看收集示例**和**查看剪辑示例**会用内置片段演示同一次到达。
 
 然后是三个标签：
 

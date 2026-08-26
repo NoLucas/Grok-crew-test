@@ -192,13 +192,19 @@ def build_parser() -> argparse.ArgumentParser:
     spec_create = spec_sub.add_parser("create", help="Save an edit spec from JSON.")
     spec_create.add_argument("--file", required=True)
     spec_create.add_argument("--door", choices=("grok", "agent"), default="", help="Grok door or other-agent door. Overrides the JSON file.")
+    spec_create.add_argument("--crew", action="store_true", help="One spec for a collector and an editor.")
     spec_brief = spec_sub.add_parser("brief", help="Print the text to give that door's bot on another computer.")
     spec_brief.add_argument("--id", required=True)
+    spec_brief.add_argument("--role", choices=("collect", "edit"), default="")
 
     handoff = commands.add_parser("handoff", help="Send specs through the outbox or receive a returned package.")
     handoff_sub = handoff.add_subparsers(dest="command", required=True)
     handoff_sub.add_parser("status", help="Show both door inboxes, outboxes, and whether a git remote is set.")
     handoff_sub.add_parser("outbox", help="List specs waiting in each door's outbox.")
+    handoff_sub.add_parser("materials", help="List clips the collector dropped for the editor.")
+    materials_pull = handoff_sub.add_parser("pull-materials", help="Import collector clips, or write a demo materials pack.")
+    materials_pull.add_argument("--demo", action="store_true")
+    materials_pull.add_argument("--spec-id", default="")
     handoff_push = handoff_sub.add_parser("push-outbox", help="Copy pending outbox specs onto the git handoff remote.")
     handoff_push.add_argument("--door", choices=("grok", "agent"), default="")
     handoff_push.add_argument("--spec-id", default="")
@@ -314,9 +320,14 @@ def main() -> None:
             body = read_json_file(args.file)
             if args.door:
                 body["door"] = args.door
+            if args.crew:
+                body["crew"] = True
             print_json(client.request("/api/v2/edit-specs", body))
         else:
-            print_json(client.request(f"/api/v2/edit-specs/{args.id}/brief"))
+            path = f"/api/v2/edit-specs/{args.id}/brief"
+            if args.role:
+                path += f"?role={args.role}"
+            print_json(client.request(path))
         return
 
     if args.group == "handoff":
@@ -324,6 +335,15 @@ def main() -> None:
             print_json(client.request("/api/v2/handoff"))
         elif args.command == "outbox":
             print_json(client.request("/api/v2/handoff/outbox"))
+        elif args.command == "materials":
+            print_json(client.request("/api/v2/handoff/materials"))
+        elif args.command == "pull-materials":
+            payload = {}
+            if args.demo:
+                payload["demo"] = True
+            if args.spec_id:
+                payload["edit_spec_id"] = args.spec_id
+            print_json(client.request("/api/v2/handoff/materials/pull", payload))
         elif args.command == "push-outbox":
             payload: dict[str, Any] = {}
             if args.door:

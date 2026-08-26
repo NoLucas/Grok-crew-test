@@ -21,6 +21,7 @@ from typing import Any
 
 import config
 from edit_spec import attach_spec_project, get_spec, normalize_agent, normalize_door, resolve_sender
+from handoff_materials import find_materials_clip, materials_status
 from handoff_outbox import outbox_status
 
 BUNDLE_SCHEMA = "local-video-workspace.project-bundle/v1"
@@ -166,16 +167,24 @@ def apply_package_local(
             }
     spec_id = str(project.get("edit_spec_id") or "").strip()
     spec_record = get_spec(spec_id) if spec_id else None
+    spec_payload = spec_record.get("spec") if spec_record and isinstance(spec_record.get("spec"), dict) else {}
     if spec_record:
-        spec_door = normalize_door(spec_record.get("door") or (spec_record.get("spec") or {}).get("door"))
-        if spec_door != package_door:
+        spec_door = normalize_door(spec_record.get("door") or spec_payload.get("door"))
+        if spec_payload.get("crew"):
+            if package_door == "agent":
+                return {
+                    "ok": False,
+                    "folder": folder.name,
+                    "reason": "the collector drops clips in handoff-materials, not a finished cut in the inbox",
+                    "door": package_door,
+                }
+        elif spec_door != package_door:
             return {
                 "ok": False,
                 "folder": folder.name,
                 "reason": f"edit_spec_id belongs to the {spec_door} door, not {package_door}",
                 "door": package_door,
             }
-    spec_payload = spec_record.get("spec") if spec_record and isinstance(spec_record.get("spec"), dict) else {}
     try:
         _door, sender = resolve_sender(
             {**project, "door": package_door},
@@ -264,7 +273,9 @@ def write_demo_package(spec_id: str | None = None, door: str | None = None) -> d
 
     if not provision_sample_media():
         raise ValueError("The bundled sample clip is missing, so a demo package cannot be written.")
-    sample = find_bundled_sample()
+    sample = find_materials_clip(spec_id) if spec_id else None
+    if sample is None:
+        sample = find_bundled_sample()
     if sample is None:
         raise ValueError("The bundled sample clip is missing, so a demo package cannot be written.")
     title = "Bot-delivered cut"
@@ -332,13 +343,14 @@ def handoff_status() -> dict[str, Any]:
         "pending": grok["pending"] + agent["pending"],
         "doors": {"grok": grok, "agent": agent},
         "outbox": outbox_status(),
+        "materials": materials_status(),
         "git_configured": bool(remote),
         "git_remote_set": bool(remote),
         "source_owner": "bot",
         "note": (
-            "Two doors. Specs wait in handoff-outbox/grok or handoff-outbox/agents. "
-            "Finished packages return to handoff-inbox/grok or handoff-inbox/agents. "
-            "A Grok pull never imports the other door."
+            "A crew spec: collector reads outbox/agents and drops clips in handoff-materials. "
+            "Editor reads outbox/grok, cuts those clips, and returns the cut to handoff-inbox/grok. "
+            "A Grok pull never imports the collector inbox."
         ),
     }
 
@@ -354,7 +366,10 @@ def resolve_pull_door(payload: dict[str, Any]) -> str:
     if requested not in (None, ""):
         door = normalize_door(requested, required=True)
         if spec_door and spec_door != door:
-            raise ValueError(f"That spec belongs to the {spec_door} door, not {door}.")
+            record = get_spec(spec_id) if spec_id else None
+            spec = record.get("spec") if record and isinstance(record.get("spec"), dict) else {}
+            if not spec.get("crew"):
+                raise ValueError(f"That spec belongs to the {spec_door} door, not {door}.")
         return door
     return spec_door or "grok"
 
@@ -365,6 +380,12 @@ def pull_handoff(body: dict[str, Any] | None = None) -> dict[str, Any]:
     spec_id = str(payload.get("edit_spec_id") or "").strip() or None
     door = resolve_pull_door(payload)
     written = None
+    record = get_spec(spec_id) if spec_id else None
+    spec = record.get("spec") if record and isinstance(record.get("spec"), dict) else {}
+    if demo and spec.get("crew") and door == "agent":
+        from handoff_materials import pull_materials
+
+        return pull_materials({"demo": True, "edit_spec_id": spec_id})
     if demo:
         written = write_demo_package(spec_id, door=door)
     pulled = pull_local_inbox(door=door)

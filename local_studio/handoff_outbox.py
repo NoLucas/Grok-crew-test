@@ -50,55 +50,92 @@ def outbox_folder(spec_id: str, door: str) -> Path:
     return door_outbox_dir(door) / spec_id
 
 
-def _package(record: dict[str, Any], brief_text: str) -> dict[str, Any]:
-    door = normalize_door(record.get("door") or (record.get("spec") or {}).get("door"))
-    agent = str(record.get("agent") or ("Grok" if door == "grok" else "agent"))
+def _package(record: dict[str, Any], brief_text: str, *, door: str, agent: str, role: str = "") -> dict[str, Any]:
     folder = DOOR_FOLDERS[door]
+    if role == "collect":
+        returned = {
+            "kind": "materials",
+            "box": f"local_studio/workspace/handoff-materials/{record['id']}/",
+            "git_prefix": f"materials/{record['id']}/",
+        }
+        never = [
+            "Do not connect to 127.0.0.1.",
+            "Do not put a finished cut in any inbox.",
+            "Only collect sources the operator may use.",
+            "This desk does not scrape login-walled sites for you.",
+        ]
+    else:
+        returned = {
+            "kind": "cut",
+            "inbox": f"local_studio/workspace/handoff-inbox/{folder}/",
+            "git_prefix": f"{folder}/",
+            "bundle_project_door": door,
+            "created_by": "grok" if door == "grok" else agent,
+        }
+        never = [
+            "Do not connect to 127.0.0.1.",
+            "Do not use the other door's outbox or inbox.",
+        ]
+        if role == "edit":
+            never.append("Read handoff-materials first. Do not hunt a new source unless that box is empty.")
     return {
         "schema": OUTBOX_SCHEMA,
         "id": record["id"],
         "door": door,
         "agent": agent,
+        "role": role or ("edit" if door == "grok" else "collect" if (record.get("spec") or {}).get("crew") else ""),
         "status": record.get("status") or "waiting_for_bot",
         "created_at": record.get("created_at"),
         "spec": record.get("spec") or {},
         "brief": brief_text,
-        "return": {
-            "inbox": f"local_studio/workspace/handoff-inbox/{folder}/",
-            "git_prefix": f"{folder}/",
-            "bundle_project_door": door,
-            "created_by": "grok" if door == "grok" else agent,
-        },
-        "never": [
-            "Do not connect to 127.0.0.1.",
-            "Do not use the other door's outbox or inbox.",
-        ],
+        "return": returned,
+        "never": never,
     }
 
 
-def write_outbox(record: dict[str, Any], *, push_git: bool = True) -> dict[str, Any]:
+def write_outbox(
+    record: dict[str, Any],
+    *,
+    door: str | None = None,
+    role: str | None = None,
+    push_git: bool = True,
+) -> dict[str, Any]:
     if not record or not record.get("id"):
         raise ValueError("Edit spec is missing.")
-    door = normalize_door(record.get("door") or (record.get("spec") or {}).get("door"))
-    printed = spec_brief(record["id"])
-    folder = outbox_folder(record["id"], door)
+    resolved_door = normalize_door(door or record.get("door") or (record.get("spec") or {}).get("door"))
+    printed = spec_brief(record["id"], role=role)
+    agent = str(printed.get("agent") or record.get("agent") or ("Grok" if resolved_door == "grok" else "agent"))
+    folder = outbox_folder(record["id"], resolved_door)
     folder.mkdir(parents=True, exist_ok=True)
-    payload = _package(record, printed["text"])
+    payload = _package(record, printed["text"], door=resolved_door, agent=agent, role=str(printed.get("role") or role or ""))
     (folder / "spec.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (folder / "brief.txt").write_text(printed["text"], encoding="utf-8")
     result = {
         "folder": folder.name,
         "path": str(folder),
-        "door": door,
+        "door": resolved_door,
         "agent": payload["agent"],
+        "role": payload.get("role") or "",
         "edit_spec_id": record["id"],
-        "git_prefix": f"outbox/{DOOR_FOLDERS[door]}/{folder.name}",
+        "git_prefix": f"outbox/{DOOR_FOLDERS[resolved_door]}/{folder.name}",
     }
     if push_git:
-        result["git"] = push_outbox({**result, "path": str(folder)}, door=door)
+        result["git"] = push_outbox({**result, "path": str(folder)}, door=resolved_door)
     else:
         result["git"] = {"ok": False, "skipped": True, "reason": "git push not requested"}
     return result
+
+
+def write_crew_outbox(record: dict[str, Any], *, push_git: bool = True) -> dict[str, Any]:
+    collect = write_outbox(record, door="agent", role="collect", push_git=push_git)
+    edit = write_outbox(record, door="grok", role="edit", push_git=push_git)
+    return {
+        "crew": True,
+        "collect": collect,
+        "edit": edit,
+        "path": collect["path"],
+        "git": {"collect": collect.get("git"), "edit": edit.get("git")},
+    }
 
 
 def pending_outbox_folders(door: str) -> list[Path]:
@@ -110,6 +147,7 @@ def _read_outbox_item(folder: Path) -> dict[str, Any]:
     spec_path = folder / "spec.json"
     title = folder.name
     agent = ""
+    role = ""
     if spec_path.is_file():
         try:
             payload = json.loads(spec_path.read_text(encoding="utf-8"))
@@ -119,10 +157,12 @@ def _read_outbox_item(folder: Path) -> dict[str, Any]:
             spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
             title = str(spec.get("title") or payload.get("id") or title)
             agent = str(payload.get("agent") or "")
+            role = str(payload.get("role") or "")
     return {
         "id": folder.name,
         "title": title,
         "agent": agent,
+        "role": role,
         "path": str(folder),
         "folder": folder.name,
     }
@@ -150,9 +190,9 @@ def outbox_status() -> dict[str, Any]:
         "doors": {"grok": grok, "agent": agent},
         "git_configured": bool(remote),
         "note": (
-            "Bots pick up spec.json from their door only. "
-            "Grok reads handoff-outbox/grok or git outbox/grok/. "
-            "Other agents read handoff-outbox/agents or git outbox/agents/."
+            "On a crew spec the collector reads handoff-outbox/agents and drops clips "
+            "in handoff-materials. The editor reads handoff-outbox/grok, then those clips, "
+            "and returns the cut to handoff-inbox/grok."
         ),
     }
 
@@ -169,17 +209,24 @@ def find_outbox_folder(spec_id: str, door: str | None = None) -> Path | None:
     return None
 
 
-def archive_outbox(spec_id: str) -> dict[str, Any] | None:
-    folder = find_outbox_folder(spec_id)
-    if folder is None:
+def archive_outbox(spec_id: str, door: str | None = None) -> dict[str, Any] | None:
+    doors = [normalize_door(door, required=True)] if door else ["grok", "agent"]
+    archived: list[dict[str, Any]] = []
+    for item in doors:
+        folder = outbox_folder(spec_id, item)
+        if not folder.is_dir():
+            continue
+        processed = door_outbox_dir(item) / ".processed" / folder.name
+        if processed.exists():
+            shutil.rmtree(processed)
+        shutil.move(str(folder), str(processed))
+        git = _remove_outbox_from_git(spec_id, item)
+        archived.append({"folder": folder.name, "door": item, "path": str(processed), "git": git})
+    if not archived:
         return None
-    door = "agent" if folder.parent.name == "agents" else "grok"
-    processed = door_outbox_dir(door) / ".processed" / folder.name
-    if processed.exists():
-        shutil.rmtree(processed)
-    shutil.move(str(folder), str(processed))
-    git = _remove_outbox_from_git(spec_id, door)
-    return {"folder": folder.name, "door": door, "path": str(processed), "git": git}
+    if len(archived) == 1:
+        return archived[0]
+    return {"archived": archived}
 
 
 def _run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

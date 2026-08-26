@@ -9,7 +9,7 @@ You do not have to drop a source file here. You say how it should feel — lengt
 It is not a website that holds your footage. The bot never opens this PC. It only pushes a package.
 
 ```
-your brief  →  that door's outbox  →  the bot picks spec.json  →  that door's inbox  →  this PC receives it  →  post only if you say so
+your brief  →  collector outbox + editor outbox  →  collector drops clips in the materials box  →  Grok cuts those clips  →  editor inbox  →  this PC receives it  →  post only if you say so
 ```
 
 ## Who it is for
@@ -22,7 +22,7 @@ You do not need an account to start.
 
 ## What you see
 
-The first screen has **two doors**. Save the brief on the Grok door or the other-agent door. It goes into that door's outbox (`handoff-outbox/grok` or `handoff-outbox/agents`). The bot reads `spec.json` there — or under `outbox/grok/` / `outbox/agents/` on git — and never opens this PC. Finished Grok packages land in `handoff-inbox/grok`. Claude, Codex, ChatGPT, and the rest land in `handoff-inbox/agents`. Each **Receive** button imports only its own door and archives that spec from the outbox. Copying the text is a backup. **See a sample on this door** shows the same arrival using a bundled clip.
+The first screen saves **one spec for two bots**. The collector (Claude, Codex, ChatGPT, and the rest) reads `handoff-outbox/agents` and drops clips in `handoff-materials`. Grok reads `handoff-outbox/grok`, cuts those clips, and returns the package to `handoff-inbox/grok`. This desk does not scrape websites. Copying the briefs is a backup. **See a collector sample** and **See an editor sample** show the same arrival using a bundled clip.
 
 Then you work in three tabs:
 

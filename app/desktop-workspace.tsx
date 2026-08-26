@@ -86,6 +86,7 @@ type HandoffStatus = {
     git_configured?: boolean;
     doors?: { grok?: OutboxDoorStatus; agent?: OutboxDoorStatus };
   };
+  materials?: { pending_count?: number };
 };
 type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };

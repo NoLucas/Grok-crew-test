@@ -7,6 +7,24 @@
     "other_agent_door": "Claude、Codex、ChatGPT、Gemini、Cursor 等非 Grok 代理。读取 outbox/agents/。交回包裹放在 agents/ 下。不要用 grok/ 或 Runner。",
     "bot": "从自己那扇门的发件箱读取 spec.json，准备原片并剪辑，再把含视频和带 edit_spec_id、project.door 的 bundle.json 的包裹推回同一扇门的收件箱。"
   },
+  "crew": {
+    "purpose": "一份规格，两个机器人。收集者找素材，剪辑者只剪那些片段。这个工作台不抓网站。",
+    "collector": {
+      "door": "agent",
+      "outbox": "local_studio/workspace/handoff-outbox/agents/{edit_spec_id}/",
+      "drop": "local_studio/workspace/handoff-materials/{edit_spec_id}/",
+      "git_drop": "materials/{edit_spec_id}/",
+      "files": ["manifest.json", "source clips"],
+      "do_not": "不要把成品剪辑放进任何收件箱。只收集操作者有权使用的来源。"
+    },
+    "editor": {
+      "door": "grok",
+      "outbox": "local_studio/workspace/handoff-outbox/grok/{edit_spec_id}/",
+      "read": "local_studio/workspace/handoff-materials/{edit_spec_id}/manifest.json",
+      "return": "local_studio/workspace/handoff-inbox/grok/",
+      "git_return": "grok/"
+    }
+  },
   "outbox": {
     "purpose": "操作者保存规格后，这台电脑把 spec.json 和 brief.txt 写入那扇门的发件箱。机器人只读自己的门，绝不连接 127.0.0.1。对应收件箱收到剪辑后，发件箱文件夹会移到 .processed/。",
     "schema": "grok-crew.outbox-spec/v1",

@@ -25,7 +25,7 @@ async function main() {
   const { studio } = await ensureLocalRuntime({ startStudio: true });
 
   console.log('\nDesktop is ready at http://localhost:3000/');
-  console.log('If the project list is empty, save a brief on the Grok door or the other-agent door. It goes in that door\'s outbox.');
+  console.log('If the project list is empty, save one brief for two bots: a collector gathers clips, Grok edits them.');
   console.log('Bots in this cloned folder can use: python local_studio/grok_crew.py contract\n');
   const web = spawn(npm, [...npmPrefix, 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort'], { cwd: root, stdio: 'inherit' });
   const close = () => { if (studio && !studio.killed) studio.kill(); if (!web.killed) web.kill(); };
