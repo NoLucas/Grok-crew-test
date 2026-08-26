@@ -220,7 +220,7 @@ export function SimpleDesk({
           <li>{t('그래도 안 되면 압축 실행 파일을 풀어 Grok Crew.exe 를 엽니다. 관리자 비밀번호는 필요 없습니다.', 'If it still will not open, unzip the portable file and open Grok Crew.exe. No administrator password.', '还是不行就解压便携包，打开 Grok Crew.exe。不需要管理员密码。', 'まだ開かないなら圧縮ファイルを解いて Grok Crew.exe を開く。管理者パスワードは不要。')}</li>
         </ol>
         <p className="desktop-simple-help">
-          <a href="http://127.0.0.1:7214/downloads/grok-crew-bot.zip">
+          <a href={`${typeof window !== 'undefined' && window.grokCrew?.apiBase ? window.grokCrew.apiBase : 'http://127.0.0.1:7214'}/downloads/grok-crew-bot.zip`}>
             {t('다른 방법: 봇에게 줄 파일', 'Other: file for the bot', '其他：给机器人的文件', '別の方法：ボット用ファイル')}
           </a>
         </p>

@@ -336,7 +336,7 @@ export default function DesktopWorkspace() {
         setMessage(t(`${name} 쪽에서 넘긴 컷을 열었습니다.`, `Opened the cut from ${name}.`, `已打开 ${name} 交来的剪辑。`, `${name} が渡したカットを開きました。`));
       })
       .catch(() => {
-        pullKeyRef.current = key;
+        /* Keep the key unset so the next refresh can retry a failed pull. */
       })
       .finally(() => {
         pullingRef.current = false;

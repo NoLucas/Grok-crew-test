@@ -221,14 +221,19 @@ def outbox_status() -> dict[str, Any]:
 
 def find_outbox_folder(spec_id: str, door: str | None = None) -> Path | None:
     doors = [normalize_door(door, required=True)] if door else list(DOORS)
+    live: Path | None = None
+    saw_processed = False
     for item in doors:
         for alias in door_folder_aliases(item):
             folder = local_outbox_dir() / alias / spec_id
-            if folder.is_dir():
-                return folder
-            processed = local_outbox_dir() / alias / ".processed" / spec_id
-            if processed.is_dir():
-                return None
+            if folder.is_dir() and live is None:
+                live = folder
+            if (local_outbox_dir() / alias / ".processed" / spec_id).is_dir():
+                saw_processed = True
+    if live is not None:
+        return live
+    if saw_processed:
+        return None
     return None
 
 
@@ -263,16 +268,18 @@ def _mirror_dir() -> Path:
 
 
 def _ensure_mirror(remote: str, branch: str) -> Path:
+    remote = config.require_git_remote(remote)
+    branch = config.require_git_branch(branch)
     mirror = _mirror_dir()
     if not (mirror / ".git").exists():
         mirror.parent.mkdir(parents=True, exist_ok=True)
         if mirror.exists():
             shutil.rmtree(mirror)
-        clone = _run_git(["clone", "--single-branch", "--branch", branch, remote, str(mirror)], cwd=config.DATA_DIR)
+        clone = _run_git(["clone", "--single-branch", "--branch", branch, "--", remote, str(mirror)], cwd=config.DATA_DIR)
         if clone.returncode != 0:
             raise RuntimeError(clone.stderr.strip() or clone.stdout.strip() or "Could not clone the handoff repo.")
         return mirror
-    fetch = _run_git(["fetch", "origin", branch], cwd=mirror)
+    fetch = _run_git(["fetch", "origin", "--", branch], cwd=mirror)
     if fetch.returncode != 0:
         raise RuntimeError(fetch.stderr.strip() or "Could not fetch the handoff repo.")
     reset = _run_git(["reset", "--hard", f"origin/{branch}"], cwd=mirror)
@@ -326,7 +333,7 @@ def push_outbox(item: dict[str, Any] | None = None, *, door: str | None = None) 
             return {"ok": True, "remote": remote, "branch": branch, "copied": [], "note": "No pending outbox specs to push."}
         _commit_and_push(mirror, branch, f"Outbox {', '.join(copied)}")
         return {"ok": True, "remote": remote, "branch": branch, "copied": copied}
-    except (RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError, ValueError) as exc:
         return {"ok": False, "remote": remote, "reason": str(exc)}
 
 
@@ -342,7 +349,7 @@ def _remove_outbox_from_git(spec_id: str, door: str) -> dict[str, Any]:
             dest = mirror / "outbox" / alias / spec_id
             if not dest.exists():
                 continue
-            remove = _run_git(["rm", "-r", "-q", str(dest.relative_to(mirror))], cwd=mirror)
+            remove = _run_git(["rm", "-r", "-q", "--", str(dest.relative_to(mirror))], cwd=mirror)
             if remove.returncode != 0:
                 raise RuntimeError(remove.stderr.strip() or "Could not remove the fulfilled spec from git.")
             removed.append(f"outbox/{alias}/{spec_id}")
@@ -350,7 +357,7 @@ def _remove_outbox_from_git(spec_id: str, door: str) -> dict[str, Any]:
             return {"ok": True, "skipped": True, "reason": "already absent from git outbox"}
         _commit_and_push(mirror, branch, f"Fulfilled outbox {', '.join(removed)}")
         return {"ok": True, "removed": removed[0] if len(removed) == 1 else removed}
-    except (RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError, ValueError) as exc:
         return {"ok": False, "reason": str(exc)}
 
 

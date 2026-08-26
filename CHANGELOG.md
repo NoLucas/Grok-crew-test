@@ -6,6 +6,11 @@ All notable changes to Grok Crew are documented here.
 
 ### Security
 
+- Git inbound packages that fail import stay on disk. The watcher no longer marks them processed or `git rm`s the folder, so a bad `handoff.json` cannot wipe a delivery.
+- Inbox `copy_media` now writes only under `inputs/handoff/`. A package cannot clobber `projects.json` or other workspace files through `destination`.
+- `HANDOFF_REPO_REMOTE` and `HANDOFF_BRANCH` reject `-e`, `ext::`, `file:`, `?`, `#`, and other git-helper injection. Clone, fetch, and `git rm` use `--` before the operand.
+- Concurrent inbox and materials pulls share a lock so two `/handoff/pull` requests cannot import the same package twice.
+- `/api/projects/{id}/inspect-media`, `/quality-report`, local analysis, and queued render jobs resolve `source_path` through `require_path` so a tampered project row cannot read outside the workspace.
 - Publish HTTP clients now refuse redirects and connect only to the IP checked during URL validation, so a 307 or DNS rebind cannot send the video to an internal address.
 - CGNAT (`100.64.0.0/10`) and IPv4-mapped loopback addresses are treated as blocked upload targets.
 - An empty `Origin` header is no longer treated as a missing Origin. Curl/Electron with no Origin stay allowed; `Origin: ` and `Origin: null` stay blocked.
@@ -30,6 +35,12 @@ All notable changes to Grok Crew are documented here.
 - Unexpected handler exceptions return a generic 500 instead of internal strings; malformed `Range` headers return 416.
 - Render-queue jobs now require the same human approval or `auto_local` gate as `/render`.
 - The desktop UI no longer reads a Local Studio token from `localStorage`. Browser responses send a Content-Security-Policy.
+
+### Fixed
+
+- `find_outbox_folder` still finds a leftover `grok/{id}` folder when `editor/.processed/{id}` already exists.
+- Desktop auto-pull retries after a failed first pull instead of treating the failure as done.
+- Simple desk bot-zip download uses `window.grokCrew.apiBase` so packaged Electron does not hardcode `:7214`.
 
 ### Added
 

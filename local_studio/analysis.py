@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from config import utc_now
+from config import require_path, utc_now
 from db import db, row_dict
 
 
@@ -108,7 +108,7 @@ def get_analysis(project_id: str) -> dict[str, Any] | None:
 
 
 def analyze_project(project: dict[str, Any]) -> dict[str, Any]:
-    source = Path(project["source_path"])
+    source = require_path(project["source_path"], "source_path")
     if not source.exists():
         raise ValueError("Project source does not exist.")
     media = _probe(source)

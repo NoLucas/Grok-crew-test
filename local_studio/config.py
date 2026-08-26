@@ -122,6 +122,31 @@ def require_path(value: object, field: str) -> Path:
     return workspace_path(value)
 
 
+_GIT_REMOTE = re.compile(r"^(https://|git@|ssh://git@)", re.IGNORECASE)
+_GIT_BRANCH = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+def require_git_remote(value: str) -> str:
+    text = str(value or "").strip()
+    if not text or text.startswith("-") or any(ch.isspace() for ch in text):
+        raise ValueError("HANDOFF_REPO_REMOTE must be an https or ssh git URL.")
+    if any(ch in text for ch in "?;#\\$`|"):
+        raise ValueError("HANDOFF_REPO_REMOTE must be an https or ssh git URL.")
+    lowered = text.lower()
+    if lowered.startswith(("ext::", "file:", "fd::")):
+        raise ValueError("HANDOFF_REPO_REMOTE must be an https or ssh git URL.")
+    if not _GIT_REMOTE.match(text):
+        raise ValueError("HANDOFF_REPO_REMOTE must be an https or ssh git URL.")
+    return text
+
+
+def require_git_branch(value: str) -> str:
+    text = str(value or "").strip() or "handoff-inbox"
+    if text.startswith("-") or ".." in text or not _GIT_BRANCH.fullmatch(text):
+        raise ValueError("HANDOFF_BRANCH is not a valid branch name.")
+    return text
+
+
 def workspace_relative(path: Path | str) -> str:
     """Return a workspace-relative path, or just the filename if the path is outside."""
     resolved = Path(path).expanduser().resolve()

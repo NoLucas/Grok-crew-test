@@ -27,7 +27,9 @@ def test_copy_media_rejects_disallowed_extension(tmp_path):
 
 
 def test_copy_media_rejects_file_over_size_cap(tmp_path, monkeypatch):
-    monkeypatch.setattr(hw, "MAX_MEDIA_BYTES", 10)
+    import handoff_inbox
+
+    monkeypatch.setattr(handoff_inbox, "MAX_MEDIA_BYTES", 10)
     folder = tmp_path / "pkg"
     workspace = tmp_path / "workspace"
     folder.mkdir()
@@ -78,6 +80,18 @@ def test_copy_media_rejects_path_traversal(tmp_path):
         hw.copy_media(folder, workspace, "../../source.mp4")
 
 
+def test_copy_media_rejects_workspace_clobber(tmp_path):
+    folder = tmp_path / "pkg"
+    workspace = tmp_path / "workspace"
+    folder.mkdir()
+    (folder / "grok-crew-sample.mp4").write_bytes(b"x")
+    (workspace / "inputs").mkdir(parents=True)
+    (workspace / "inputs" / "grok-crew-sample.mp4").write_bytes(b"keep")
+    with pytest.raises(RuntimeError, match="inputs/handoff"):
+        hw.copy_media(folder, workspace, "inputs/grok-crew-sample.mp4")
+    assert (workspace / "inputs" / "grok-crew-sample.mp4").read_bytes() == b"keep"
+
+
 # -- process_folder(): bundle.json size cap, checked before any network call -
 
 def test_process_folder_skips_oversized_bundle_without_touching_network(tmp_path, monkeypatch):
@@ -86,7 +100,7 @@ def test_process_folder_skips_oversized_bundle_without_touching_network(tmp_path
     folder.mkdir()
     (folder / "bundle.json").write_text('{"schema": "x", "padding": "' + ("a" * 100) + '"}', encoding="utf-8")
     # Should return quietly (logged, not raised) without ever calling the client.
-    hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False)
+    assert hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False) is False
 
 
 # -- pending_folders(): excludes .git and already-processed packages ---------
@@ -128,7 +142,14 @@ def test_process_folder_skips_agent_package_in_grok_inbox(tmp_path):
         '{"schema":"local-video-workspace.project-bundle/v1","project":{"title":"X","source_path":"inputs/handoff/pkg/source.mp4","door":"agent"}}',
         encoding="utf-8",
     )
-    hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False)
+    assert hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False) is False
+
+
+def test_process_folder_returns_false_without_marking_skip(tmp_path):
+    folder = tmp_path / "20260824-pkg"
+    folder.mkdir()
+    (folder / "bundle.json").write_text('{"schema": "x"}', encoding="utf-8")
+    assert hw.process_folder(_NeverCalledClient(), folder, tmp_path / "workspace", allow_auto_upload=False) is False
 
 
 # -- folders_for_cycle(): caps packages processed per poll (frequency limit) -

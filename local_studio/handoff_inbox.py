@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,8 @@ MAX_MEDIA_BYTES = int(os.getenv("HANDOFF_MAX_MEDIA_BYTES", str(2 * 1024 ** 3)))
 MAX_BUNDLE_BYTES = int(os.getenv("HANDOFF_MAX_BUNDLE_BYTES", str(4 * 1024 * 1024)))
 DEFAULT_MAX_PACKAGES_PER_CYCLE = 5
 RESERVED_INBOX_NAMES = {".git", ".processed", "editor", "collector", "grok", "agents", "agent"}
+HANDOFF_MEDIA_PREFIX = Path("inputs") / "handoff"
+_PULL_LOCK = threading.Lock()
 
 
 def local_inbox_dir() -> Path:
@@ -113,11 +116,23 @@ def copy_media(folder: Path, workspace: Path, relative_path: str) -> None:
     size = source.stat().st_size
     if size > MAX_MEDIA_BYTES:
         raise RuntimeError(f"Media file '{source.name}' is {size} bytes, over the {MAX_MEDIA_BYTES}-byte handoff limit (set HANDOFF_MAX_MEDIA_BYTES to change it).")
-    destination = (workspace / relative_path).resolve()
-    if destination != workspace and workspace not in destination.parents:
-        raise RuntimeError(f"Refusing to write outside the workspace: {relative_path}")
+    destination = resolve_handoff_media_destination(workspace, relative_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
+
+
+def resolve_handoff_media_destination(workspace: Path, relative_path: str) -> Path:
+    text = str(relative_path or "").replace("\\", "/").lstrip("/")
+    if not text or ".." in Path(text).parts:
+        raise RuntimeError(f"Refusing to write outside the workspace: {relative_path}")
+    root = workspace.resolve()
+    destination = (root / text).resolve()
+    if destination != root and root not in destination.parents:
+        raise RuntimeError(f"Refusing to write outside the workspace: {relative_path}")
+    allowed = (root / HANDOFF_MEDIA_PREFIX).resolve()
+    if destination != allowed and allowed not in destination.parents:
+        raise RuntimeError("Handoff media must land under inputs/handoff/.")
+    return destination
 
 
 def copy_package_media(folder: Path, workspace: Path, project: dict[str, Any]) -> list[str]:
@@ -272,6 +287,15 @@ def pull_local_inbox(
     *,
     door: str = EDITOR_DOOR,
     max_per_cycle: int = DEFAULT_MAX_PACKAGES_PER_CYCLE,
+) -> dict[str, Any]:
+    with _PULL_LOCK:
+        return _pull_local_inbox_locked(door=door, max_per_cycle=max_per_cycle)
+
+
+def _pull_local_inbox_locked(
+    *,
+    door: str,
+    max_per_cycle: int,
 ) -> dict[str, Any]:
     normalized = normalize_door(door, required=True)
     folders = pending_inbox_folders_for_door(normalized)

@@ -352,7 +352,7 @@ def inspect_project_media(project_id: str, body: dict[str, Any]) -> dict[str, An
     project = get_project(project_id)
     if not project:
         raise ValueError("Project not found.")
-    report = probe_media(Path(project["source_path"]))
+    report = probe_media(require_path(project["source_path"], "source_path"))
     return save_artifact(project_id, "media_inspection", body.get("title", "Media preflight"), report, body.get("created_by", "local_inspector"))
 
 
@@ -365,7 +365,8 @@ def quality_report(project_id: str, stage: str, body: dict[str, Any]) -> dict[st
     timeline = project.get("timeline_json", {}) if isinstance(project.get("timeline_json"), dict) else {}
     clips = timeline.get("clips", []) if isinstance(timeline.get("clips"), list) else []
     checks: list[dict[str, str]] = []
-    source = Path(project["source_path"]); output = Path(project["output_path"])
+    source = require_path(project["source_path"], "source_path")
+    output = require_path(project["output_path"], "output_path")
     checks.append({"level": "pass" if source.exists() else "error", "rule": "source_file", "detail": "Source file is available." if source.exists() else "Source file is missing from the local workspace."})
     checks.append({"level": "pass" if clips else "error", "rule": "timeline", "detail": f"{len(clips)} EDL clip(s) are ready." if clips else "No EDL clips are available."})
     invalid_clips = [clip for clip in clips if not isinstance(clip, dict) or float(clip.get("out", 0)) <= float(clip.get("in", 0))]
@@ -842,6 +843,8 @@ def execute_job(job_id: str) -> dict[str, Any]:
                 progress=100, width=result.get("width"), height=result.get("height"), error=None,
             )
         elif job["kind"] == "render":
+            require_path(project["source_path"], "source_path")
+            require_path(project["output_path"], "output_path")
             result = render_moviepy(project, progress_cb=lambda pct: update_job_progress(job_id, pct), should_cancel=lambda: job_cancel_requested(job_id))
         elif job["kind"] == "instagram_publish" and not job["payload_json"].get("idempotency_key"):
             result = instagram_publish(project, job["payload_json"])

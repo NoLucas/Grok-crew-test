@@ -4,9 +4,9 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import config
-from edit_spec import attach_spec_project, create_spec
+from edit_spec import EDITOR_DOOR, attach_spec_project, create_spec
 from handoff_inbox import apply_package_local
-from handoff_outbox import OUTBOX_SCHEMA, outbox_status, push_outbox
+from handoff_outbox import OUTBOX_SCHEMA, find_outbox_folder, outbox_status, push_outbox
 
 
 def _outbox_path(door_folder: str, spec_id: str) -> Path:
@@ -116,3 +116,17 @@ def test_http_outbox_push_skips_without_remote(live_server):
     )).read().decode())
     assert pushed["git"]["skipped"] is True
     assert spec_id in {item["id"] for item in pushed["outbox"]["doors"]["editor"]["pending"]}
+
+
+def test_find_outbox_folder_prefers_leftover_live_over_processed_canonical(studio) -> None:
+    spec_id = "spec-leftover-live"
+    leftover = config.WORKSPACE_DIR / "handoff-outbox" / "grok" / spec_id
+    leftover.mkdir(parents=True)
+    (leftover / "handoff.json").write_text("{}", encoding="utf-8")
+    processed = config.WORKSPACE_DIR / "handoff-outbox" / "editor" / ".processed" / spec_id
+    processed.mkdir(parents=True)
+    (processed / "handoff.json").write_text("{}", encoding="utf-8")
+
+    found = find_outbox_folder(spec_id, EDITOR_DOOR)
+
+    assert found == leftover

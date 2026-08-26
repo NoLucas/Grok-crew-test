@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ MATERIALS_SCHEMA = "grok-crew.materials/v1"
 ALLOWED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
 MAX_MEDIA_BYTES = int(os.getenv("HANDOFF_MAX_MEDIA_BYTES", str(2 * 1024 ** 3)))
 RESERVED = {".git", ".processed"}
+_PULL_LOCK = threading.Lock()
 
 
 def local_materials_dir() -> Path:
@@ -351,6 +353,11 @@ def archive_materials(spec_id: str) -> dict[str, Any] | None:
 
 
 def pull_materials(body: dict[str, Any] | None = None) -> dict[str, Any]:
+    with _PULL_LOCK:
+        return _pull_materials_locked(body)
+
+
+def _pull_materials_locked(body: dict[str, Any] | None) -> dict[str, Any]:
     payload = body if isinstance(body, dict) else {}
     spec_id = str(payload.get("edit_spec_id") or "").strip()
     demo = bool(payload.get("demo"))

@@ -12,14 +12,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
 from grok_crew import LocalStudioClient
-from handoff_inbox import infer_package_door, media_relpaths
+from handoff_inbox import copy_media, infer_package_door, media_relpaths
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -77,21 +76,27 @@ def run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def default_remote() -> str:
+    from config import require_git_remote
+
     result = run_git(["remote", "get-url", "origin"], cwd=BASE_DIR.parent)
     if result.returncode != 0 or not result.stdout.strip():
         raise RuntimeError("Could not determine the repository's origin remote. Pass --repo-remote explicitly.")
-    return result.stdout.strip()
+    return require_git_remote(result.stdout.strip())
 
 
 def sync_mirror(remote: str, branch: str) -> Path:
+    from config import require_git_branch, require_git_remote
+
+    remote = require_git_remote(remote)
+    branch = require_git_branch(branch)
     if not (MIRROR_DIR / ".git").exists():
         MIRROR_DIR.parent.mkdir(parents=True, exist_ok=True)
         log(f"Cloning {branch} from {remote} into {MIRROR_DIR}")
-        result = run_git(["clone", "--single-branch", "--branch", branch, remote, str(MIRROR_DIR)], cwd=BASE_DIR)
+        result = run_git(["clone", "--single-branch", "--branch", branch, "--", remote, str(MIRROR_DIR)], cwd=BASE_DIR)
         if result.returncode != 0:
             raise RuntimeError(f"Could not clone the handoff branch: {result.stderr.strip()}")
     else:
-        fetch = run_git(["fetch", "origin", branch], cwd=MIRROR_DIR)
+        fetch = run_git(["fetch", "origin", "--", branch], cwd=MIRROR_DIR)
         if fetch.returncode != 0:
             raise RuntimeError(f"Could not fetch the handoff branch: {fetch.stderr.strip()}")
         reset = run_git(["reset", "--hard", f"origin/{branch}"], cwd=MIRROR_DIR)
@@ -152,22 +157,6 @@ def heartbeat(client: LocalStudioClient, action: str, detail: dict[str, Any]) ->
         log(f"Heartbeat failed (non-fatal): {exc}")
 
 
-def copy_media(folder: Path, workspace: Path, relative_path: str) -> None:
-    source = folder / Path(relative_path).name
-    if not source.is_file():
-        raise RuntimeError(f"Media file '{source.name}' referenced by bundle.project.source_path was not found in the package.")
-    if source.suffix.lower() not in ALLOWED_MEDIA_EXTENSIONS:
-        raise RuntimeError(f"Media file '{source.name}' has an unsupported extension. Allowed: {', '.join(sorted(ALLOWED_MEDIA_EXTENSIONS))}.")
-    size = source.stat().st_size
-    if size > MAX_MEDIA_BYTES:
-        raise RuntimeError(f"Media file '{source.name}' is {size} bytes, over the {MAX_MEDIA_BYTES}-byte handoff limit (set HANDOFF_MAX_MEDIA_BYTES to change it).")
-    destination = (workspace / relative_path).resolve()
-    if destination != workspace and workspace not in destination.parents:
-        raise RuntimeError(f"Refusing to write outside the workspace: {relative_path}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, destination)
-
-
 def run_job(client: LocalStudioClient, job_id: str, folder_name: str, kind: str) -> None:
     try:
         result = client.request(f"/api/jobs/{job_id}/run", {})
@@ -177,27 +166,27 @@ def run_job(client: LocalStudioClient, job_id: str, folder_name: str, kind: str)
         log(f"{folder_name}: could not run {kind} job {job_id}: {exc}")
 
 
-def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, allow_auto_upload: bool) -> None:
+def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, allow_auto_upload: bool) -> bool:
     bundle_path = folder / "bundle.json"
     if not bundle_path.exists():
         log(f"Skipping {folder.name}: no bundle.json.")
-        return
+        return False
     bundle_size = bundle_path.stat().st_size
     if bundle_size > MAX_BUNDLE_BYTES:
         log(f"Skipping {folder.name}: bundle.json is {bundle_size} bytes, over the {MAX_BUNDLE_BYTES}-byte limit.")
-        return
+        return False
     try:
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         log(f"Skipping {folder.name}: invalid bundle.json ({exc}).")
-        return
+        return False
     if not isinstance(bundle, dict) or bundle.get("schema") != BUNDLE_SCHEMA:
         log(f"Skipping {folder.name}: bundle.json must use schema {BUNDLE_SCHEMA}.")
-        return
+        return False
     project = bundle.get("project")
     if not isinstance(project, dict) or not project.get("source_path"):
         log(f"Skipping {folder.name}: bundle.project.source_path is required.")
-        return
+        return False
     try:
         from edit_spec import EDITOR_DOOR, normalize_door
 
@@ -209,22 +198,22 @@ def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, 
             location_door = EDITOR_DOOR
         if package_door != location_door:
             log(f"Skipping {folder.name}: package door {package_door} does not match this inbox ({location_door}).")
-            return
+            return False
     except ValueError as exc:
         log(f"Skipping {folder.name}: {exc}")
-        return
+        return False
     try:
         for relative in media_relpaths(project):
             copy_media(folder, workspace, relative)
     except RuntimeError as exc:
         log(f"Skipping {folder.name}: {exc}")
-        return
+        return False
     auto_upload_requested = bool(project.get("handoff_auto_upload_requested"))
     try:
         response = client.request("/api/projects/import", {"bundle": bundle})
     except RuntimeError as exc:
         log(f"Skipping {folder.name}: import failed ({exc}).")
-        return
+        return False
     jobs = response.get("jobs") if isinstance(response.get("jobs"), list) else []
     log(f"Imported {folder.name} as project {(response.get('project') or {}).get('id')} with {len(jobs)} job(s).")
     for job in jobs:
@@ -240,11 +229,12 @@ def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, 
                 run_job(client, job_id, folder.name, "instagram_publish")
             else:
                 log(f"{folder.name}: leaving Instagram job {job_id} queued for a human to run.")
+    return True
 
 
 def cleanup_folder(mirror: Path, folder: Path, branch: str) -> None:
     relative = folder.relative_to(mirror)
-    remove = run_git(["rm", "-r", "-q", str(relative)], cwd=mirror)
+    remove = run_git(["rm", "-r", "-q", "--", str(relative)], cwd=mirror)
     if remove.returncode != 0:
         log(f"Could not remove {relative} from the handoff branch: {remove.stderr.strip()}")
         return
@@ -272,7 +262,9 @@ def run_once(args: argparse.Namespace) -> None:
         return
     folders = folders_for_cycle(folders, args.max_per_cycle)
     for folder in folders:
-        process_folder(client, folder, workspace, allow_auto_upload=args.allow_auto_upload)
+        imported = process_folder(client, folder, workspace, allow_auto_upload=args.allow_auto_upload)
+        if not imported:
+            continue
         heartbeat(client, "handoff_processed", {"package": folder.name})
         try:
             processed.add(str(folder.relative_to(mirror)))
