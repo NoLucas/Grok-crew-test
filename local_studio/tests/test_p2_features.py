@@ -32,6 +32,17 @@ def test_compositing_normalizes_and_keys_green():
     assert mixed[0, 0, 0] < 100
 
 
+def test_color_lut_path_must_stay_in_workspace():
+    from color import apply_color_grade, normalize_color
+    import numpy as np
+
+    frame = np.zeros((4, 4, 3), dtype=np.uint8)
+    with pytest.raises(ValueError):
+        normalize_color({"lut": "/etc/passwd"})
+    with pytest.raises(ValueError):
+        apply_color_grade(frame, {"lut": "/etc/passwd", "lift": [0, 0, 0], "gamma": [1, 1, 1], "gain": [1, 1, 1], "saturation": 1})
+
+
 def test_color_grade_and_lut_and_scopes(tmp_path):
     cube = tmp_path / "one.cube"
     cube.write_text("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n")

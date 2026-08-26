@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from config import utc_now
+from config import utc_now, workspace_path
 from db import db, event, row_dict
 from audio_fx import normalize_audio_fx
 from color import normalize_color
@@ -138,6 +138,17 @@ def _legacy_to_v2(project: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _assert_workspace_asset_paths(asset: dict[str, Any]) -> None:
+    path_value = str(asset.get("path") or "").strip()
+    if path_value:
+        workspace_path(path_value)
+    color = asset.get("color")
+    if isinstance(color, dict):
+        lut = str(color.get("lut") or "").strip()
+        if lut:
+            workspace_path(lut)
+
+
 def validate_timeline(timeline: Any) -> dict[str, Any]:
     if not isinstance(timeline, dict) or timeline.get("schema") != TIMELINE_SCHEMA:
         raise ValueError(f"timeline.schema must be {TIMELINE_SCHEMA}.")
@@ -163,8 +174,14 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
         if asset_id in asset_ids:
             raise ValueError(f"Duplicate asset id: {asset_id}")
         asset_ids.add(asset_id)
+        _assert_workspace_asset_paths(asset)
         if asset.get("kind") == "sequence":
             normalize_sequence_asset(asset)
+            nested = asset.get("timeline")
+            if isinstance(nested, dict):
+                for nested_asset in nested.get("assets") or []:
+                    if isinstance(nested_asset, dict):
+                        _assert_workspace_asset_paths(nested_asset)
     track_ids, clip_ids = set(), set()
     for track in tracks:
         if not isinstance(track, dict) or track.get("type") not in TRACK_TYPES or not isinstance(track.get("clips"), list):
@@ -213,6 +230,9 @@ def validate_timeline(timeline: Any) -> dict[str, Any]:
             clip["keyframes"] = normalize_keyframes(clip.get("keyframes", {}), clip["duration"])
             clip["compositing"] = normalize_compositing(clip.get("compositing"))
             clip["color"] = normalize_color(clip.get("color"))
+            lut = str(clip["color"].get("lut") or "").strip()
+            if lut:
+                workspace_path(lut)
             clip["motion"] = normalize_motion(clip.get("motion"), clip["duration"])
             if clip.get("camera") not in (None, ""):
                 clip["camera"] = _safe_identifier(clip.get("camera"), "clip.camera")

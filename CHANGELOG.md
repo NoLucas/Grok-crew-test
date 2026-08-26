@@ -4,6 +4,17 @@ All notable changes to Grok Crew are documented here.
 
 ## Unreleased
 
+### Security
+
+- Timeline assets, LUT files, and OTIO imports now reject paths outside the local workspace, so render/preview cannot read arbitrary files.
+- Electron IPC normalizes Studio URLs before fetch, so `/api/../media` no longer bypasses the `/api` allowlist.
+- Renderer navigation now compares origins instead of string prefixes, blocking `http://127.0.0.1:port@evil` style loads.
+- IPC handlers require the main window as sender; preload fails closed without a runtime argument.
+- `/health` hides workspace and database paths unless a configured token is presented.
+- Unexpected handler exceptions return a generic 500 instead of internal strings; malformed `Range` headers return 416.
+- Render-queue jobs now require the same human approval or `auto_local` gate as `/render`.
+- The desktop UI no longer reads a Local Studio token from `localStorage`. Browser responses send a Content-Security-Policy.
+
 ### Added
 
 - P1-08 program-monitor composite preview now samples the same MoviePy timeline used for final output, so playhead frames, captions, timing, and audio RMS can be compared 1:1 with the rendered MP4.

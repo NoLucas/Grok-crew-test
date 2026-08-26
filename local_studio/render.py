@@ -17,9 +17,8 @@ from sequence import prepare_timeline
 
 
 def _asset_path(value: str) -> Path:
-    """Resolve a v2 asset without allowing a renderer to silently leave workspace."""
-    candidate = Path(value)
-    return candidate if candidate.is_absolute() else workspace_path(value)
+    """Resolve a v2 asset; absolute paths outside the workspace are rejected."""
+    return workspace_path(value)
 
 
 def original_asset_path(asset: dict[str, Any]) -> Path:

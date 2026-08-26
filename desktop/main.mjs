@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRendererNavigationAllowed, studioRequestUrl } from './ipc-guard.mjs';
 import { RelayService } from './relay-service.mjs';
 import { createDesktopTray, installCloseToTray } from './tray-controller.mjs';
 
@@ -120,21 +121,32 @@ async function startRenderer() {
   return `http://127.0.0.1:${started.port}`;
 }
 
+function assertTrustedRenderer(event) {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    throw new Error('Untrusted IPC sender.');
+  }
+}
+
 function registerIpc(apiBase) {
   const request = async (path, value = {}) => {
     const method = String(value?.method ?? 'GET').toUpperCase();
     const body = value?.body == null ? undefined : String(value.body);
-    if (!path.startsWith('/api/') || path.includes('://') || !['GET', 'POST', 'PATCH'].includes(method)) throw new Error('Blocked Studio IPC request.');
+    if (!['GET', 'POST', 'PATCH'].includes(method)) throw new Error('Blocked Studio IPC request.');
+    const url = studioRequestUrl(apiBase, path);
     if (body && Buffer.byteLength(body) > 2 * 1024 * 1024) throw new Error('Studio IPC body is too large.');
-    const response = await fetch(`${apiBase}${path}`, {
+    const response = await fetch(url, {
       method, body, headers: { Authorization: `Bearer ${studioToken}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(String(payload.error ?? `Local Studio ${response.status}`));
     return payload;
   };
-  ipcMain.handle('studio:request', async (_event, value) => request(String(value?.path ?? ''), value));
-  ipcMain.handle('timeline:apply-patch', async (_event, projectId, timelinePatch) => {
+  ipcMain.handle('studio:request', async (event, value) => {
+    assertTrustedRenderer(event);
+    return request(String(value?.path ?? ''), value);
+  });
+  ipcMain.handle('timeline:apply-patch', async (event, projectId, timelinePatch) => {
+    assertTrustedRenderer(event);
     const safeProjectId = String(projectId ?? '').trim();
     if (!safeProjectId || safeProjectId.length > 120 || !/^[A-Za-z0-9_.-]+$/.test(safeProjectId)) {
       return {
@@ -179,7 +191,8 @@ function registerIpc(apiBase) {
       };
     }
   });
-  ipcMain.handle('desktop:select-media', async () => {
+  ipcMain.handle('desktop:select-media', async (event) => {
+    assertTrustedRenderer(event);
     const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'mkv', 'webm', 'mp3', 'wav', 'png', 'jpg', 'jpeg', 'webp'] }] });
     if (result.canceled) return null;
     const source = result.filePaths[0];
@@ -193,27 +206,31 @@ function registerIpc(apiBase) {
     copyFileSync(source, join(inputs, fileName));
     return `inputs/${fileName}`;
   });
-  ipcMain.handle('desktop:show-output', async (_event, relativePath) => {
+  ipcMain.handle('desktop:show-output', async (event, relativePath) => {
+    assertTrustedRenderer(event);
     const target = resolve(app.getPath('videos'), 'Grok Crew', String(relativePath ?? ''));
     const rootPath = resolve(app.getPath('videos'), 'Grok Crew');
     if (target !== rootPath && !target.startsWith(`${rootPath}${process.platform === 'win32' ? '\\' : '/'}`)) throw new Error('Output path leaves the app workspace.');
     return shell.showItemInFolder(target);
   });
-  ipcMain.handle('desktop:app-info', () => ({ version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }));
+  ipcMain.handle('desktop:app-info', (event) => {
+    assertTrustedRenderer(event);
+    return { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged };
+  });
   const relay = new RelayService({ request, safeStorage, dialog, shell, clipboard, userData: app.getPath('userData'), documents: app.getPath('documents') });
-  ipcMain.handle('relay:pair-runner', () => relay.pairRunner());
-  ipcMain.handle('relay:export-desktop-pairing', () => relay.exportDesktopPairing());
-  ipcMain.handle('relay:export-request', (_event, controlJobId) => relay.exportRequest(String(controlJobId ?? '')));
-  ipcMain.handle('relay:import-result', () => relay.importResult());
-  ipcMain.handle('relay:answer-input', (_event, controlJobId, answer) => relay.answerInput(String(controlJobId ?? ''), answer));
-  ipcMain.handle('relay:connect-git', () => relay.connectGitRelay());
-  ipcMain.handle('relay:github-status', () => relay.githubStatus());
-  ipcMain.handle('relay:github-login-device', () => relay.loginGitHubDevice());
-  ipcMain.handle('relay:github-login-token', (_event, token) => relay.loginGitHubToken(String(token ?? '')));
-  ipcMain.handle('relay:push-git-request', (_event, controlJobId) => relay.pushGitRequest(String(controlJobId ?? '')));
-  ipcMain.handle('relay:pull-git-results', () => relay.pullGitResults());
-  ipcMain.handle('relay:control-job', (_event, controlJobId, command, reason) => relay.controlJob(String(controlJobId ?? ''), String(command ?? ''), String(reason ?? '')));
-  ipcMain.handle('relay:resolve-conflict', (_event, controlJobId, action) => relay.resolveConflict(String(controlJobId ?? ''), String(action ?? '')));
+  ipcMain.handle('relay:pair-runner', (event) => { assertTrustedRenderer(event); return relay.pairRunner(); });
+  ipcMain.handle('relay:export-desktop-pairing', (event) => { assertTrustedRenderer(event); return relay.exportDesktopPairing(); });
+  ipcMain.handle('relay:export-request', (event, controlJobId) => { assertTrustedRenderer(event); return relay.exportRequest(String(controlJobId ?? '')); });
+  ipcMain.handle('relay:import-result', (event) => { assertTrustedRenderer(event); return relay.importResult(); });
+  ipcMain.handle('relay:answer-input', (event, controlJobId, answer) => { assertTrustedRenderer(event); return relay.answerInput(String(controlJobId ?? ''), answer); });
+  ipcMain.handle('relay:connect-git', (event) => { assertTrustedRenderer(event); return relay.connectGitRelay(); });
+  ipcMain.handle('relay:github-status', (event) => { assertTrustedRenderer(event); return relay.githubStatus(); });
+  ipcMain.handle('relay:github-login-device', (event) => { assertTrustedRenderer(event); return relay.loginGitHubDevice(); });
+  ipcMain.handle('relay:github-login-token', (event, token) => { assertTrustedRenderer(event); return relay.loginGitHubToken(String(token ?? '')); });
+  ipcMain.handle('relay:push-git-request', (event, controlJobId) => { assertTrustedRenderer(event); return relay.pushGitRequest(String(controlJobId ?? '')); });
+  ipcMain.handle('relay:pull-git-results', (event) => { assertTrustedRenderer(event); return relay.pullGitResults(); });
+  ipcMain.handle('relay:control-job', (event, controlJobId, command, reason) => { assertTrustedRenderer(event); return relay.controlJob(String(controlJobId ?? ''), String(command ?? ''), String(reason ?? '')); });
+  ipcMain.handle('relay:resolve-conflict', (event, controlJobId, action) => { assertTrustedRenderer(event); return relay.resolveConflict(String(controlJobId ?? ''), String(action ?? '')); });
 }
 
 async function createWindow(apiBase, rendererUrl) {
@@ -231,7 +248,7 @@ async function createWindow(apiBase, rendererUrl) {
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(rendererUrl)) event.preventDefault();
+    if (!isRendererNavigationAllowed(url, rendererUrl)) event.preventDefault();
   });
   mainWindow = window;
   window.on('query-session-end', () => { quitting = true; });

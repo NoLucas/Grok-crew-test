@@ -7,6 +7,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 const runtimeArgument = process.argv.find((value) => value.startsWith('--grok-crew-runtime='));
 const encodedRuntime = runtimeArgument ? runtimeArgument.split('=', 2)[1] : '';
 const base64Runtime = encodedRuntime.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encodedRuntime.length / 4) * 4, '=');
+if (!runtimeArgument && process.env.GROK_CREW_ALLOW_PRELOAD_FALLBACK !== '1') {
+  throw new Error('Missing grok-crew runtime.');
+}
 const runtime = runtimeArgument
   ? JSON.parse(Buffer.from(base64Runtime, 'base64').toString('utf8'))
   : { apiBase: 'http://127.0.0.1:7214' };

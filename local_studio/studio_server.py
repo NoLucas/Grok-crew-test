@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -872,9 +873,26 @@ def render_queue(project_id: str) -> list[dict[str, Any]]:
 
 
 def enqueue_render(project_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-    job = create_job(project_id, "render", body or {}, True)
-    if (body or {}).get("run_immediately", True):
-        job = start_job(job["id"], wait=bool((body or {}).get("wait", False)))
+    payload = body or {}
+    auto_local, _policy = bot_auto_executes(payload)
+    human_approved = bool(payload.get("approved"))
+    if not human_approved and not auto_local:
+        raise ValueError(
+            "This bot requires human approval before a local render. "
+            "Set its execution policy to auto_local or send approved: true."
+        )
+    job = create_job(
+        project_id,
+        "render",
+        {
+            "requested_by": payload.get("requested_by", "local_user"),
+            "bot_id": payload.get("bot_id"),
+            "execution_authorization": "bot_auto_local" if auto_local and not human_approved else "human_approved",
+        },
+        True,
+    )
+    if payload.get("run_immediately", True):
+        job = start_job(job["id"], wait=bool(payload.get("wait", False)))
     return {"job": job, "queue": render_queue(project_id)}
 
 
@@ -885,6 +903,8 @@ def main() -> None:
     from handlers import StudioHandler  # deferred: handlers.py imports this module, so avoid a top-level cycle
     with db() as conn:
         conn.execute("UPDATE jobs SET status = 'failed', error_text = ?, updated_at = ? WHERE status = 'running'", ("Interrupted by an unclean Local Studio shutdown.", utc_now()))
+    if not os.getenv("LOCAL_STUDIO_TOKEN", "").strip():
+        print("Warning: LOCAL_STUDIO_TOKEN is unset; loopback clients can call the API without a bearer token.")
     server = ThreadingHTTPServer(("127.0.0.1", args.port), StudioHandler)
     print(f"Local Video Studio listening at http://127.0.0.1:{args.port}")
     print(f"Workspace: {config.WORKSPACE_DIR}")

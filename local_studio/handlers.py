@@ -126,7 +126,14 @@ class StudioHandler(BaseHTTPRequestHandler):
         byte_range = self.headers.get("Range", "")
         if byte_range.startswith("bytes="):
             raw_start, _, raw_end = byte_range[6:].partition("-")
-            start = int(raw_start or 0); end = min(int(raw_end) if raw_end else size - 1, size - 1)
+            try:
+                start = int(raw_start or 0)
+                end = min(int(raw_end) if raw_end else size - 1, size - 1)
+            except ValueError:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
             if start < 0 or end < start or start >= size:
                 self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
                 self.send_header("Content-Range", f"bytes */{size}"); self.end_headers(); return
@@ -201,7 +208,13 @@ class StudioHandler(BaseHTTPRequestHandler):
         provided = self.headers.get("Authorization", "")
         return hmac.compare_digest(provided, f"Bearer {expected}")
 
+    def _internal_error(self, exc: Exception) -> None:
+        print(f"[{utc_now()}] local studio error: {exc}")
+        self._json(500, {"error": "The local studio could not complete that request."})
+
     def do_OPTIONS(self) -> None:  # noqa: N802
+        if not self._origin_allowed():
+            self._json(403, {"error": "Cross-origin requests are not allowed."}); return
         self.send_response(HTTPStatus.NO_CONTENT)
         origin = self.headers.get("Origin")
         if origin in ALLOWED_ORIGINS:
@@ -216,6 +229,8 @@ class StudioHandler(BaseHTTPRequestHandler):
             self._json(403, {"error": "Cross-origin requests are not allowed."}); return
         try:
             path = urlparse(self.path).path.rstrip("/") or "/"
+            # /media and /analysis-media stay tokenless so <video>/<img> can load loopback previews.
+            # Paths are still confined to the workspace / analysis thumbnail roots.
             if path not in PUBLIC_GET_PATHS and path not in BROWSER_PAGE_PATHS and not path.startswith(("/media/", "/analysis-media/")) and not self._token_ok():
                 self._json(401, {"error": "Invalid local studio token."}); return
             if path in BROWSER_PAGE_PATHS:
@@ -229,8 +244,18 @@ class StudioHandler(BaseHTTPRequestHandler):
                 else:
                     self._analysis_media(parts[2], parts[3])
             elif path == "/health":
-                instagram_ready = bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID") and os.getenv("INSTAGRAM_API_VERSION"))
-                self._json(200, {"service": "Local Video Studio", "status": "ready", "bind": "127.0.0.1", "workspace": str(config.WORKSPACE_DIR), "database": str(config.DB_PATH), "moviepy_installed": self._moviepy_ready(), "instagram_publish_enabled": instagram_ready, "credentials_configured": instagram_ready, "bots": list_bots()["summary"]})
+                payload = {"service": "Local Video Studio", "status": "ready", "bind": "127.0.0.1"}
+                if self._token_ok():
+                    instagram_ready = bool(os.getenv("INSTAGRAM_ACCESS_TOKEN") and os.getenv("INSTAGRAM_USER_ID") and os.getenv("INSTAGRAM_API_VERSION"))
+                    payload.update({
+                        "workspace": str(config.WORKSPACE_DIR),
+                        "database": str(config.DB_PATH),
+                        "moviepy_installed": self._moviepy_ready(),
+                        "instagram_publish_enabled": instagram_ready,
+                        "credentials_configured": instagram_ready,
+                        "bots": list_bots()["summary"],
+                    })
+                self._json(200, payload)
             elif path == "/api/projects":
                 self._json(200, {"projects": list_projects()})
             elif path == "/api/v2/workspace":
@@ -320,7 +345,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001
-            self._json(500, {"error": str(exc)})
+            self._internal_error(exc)
 
     def do_POST(self) -> None:  # noqa: N802
         if not self._origin_allowed():
@@ -445,7 +470,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001
-            self._json(500, {"error": str(exc)})
+            self._internal_error(exc)
 
     def do_PATCH(self) -> None:  # noqa: N802
         if not self._origin_allowed():
@@ -465,7 +490,7 @@ class StudioHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001
-            self._json(500, {"error": str(exc)})
+            self._internal_error(exc)
 
     @staticmethod
     def _moviepy_ready() -> bool:

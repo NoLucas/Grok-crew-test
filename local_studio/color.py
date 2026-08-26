@@ -5,6 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from config import workspace_path
+
+MAX_LUT_BYTES = 2_000_000
+MAX_LUT_SIZE = 65
+
 
 def normalize_color(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
@@ -18,6 +23,8 @@ def normalize_color(value: Any) -> dict[str, Any]:
         raise ValueError("clip.color lift/gamma/gain/saturation must be numeric.") from exc
     if len(lift) != 3 or len(gamma) != 3 or len(gain) != 3:
         raise ValueError("clip.color lift, gamma, and gain must each have 3 channels.")
+    if lut:
+        workspace_path(lut)
     return {
         "lut": lut,
         "lift": [_clamp(channel, -0.5, 0.5) for channel in lift],
@@ -31,6 +38,15 @@ def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+def _resolved_lut(path_value: str) -> Path | None:
+    path = workspace_path(path_value)
+    if not path.is_file():
+        return None
+    if path.stat().st_size > MAX_LUT_BYTES:
+        raise ValueError("LUT file is too large.")
+    return path
+
+
 def parse_cube_lut(path: Path) -> dict[str, Any]:
     size = 2
     table: list[tuple[float, float, float]] = []
@@ -40,6 +56,8 @@ def parse_cube_lut(path: Path) -> dict[str, Any]:
             continue
         if stripped.upper().startswith("LUT_3D_SIZE"):
             size = max(2, int(stripped.split()[-1]))
+            if size > MAX_LUT_SIZE:
+                raise ValueError("LUT_3D_SIZE is too large.")
             continue
         if stripped[0].isalpha():
             continue
@@ -103,8 +121,8 @@ def apply_color_grade(frame: Any, color: dict[str, Any], lut_cache: dict[str, An
     if lut_path:
         cache = lut_cache if lut_cache is not None else {}
         if lut_path not in cache:
-            path = Path(lut_path)
-            cache[lut_path] = parse_cube_lut(path) if path.is_file() else None
+            path = _resolved_lut(lut_path)
+            cache[lut_path] = parse_cube_lut(path) if path else None
         if cache[lut_path]:
             graded = apply_cube_lut(graded, cache[lut_path])
     return graded

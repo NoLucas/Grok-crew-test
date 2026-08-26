@@ -174,14 +174,13 @@ export default function DesktopWorkspace() {
   const syncingRelay = useRef(false);
   const selectedClipId = selectedClipIds[selectedClipIds.length - 1] ?? '';
 
-  const token = typeof window === 'undefined' ? '' : window.localStorage.getItem('localStudioToken') ?? '';
   const api = useCallback(async (path: string, init?: RequestInit): Promise<JsonObject> => {
     if (window.grokCrew) return await window.grokCrew.request(path, { method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : null }) as JsonObject;
-    const response = await fetch(`${studioBase()}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) } });
+    const response = await fetch(`${studioBase()}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
     const data = await response.json() as JsonObject;
     if (!response.ok) throw new Error(String(data.error ?? `Local Studio ${response.status}`));
     return data;
-  }, [token]);
+  }, []);
 
   const refreshWorkspace = useCallback(async (quiet = false) => {
     try {
@@ -405,7 +404,7 @@ export default function DesktopWorkspace() {
     try {
       const result = await api(`/api/v2/projects/${project.id}/render-queue`, {
         method: 'POST',
-        body: JSON.stringify({ run_immediately: false }),
+        body: JSON.stringify({ approved: true, requested_by: 'desktop_operator', run_immediately: false }),
       }) as { queue: LocalJob[] };
       setQueueJobs(result.queue);
       setMessage(t('렌더를 대기열에 넣었습니다.', 'Queued a render.', '已加入渲染队列。', 'レンダーをキューに追加しました。'));

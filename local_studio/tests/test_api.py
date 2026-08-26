@@ -146,6 +146,45 @@ def test_token_check_accepts_correct_bearer_token(live_server, monkeypatch):
         assert response.status == 200
 
 
+def test_health_hides_paths_without_token(live_server, monkeypatch):
+    monkeypatch.setenv("LOCAL_STUDIO_TOKEN", "correct-token")
+    status, body = get_status(live_server, "/health")
+    assert status == 200
+    assert body["status"] == "ready"
+    assert "workspace" not in body
+    assert "database" not in body
+    request = Request(f"{live_server}/health", headers={"Authorization": "Bearer correct-token"})
+    with urlopen(request, timeout=10) as response:
+        full = json.loads(response.read().decode("utf-8"))
+    assert "workspace" in full
+
+
+def test_malformed_media_range_returns_416(live_server, studio):
+    media = config.WORKSPACE_DIR / "inputs" / "range-source.mp4"
+    media.parent.mkdir(parents=True, exist_ok=True)
+    media.write_bytes(b"0123456789")
+    request = Request(f"{live_server}/media/inputs/range-source.mp4", headers={"Range": "bytes=not-a-range"})
+    try:
+        urlopen(request, timeout=10)
+        assert False, "expected 416 for a malformed Range header"
+    except HTTPError as exc:
+        assert exc.code == 416
+
+
+def test_render_queue_requires_approval_or_auto_local(live_server):
+    project = create_project(live_server)
+    try:
+        post(live_server, f"/api/v2/projects/{project['id']}/render-queue", {"run_immediately": False})
+        assert False, "expected render-queue without approval to be rejected"
+    except HTTPError as exc:
+        assert exc.code == 400
+    queued = post(live_server, f"/api/v2/projects/{project['id']}/render-queue", {
+        "approved": True,
+        "run_immediately": False,
+    })
+    assert queued["job"]["status"] == "queued"
+
+
 # -- CORS / cross-origin guard ------------------------------------------------
 
 def test_disallowed_origin_is_rejected(live_server):

@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from config import workspace_path
 from render_contract import timeline_render_contract
+
+
+def _workspace_media_path(value: str) -> str:
+    path = value.strip()
+    if path.startswith("file://"):
+        path = path[7:]
+    if not path:
+        return ""
+    workspace_path(path)
+    return path
 
 
 def _timecode(seconds: float, fps: int) -> str:
@@ -162,11 +173,12 @@ def import_otio(payload: dict[str, Any]) -> dict[str, Any]:
                 continue
             reference = child.get("media_reference") if isinstance(child.get("media_reference"), dict) else {}
             asset_id = f"otio-{index}-{len(assets)}"
+            media_path = _workspace_media_path(str(reference.get("target_url") or ""))
             assets.append({
                 "id": asset_id,
                 "kind": "video" if kind == "video" else "audio",
                 "name": str(child.get("name") or asset_id),
-                "path": str(reference.get("target_url") or ""),
+                "path": media_path,
             })
             source_in = _otio_start(child.get("source_range"), fps)
             clips.append({

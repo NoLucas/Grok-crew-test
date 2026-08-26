@@ -33,6 +33,33 @@ def test_workspace_path_rejects_absolute_path_outside_workspace(studio):
         studio.workspace_path("C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd")
 
 
+def test_original_asset_path_rejects_absolute_path_outside_workspace(studio):
+    from render import original_asset_path
+
+    with pytest.raises(ValueError):
+        original_asset_path({"path": "C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd"})
+
+
+def test_validate_timeline_rejects_asset_path_outside_workspace(studio):
+    from desktop_domain import validate_timeline
+
+    timeline = {
+        "schema": "grok-crew.timeline/v2",
+        "revision": 1,
+        "settings": {"width": 1080, "height": 1920, "fps": 30, "quality": "balanced"},
+        "assets": [{
+            "id": "leak",
+            "kind": "video",
+            "name": "Outside",
+            "path": "C:/Windows/win.ini" if os.name == "nt" else "/etc/passwd",
+        }],
+        "tracks": [],
+        "markers": [],
+    }
+    with pytest.raises(ValueError, match="workspace"):
+        validate_timeline(timeline)
+
+
 # -- validated_edit_method ----------------------------------------------------
 
 def test_validated_edit_method_rejects_unknown_field(studio):
