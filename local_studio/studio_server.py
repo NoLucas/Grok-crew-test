@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import re
 import shutil
 import sqlite3
@@ -40,7 +41,11 @@ from config import (
 )
 from db import db, event, init_db, row_dict
 from instagram import instagram_publish
+from launch import launch_status as build_launch_status
+from publishers import list_publish_receipts
 from publishers import publish
+from publishers import reconcile_publish_receipts
+from publishers import retry_publish
 from proxy import (
     generate_proxy,
     get_proxy,
@@ -896,6 +901,33 @@ def enqueue_render(project_id: str, body: dict[str, Any] | None = None) -> dict[
     return {"job": job, "queue": render_queue(project_id)}
 
 
+def project_publish_receipts(project_id: str) -> dict[str, Any]:
+    if not get_project(project_id):
+        raise ValueError("Project not found.")
+    return {"receipts": list_publish_receipts(project_id)}
+
+
+def retry_project_publish(project_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    project = get_project(project_id)
+    if not project:
+        raise ValueError("Project not found.")
+    body = payload or {}
+    if not body.get("approved"):
+        raise ValueError("Publishing requires a recorded human approval or an approved project auto-publish policy.")
+    receipt_id = str(body.get("receipt_id") or "").strip()
+    if not receipt_id:
+        raise ValueError("receipt_id is required.")
+    try:
+        result = retry_publish(project, receipt_id, body)
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+    return {"result": result, "receipts": list_publish_receipts(project_id)}
+
+
+def launch_status() -> dict[str, Any]:
+    return build_launch_status()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Local Video Studio on loopback only.")
     parser.add_argument("--port", type=int, default=7214)
@@ -903,6 +935,9 @@ def main() -> None:
     from handlers import StudioHandler  # deferred: handlers.py imports this module, so avoid a top-level cycle
     with db() as conn:
         conn.execute("UPDATE jobs SET status = 'failed', error_text = ?, updated_at = ? WHERE status = 'running'", ("Interrupted by an unclean Local Studio shutdown.", utc_now()))
+    recovered_receipts = reconcile_publish_receipts()
+    if recovered_receipts:
+        print(f"recovered {recovered_receipts} interrupted publish receipts", file=sys.stderr)
     if not os.getenv("LOCAL_STUDIO_TOKEN", "").strip():
         print("Warning: LOCAL_STUDIO_TOKEN is unset; loopback clients can call the API without a bearer token.")
     server = ThreadingHTTPServer(("127.0.0.1", args.port), StudioHandler)

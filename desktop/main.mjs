@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { isRendererNavigationAllowed, studioRequestUrl } from './ipc-guard.mjs';
 import { RelayService } from './relay-service.mjs';
 import { createDesktopTray, installCloseToTray } from './tray-controller.mjs';
+import { fetchLatestRelease, updatePolicy } from './update-service.mjs';
 
 const desktopDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(desktopDir, '..');
@@ -216,6 +217,36 @@ function registerIpc(apiBase) {
   ipcMain.handle('desktop:app-info', (event) => {
     assertTrustedRenderer(event);
     return { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged };
+  });
+  ipcMain.handle('desktop:update-status', async (event) => {
+    assertTrustedRenderer(event);
+    const currentVersion = app.getVersion();
+    const packaged = app.isPackaged;
+    const repo = String(process.env.GROK_CREW_UPDATE_REPO || 'NoLucas/Grok-crew-test');
+    let latest = null;
+    if (packaged) {
+      try {
+        latest = await fetchLatestRelease(repo);
+      } catch {
+        latest = null;
+      }
+    }
+    return updatePolicy({
+      packaged,
+      currentVersion,
+      latestVersion: latest?.latestVersion ?? null,
+      releaseUrl: latest?.releaseUrl ?? '',
+      feedConfigured: Boolean(latest),
+      signed: process.env.GROK_CREW_UPDATES_SIGNED === '1',
+    });
+  });
+  ipcMain.handle('desktop:open-release', async (event, url) => {
+    assertTrustedRenderer(event);
+    const target = String(url ?? '');
+    if (!/^https:\/\/github\.com\/[^/]+\/[^/]+\/releases(\/|$)/.test(target)) {
+      throw new Error('Release URL is not allowed.');
+    }
+    return shell.openExternal(target);
   });
   const relay = new RelayService({ request, safeStorage, dialog, shell, clipboard, userData: app.getPath('userData'), documents: app.getPath('documents') });
   ipcMain.handle('relay:pair-runner', (event) => { assertTrustedRenderer(event); return relay.pairRunner(); });

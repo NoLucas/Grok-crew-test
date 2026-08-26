@@ -17,6 +17,13 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- P3 publish receipts: list recent Instagram/TikTok/YouTube attempts, retry a failed receipt with the same idempotency key, and mark receipts left `running` as failed on the next Local Studio start.
+- Publish failures redact bearer/access tokens before they are stored or returned.
+- `GET /api/v2/launch` reports local 1.0 gates versus external OAuth, code signing, and in-place auto-update.
+- Packaged desktop can check GitHub releases and open the download URL. Unpackaged builds stay on the local tree; unsigned in-place install remains external.
+- Desktop Export shows receipt status/retry, and the title bar reports local launch gates plus the current update policy.
+- `npm run launch:verify` prints the local/external launch report.
+
 - P1-08 program-monitor composite preview now samples the same MoviePy timeline used for final output, so playhead frames, captions, timing, and audio RMS can be compared 1:1 with the rendered MP4.
 - P2-01 compositing: per-clip blend modes, rectangle/ellipse masks with feather, and chroma key.
 - P2-02 motion: speed-ramp easing, attach-to-tracker points, and a lightweight stabilize pass.

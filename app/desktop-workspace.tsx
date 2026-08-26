@@ -14,6 +14,14 @@ import { buildTimelineHistoryAction, emptyTimelineHistory } from './timeline/his
 import type { TimelineHistoryAction, TimelineHistoryResult, TimelineHistoryState } from './timeline/history';
 import type { Timeline, TrackType } from './timeline/types';
 
+type UpdateStatus = {
+  status: string;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+  message: string;
+};
+
 declare global {
   interface Window {
     grokCrew?: {
@@ -23,6 +31,8 @@ declare global {
       selectMedia: () => Promise<string | null>;
       showOutput: (path: string) => Promise<void>;
       appInfo: () => Promise<{ version: string; platform: string; packaged: boolean }>;
+      updateStatus?: () => Promise<UpdateStatus>;
+      openRelease?: (url: string) => Promise<void>;
       pairRunner: () => Promise<{ runner_id: string; display_name: string } | null>;
       exportDesktopPairing: () => Promise<{ file: string; desktop_id: string } | null>;
       exportRunnerRequest: (controlJobId: string) => Promise<{ file: string; runner_id: string } | null>;
@@ -90,6 +100,25 @@ type LocalJob = {
   progress: number;
   error_text?: string | null;
   result_json?: Record<string, unknown> | null;
+};
+type PublishReceipt = {
+  id: string;
+  platform: string;
+  idempotency_key: string;
+  project_id: string;
+  status: 'running' | 'succeeded' | 'failed';
+  result?: Record<string, unknown>;
+  error_text?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type LaunchStatus = {
+  schema: string;
+  app_version: string;
+  sidecar: { token_required: boolean; moviepy_installed: boolean };
+  publishers: Record<string, { configured?: boolean }>;
+  local_gates: Record<string, boolean>;
+  external_gates: Record<string, { status: string; ready: boolean; detail: string }>;
 };
 
 const defaultMethod = {
@@ -171,6 +200,9 @@ export default function DesktopWorkspace() {
   const [exchangeText, setExchangeText] = useState('');
   const [github, setGithub] = useState<GitHubStatus>({ authenticated: false, relay_connected: false });
   const [githubToken, setGithubToken] = useState('');
+  const [receipts, setReceipts] = useState<PublishReceipt[]>([]);
+  const [launch, setLaunch] = useState<LaunchStatus | null>(null);
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const syncingRelay = useRef(false);
   const selectedClipId = selectedClipIds[selectedClipIds.length - 1] ?? '';
 
@@ -194,19 +226,21 @@ export default function DesktopWorkspace() {
   }, [api, t]);
 
   const refreshProject = useCallback(async (projectId: string) => {
-    if (!projectId) { setTimeline(null); setVersions([]); setHistory(emptyTimelineHistory()); setAnalysis(null); setProxies([]); return; }
+    if (!projectId) { setTimeline(null); setVersions([]); setHistory(emptyTimelineHistory()); setAnalysis(null); setProxies([]); setReceipts([]); return; }
     try {
-      const [timelineResponse, versionResponse, historyResponse, proxyResponse, analysisResponse] = await Promise.all([
+      const [timelineResponse, versionResponse, historyResponse, proxyResponse, analysisResponse, receiptResponse] = await Promise.all([
         api(`/api/v2/projects/${projectId}/timeline`),
         api(`/api/v2/projects/${projectId}/versions`),
         api(`/api/v2/projects/${projectId}/history`),
         api(`/api/v2/projects/${projectId}/proxies`),
         api(`/api/v2/projects/${projectId}/analysis`),
+        api(`/api/v2/projects/${projectId}/publish-receipts`),
       ]);
       setTimeline(timelineResponse.timeline as Timeline); setVersions(versionResponse.versions as Version[]);
       setHistory(historyResponse.history as TimelineHistoryState);
       setProxies(proxyResponse.proxies as MediaProxy[]);
       setAnalysis((analysisResponse.analysis as ProjectAnalysis | null) ?? null);
+      setReceipts((receiptResponse.receipts as PublishReceipt[]) ?? []);
       setSelectedClipIds((current) => {
         const valid = new Set((timelineResponse.timeline as Timeline).tracks.flatMap((track) => track.clips.map((clip) => clip.id)));
         return current.filter((clipId) => valid.has(clipId));
@@ -219,6 +253,20 @@ export default function DesktopWorkspace() {
     if (!window.grokCrew) return;
     void window.grokCrew.githubStatus().then(setGithub).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    void api('/api/v2/launch').then((value) => setLaunch(value as LaunchStatus)).catch(() => undefined);
+    if (window.grokCrew?.updateStatus) {
+      void window.grokCrew.updateStatus().then(setUpdate).catch(() => undefined);
+      return;
+    }
+    setUpdate({
+      status: 'dev_fallback',
+      currentVersion: '0.2.3',
+      latestVersion: '0.2.3',
+      releaseUrl: '',
+      message: 'Browser workspace uses the local tree. Packaged desktop checks GitHub releases.',
+    });
+  }, [api]);
   useEffect(() => {
     const sync = async () => {
       if (!window.grokCrew || syncingRelay.current) return;
@@ -639,7 +687,20 @@ export default function DesktopWorkspace() {
         privacy_status: platform === 'youtube' ? 'private' : undefined,
       }) });
       setMessage(t('게시 작업을 시작했습니다. 플랫폼 상태는 독립적으로 기록됩니다.', 'Publishing started. Each platform is tracked independently.', '发布任务已开始，各平台独立跟踪。', '公開処理を開始しました。各プラットフォームは個別に追跡されます。'));
+      await refreshProject(project.id);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Publish failed.'); } finally { setBusy(false); }
+  };
+  const retryReceipt = async (receipt: PublishReceipt) => {
+    if (!project) return;
+    setBusy(true);
+    try {
+      await api(`/api/v2/projects/${project.id}/publish-receipts/retry`, {
+        method: 'POST',
+        body: JSON.stringify({ receipt_id: receipt.id, approved: true }),
+      });
+      await refreshProject(project.id);
+      setMessage(t('게시를 다시 시도했습니다.', 'Retried the publish.', '已重试发布。', '公開を再試行しました。'));
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Retry failed.'); } finally { setBusy(false); }
   };
 
   return (
@@ -647,7 +708,7 @@ export default function DesktopWorkspace() {
       <header className="desktop-titlebar">
         <div className="desktop-brand"><span className="desktop-logo">G</span><div><b>Grok Crew</b><small>{t('로컬 제작 데스크', 'Desktop Production', '本地制作台', 'デスクトップ制作')}</small></div></div>
         <nav><button className={activePanel === 'setup' ? 'active' : ''} onClick={() => setActivePanel('setup')}>{t('설정', 'Setup', '设置', '設定')}</button><button className={activePanel === 'edit' ? 'active' : ''} onClick={() => setActivePanel('edit')}>{t('편집', 'Edit', '编辑', '編集')}</button><button className={activePanel === 'export' ? 'active' : ''} onClick={() => setActivePanel('export')}>{t('내보내기', 'Export', '导出', '書き出し')}</button></nav>
-        <div className="desktop-title-actions"><span className={`desktop-connection ${runner ? 'connected' : ''}`}>● {runner ? t('Runner 페어링됨', 'Runner paired', 'Runner 已配对', 'Runner ペアリング済み') : t('Runner 대기', 'Waiting for Runner', '等待 Runner', 'Runner 待機')}</span><LanguageSwitcher /></div>
+        <div className="desktop-title-actions">{update ? (update.releaseUrl && window.grokCrew?.openRelease ? <button type="button" className={`desktop-chip ${update.status === 'up_to_date' || update.status === 'dev_fallback' ? 'ready' : 'wait'}`} title={update.message} onClick={() => void window.grokCrew?.openRelease?.(update.releaseUrl)}>{update.status === 'available_external' || update.status === 'available' ? t(`업데이트 ${update.latestVersion}`, `Update ${update.latestVersion}`, `更新 ${update.latestVersion}`, `更新 ${update.latestVersion}`) : t(`개발 ${update.currentVersion}`, `Dev ${update.currentVersion}`, `开发 ${update.currentVersion}`, `開発 ${update.currentVersion}`)}</button> : <span className={`desktop-chip ${update.status === 'up_to_date' || update.status === 'dev_fallback' ? 'ready' : 'wait'}`} title={update.message}>{t(`로컬 ${update.currentVersion}`, `Local ${update.currentVersion}`, `本地 ${update.currentVersion}`, `ローカル ${update.currentVersion}`)}</span>) : null}{launch ? <span className={`desktop-chip ${Object.values(launch.local_gates).every(Boolean) ? 'ready' : 'wait'}`} title={Object.values(launch.external_gates).map((gate) => gate.detail).join(' ')}>{t('로컬 1.0 게이트', 'Local 1.0 gates', '本地 1.0 关卡', 'ローカル 1.0 ゲート')}</span> : null}<span className={`desktop-connection ${runner ? 'connected' : ''}`}>● {runner ? t('Runner 페어링됨', 'Runner paired', 'Runner 已配对', 'Runner ペアリング済み') : t('Runner 대기', 'Waiting for Runner', '等待 Runner', 'Runner 待機')}</span><LanguageSwitcher /></div>
       </header>
 
       <div className="desktop-body">
@@ -771,7 +832,7 @@ export default function DesktopWorkspace() {
               />
             </div>}
 
-            {activePanel === 'export' && <div className="desktop-export-grid"><section className="desktop-card"><div className="desktop-card-title"><span>01</span><div><b>{t('플랫폼 게시 정책', 'Publishing policy', '发布策略', '公開ポリシー')}</b><small>{t('기본은 확인 후 게시입니다.', 'Default: ask before publishing.', '默认发布前确认。', '初期値は公開前に確認。')}</small></div></div>{(['instagram', 'tiktok', 'youtube'] as const).map((platform) => <div className="desktop-publish-row" key={platform}><b>{platform === 'youtube' ? 'YouTube Shorts' : platform[0].toUpperCase() + platform.slice(1)}</b><select aria-label={`${platform} publish policy`} value={publishPolicy[platform]} onChange={(e) => setPublishPolicy({ ...publishPolicy, [platform]: e.target.value as PublishMode })}><option value="export_only">{t('파일만 내보내기', 'Export only', '仅导出', '書き出しのみ')}</option><option value="ask">{t('게시 전 확인', 'Ask before posting', '发布前确认', '公開前に確認')}</option><option value="auto">{t('자동 게시', 'Auto publish', '自动发布', '自動公開')}</option></select><button disabled={busy || !outputReady || publishPolicy[platform] === 'export_only'} onClick={() => void publishNow(platform)}>{t('게시', 'Publish', '发布', '公開')}</button></div>)}</section><section className="desktop-card desktop-render-card"><div className="desktop-card-title"><span>02</span><div><b>{t('최종 파일', 'Final render', '最终文件', '最終ファイル')}</b><small>{relativeWorkspacePath(project.output_path)}</small></div></div><div className={`desktop-render-state ${outputReady ? 'ready' : ''}`}><span>{outputReady ? '✓' : '○'}</span><div><b>{outputReady ? t('렌더 파일 준비됨', 'Render ready', '渲染文件已就绪', 'レンダー準備完了') : t('아직 렌더되지 않음', 'Not rendered yet', '尚未渲染', '未レンダー')}</b><small>{timeline.settings.quality} · {timeline.settings.fps}fps</small></div></div><button className="desktop-primary" disabled={busy} onClick={() => void runLocalRender()}>{t('지금 로컬 렌더', 'Render locally now', '立即本地渲染', '今すぐローカルレンダー')}</button><button className="desktop-secondary" disabled={busy} onClick={() => void enqueueQueuedRender()}>{t('대기열에 넣기', 'Add to queue', '加入队列', 'キューに追加')}</button>{queueJobs.length ? <small>{queueJobs.length} {t('개 대기', 'queued', '个排队', '件待機')}</small> : null}</section><section className="desktop-card"><div className="desktop-card-title"><span>03</span><div><b>{t('교환 파일', 'Exchange', '交换文件', '交換')}</b><small>EDL · OTIO</small></div></div><div className="desktop-relay-actions"><button onClick={() => void exportExchange('edl')}>EDL</button><button onClick={() => void exportExchange('otio')}>OTIO</button></div>{exchangeText ? <textarea className="desktop-exchange" readOnly value={exchangeText} /> : null}</section></div>}
+            {activePanel === 'export' && <div className="desktop-export-grid"><section className="desktop-card"><div className="desktop-card-title"><span>01</span><div><b>{t('플랫폼 게시 정책', 'Publishing policy', '发布策略', '公開ポリシー')}</b><small>{t('기본은 확인 후 게시입니다.', 'Default: ask before publishing.', '默认发布前确认。', '初期値は公開前に確認。')}</small></div></div>{(['instagram', 'tiktok', 'youtube'] as const).map((platform) => <div className="desktop-publish-row" key={platform}><b>{platform === 'youtube' ? 'YouTube Shorts' : platform[0].toUpperCase() + platform.slice(1)}</b><select aria-label={`${platform} publish policy`} value={publishPolicy[platform]} onChange={(e) => setPublishPolicy({ ...publishPolicy, [platform]: e.target.value as PublishMode })}><option value="export_only">{t('파일만 내보내기', 'Export only', '仅导出', '書き出しのみ')}</option><option value="ask">{t('게시 전 확인', 'Ask before posting', '发布前确认', '公開前に確認')}</option><option value="auto">{t('자동 게시', 'Auto publish', '自动发布', '自動公開')}</option></select><button disabled={busy || !outputReady || publishPolicy[platform] === 'export_only'} onClick={() => void publishNow(platform)}>{t('게시', 'Publish', '发布', '公開')}</button></div>)}</section><section className="desktop-card desktop-render-card"><div className="desktop-card-title"><span>02</span><div><b>{t('최종 파일', 'Final render', '最终文件', '最終ファイル')}</b><small>{relativeWorkspacePath(project.output_path)}</small></div></div><div className={`desktop-render-state ${outputReady ? 'ready' : ''}`}><span>{outputReady ? '✓' : '○'}</span><div><b>{outputReady ? t('렌더 파일 준비됨', 'Render ready', '渲染文件已就绪', 'レンダー準備完了') : t('아직 렌더되지 않음', 'Not rendered yet', '尚未渲染', '未レンダー')}</b><small>{timeline.settings.quality} · {timeline.settings.fps}fps</small></div></div><button className="desktop-primary" disabled={busy} onClick={() => void runLocalRender()}>{t('지금 로컬 렌더', 'Render locally now', '立即本地渲染', '今すぐローカルレンダー')}</button><button className="desktop-secondary" disabled={busy} onClick={() => void enqueueQueuedRender()}>{t('대기열에 넣기', 'Add to queue', '加入队列', 'キューに追加')}</button>{queueJobs.length ? <small>{queueJobs.length} {t('개 대기', 'queued', '个排队', '件待機')}</small> : null}</section><section className="desktop-card"><div className="desktop-card-title"><span>03</span><div><b>{t('교환 파일', 'Exchange', '交换文件', '交換')}</b><small>EDL · OTIO</small></div></div><div className="desktop-relay-actions"><button onClick={() => void exportExchange('edl')}>EDL</button><button onClick={() => void exportExchange('otio')}>OTIO</button></div>{exchangeText ? <textarea className="desktop-exchange" readOnly value={exchangeText} /> : null}</section><section className="desktop-card desktop-receipts-card"><div className="desktop-card-title"><span>04</span><div><b>{t('게시 영수증', 'Publish receipts', '发布回执', '公開レシート')}</b><small>{t('실패는 재시도할 수 있고, 중단된 게시는 재시작 때 실패로 정리됩니다.', 'Failed posts can be retried. Interrupted publishes fail on the next Studio start.', '失败的发布可以重试。中断的发布会在下次启动时标记为失败。', '失敗した公開は再試行できます。中断された公開は再起動時に失敗になります。')}</small></div></div>{receipts.length ? receipts.map((receipt) => <div className={`desktop-receipt ${receipt.status}`} key={receipt.id}><div><b>{receipt.platform} · {receipt.status}</b><small>{receipt.error_text || receipt.idempotency_key}</small></div><button disabled={busy || receipt.status !== 'failed'} onClick={() => void retryReceipt(receipt)}>{t('재시도', 'Retry', '重试', '再試行')}</button></div>) : <p className="desktop-receipt-empty">{t('아직 게시 영수증이 없습니다.', 'No publish receipts yet.', '暂无发布回执。', '公開レシートはまだありません。')}</p>}</section></div>}
           </>}
         </section>
 

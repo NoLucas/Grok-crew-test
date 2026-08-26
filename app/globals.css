@@ -6735,7 +6735,15 @@ select {
 }
 .desktop-titlebar nav button:hover,
 .desktop-titlebar nav button.active { border-bottom-color: var(--desktop-text); color: var(--desktop-text); }
-.desktop-title-actions { display: flex; align-items: center; gap: 14px; }
+.desktop-title-actions { display: flex; align-items: center; gap: 10px; }
+.desktop-chip {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 8px; border: 1px solid var(--desktop-line); border-radius: 999px;
+  background: white; color: var(--desktop-muted); font-size: 8px; font-weight: 650;
+}
+.desktop-chip.ready { color: var(--desktop-green); border-color: #cfead8; }
+.desktop-chip.wait { color: #9a6b12; }
+.desktop-title-actions > button.desktop-chip { cursor: pointer; }
 .desktop-connection { color: var(--desktop-muted); font-size: 10px; white-space: nowrap; }
 .desktop-connection.connected { color: var(--desktop-green); }
 .desktop-title-actions .language-switcher { display: flex; align-items: center; gap: 6px; color: var(--desktop-muted); font-size: 9px; }
@@ -6863,6 +6871,19 @@ select {
 .desktop-publish-row select { padding: 8px; border: 1px solid var(--desktop-line); background: #fafafa; font-size: 9px; }
 .desktop-publish-row button { height: 31px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 8px; font-weight: 750; }
 .desktop-publish-row button:disabled { background: #ddd; color: #999; }
+.desktop-receipts-card { grid-column: 1 / -1; }
+.desktop-receipt {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+  padding: 10px 13px; border-bottom: 1px solid var(--desktop-line-soft);
+}
+.desktop-receipt div { display: grid; gap: 3px; min-width: 0; }
+.desktop-receipt b { font-size: 10px; }
+.desktop-receipt small { color: var(--desktop-muted); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desktop-receipt.failed b { color: #b42318; }
+.desktop-receipt.succeeded b { color: var(--desktop-green); }
+.desktop-receipt button { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--desktop-ink); color: #fff; font-size: 8px; font-weight: 750; }
+.desktop-receipt button:disabled { background: #ddd; color: #999; }
+.desktop-receipt-empty { margin: 0; padding: 14px 13px; color: var(--desktop-muted); font-size: 10px; }
 .desktop-render-card > .desktop-primary { margin: 12px; }
 .desktop-render-state { display: flex; align-items: center; gap: 10px; margin: 12px; padding: 14px; border: 1px solid var(--desktop-line); border-radius: 9px; background: #fafafa; }
 .desktop-render-state > span { color: var(--desktop-muted); font-size: 20px; }

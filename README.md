@@ -80,6 +80,8 @@ It is a **local production desk for people and same-PC bots**, not a cloud video
 
 `npm run local` starts the browser workspace at `localhost:3000` and Local Studio at `127.0.0.1:7214`. Stop with `Ctrl+C`; running the same command later resumes the local workspace.
 
+`npm run launch:verify` prints the P3 local 1.0 gates (publish receipts, loopback sidecar) and marks OAuth apps, code signing, and in-place auto-update as external.
+
 ### Give a local bot its first task
 
 Run these commands from the cloned folder in the bot's terminal:

@@ -244,6 +244,22 @@ def test_publish_idempotency_returns_existing_success(studio, monkeypatch):
     assert calls == ["project-youtube-v1"]
 
 
+def test_publish_error_redacts_bearer_token(studio, monkeypatch):
+    project = make_project(studio)
+
+    class FakePublisher:
+        def publish(self, _project, _payload):
+            raise RuntimeError("Graph API rejected bearer ghp_not_a_real_token")
+
+    monkeypatch.setitem(publishers.PUBLISHERS, "tiktok", FakePublisher())
+    try:
+        publishers.publish("tiktok", project, {"idempotency_key": "redact-1"})
+        raise AssertionError("expected a sanitized publish failure")
+    except RuntimeError as exc:
+        assert "ghp_not_a_real_token" not in str(exc)
+        assert "[redacted]" in str(exc)
+
+
 def test_local_analysis_persists_transcript_and_scene_metadata(studio, monkeypatch):
     project = make_project(studio)
     source = config.WORKSPACE_DIR / "inputs" / "source.mp4"

@@ -211,6 +211,16 @@ def test_v2_publish_requires_approval_and_idempotency_key(live_server):
         assert exc.code == 400
 
 
+def test_v2_launch_and_publish_receipts_are_readable(live_server):
+    status, payload = get_status(live_server, "/api/v2/launch")
+    assert status == 200
+    assert payload["schema"] == "grok-crew.launch-status/v1"
+    project = create_project(live_server)
+    status, receipts = get_status(live_server, f"/api/v2/projects/{project['id']}/publish-receipts")
+    assert status == 200
+    assert receipts["receipts"] == []
+
+
 def test_v2_control_job_pause_and_resume_are_durable(live_server):
     project = create_project(live_server)
     created = post(live_server, f"/api/v2/projects/{project['id']}/control-jobs", {

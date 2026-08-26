@@ -40,6 +40,7 @@ from studio_server import (
     get_project,
     import_project_bundle,
     inspect_project_media,
+    launch_status,
     list_artifacts,
     list_bot_activity,
     list_bot_entries,
@@ -53,12 +54,14 @@ from studio_server import (
     project_exchange,
     project_preview,
     project_proxies,
+    project_publish_receipts,
     project_scopes,
     quality_report,
     render_queue,
     record_bot_heartbeat,
     request_job_cancel,
     request_proxy,
+    retry_project_publish,
     save_artifact,
     set_edit_method,
     set_execution_policy,
@@ -260,6 +263,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, {"projects": list_projects()})
             elif path == "/api/v2/workspace":
                 self._json(200, workspace_v2())
+            elif path == "/api/v2/launch":
+                self._json(200, launch_status())
             elif path == "/api/v2/media":
                 self._json(200, {"media": media_catalog()})
             elif path == "/api/v2/runners":
@@ -272,6 +277,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, {"versions": list_timeline_versions(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/history"):
                 self._json(200, {"history": get_timeline_history(path.split("/")[4])})
+            elif path.startswith("/api/v2/projects/") and path.endswith("/publish-receipts"):
+                self._json(200, project_publish_receipts(path.split("/")[4]))
             elif path.startswith("/api/v2/projects/") and path.endswith("/proxies"):
                 self._json(200, {"proxies": project_proxies(path.split("/")[4])})
             elif path.startswith("/api/v2/projects/") and path.endswith("/analysis"):
@@ -393,6 +400,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 if body.get("run_immediately", True):
                     job = start_job(job["id"], wait=bool(body.get("wait", False)))
                 self._json(201, {"job": job, "platform": platform})
+            elif path.startswith("/api/v2/projects/") and path.endswith("/publish-receipts/retry"):
+                self._json(200, retry_project_publish(path.split("/")[4], body))
             elif path.startswith("/api/v2/control-jobs/") and path.endswith("/control"):
                 self._json(200, {"control_job": control_control_job(path.split("/")[4], str(body.get("command", "")), body.get("reason"))})
             elif path.startswith("/api/v2/control-jobs/") and path.endswith("/cancel"):
