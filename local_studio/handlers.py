@@ -73,6 +73,7 @@ from studio_server import (
 from first_run import first_run_status, open_sample_project
 from bot_pack import bot_pack_bytes
 from edit_spec import create_spec, get_spec, list_specs, spec_brief, spec_invite
+from handoff_folders import workspace_handoff_folders
 from handoff_inbox import handoff_status, pull_handoff
 from handoff_materials import materials_status, pull_materials, write_owned_materials
 from style_recipes import list_recipes
@@ -288,6 +289,14 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, outbox_status())
             elif path == "/api/v2/handoff/materials":
                 self._json(200, materials_status())
+            elif path == "/api/v2/handoff/folders":
+                query = parse_qs(urlparse(self.path).query)
+                kind = str((query.get("kind") or [""])[0] or "").strip() or None
+                project_id = str((query.get("project_id") or [""])[0] or "").strip() or None
+                if kind and kind not in {"package", "materials"}:
+                    self._json(400, {"error": "kind must be package or materials."})
+                else:
+                    self._json(200, workspace_handoff_folders(project_id=project_id, kind=kind))
             elif path.startswith("/api/v2/edit-specs/") and path.endswith("/invite"):
                 query = parse_qs(urlparse(self.path).query)
                 language = (query.get("lang") or query.get("language") or ["ko"])[0]

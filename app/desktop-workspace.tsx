@@ -16,6 +16,7 @@ import type { Timeline, TrackType } from './timeline/types';
 import { isUnclaimedHold, remoteDeskVisible, remoteNeedsAttention } from './desktop-remote';
 import { SpecDesk } from './desktop-spec-desk';
 import { SimpleDesk } from './desktop-simple-desk';
+import { HandoffFolderBoard, type HandoffFolder } from './desktop-handoff-folder';
 
 type UpdateStatus = {
   status: string;
@@ -107,7 +108,7 @@ type CrewRoster = {
   suggested_collector?: string;
   suggested_editor?: string;
 };
-type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus; style_recipes?: StyleRecipe[]; crew_roster?: CrewRoster };
+type Workspace = { projects: Project[]; control_jobs: ControlJob[]; runner_events: RunnerEvent[]; runners: Runner[]; media: MediaItem[]; first_run?: FirstRun; edit_specs?: EditSpec[]; handoff?: HandoffStatus; handoff_folders?: HandoffFolder[]; style_recipes?: StyleRecipe[]; crew_roster?: CrewRoster };
 type GitHubStatus = { authenticated: boolean; login?: string | null; oauth_available?: boolean; relay_connected?: boolean; remote?: string | null };
 type JsonObject = Record<string, unknown>;
 type AnalysisScene = { id: string; at: number; size_bytes: number };
@@ -387,6 +388,25 @@ export default function DesktopWorkspace() {
   });
   const unclaimedJobs = projectJobs.filter((job) => isUnclaimedHold(job.status) && !job.runner_id);
   const hideInspectorColumn = specDeskOpen || !project || !timeline;
+  const handoffFolders = workspace.handoff_folders ?? [];
+  const projectFolders = useMemo(() => {
+    if (!project) return [];
+    return handoffFolders.filter((folder) => folder.project_id === project.id);
+  }, [handoffFolders, project]);
+  const projectLooksImported = Boolean(
+    project && (
+      project.handoff_agent
+      || relativeWorkspacePath(project.source_path).startsWith('inputs/handoff/')
+    ),
+  );
+  const openHandoffProject = (projectId: string) => {
+    setSpecDeskOpen(false);
+    setAdvancedSpecOpen(false);
+    setSelectedProjectId(projectId);
+    setActivePanel('edit');
+    setDrawer('none');
+    void refreshProject(projectId);
+  };
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
   const videoAssets = useMemo(
@@ -997,6 +1017,11 @@ export default function DesktopWorkspace() {
             advancedSpecOpen ? (
               <div className="desktop-simple-wrap">
                 <button type="button" className="desktop-secondary" onClick={() => setAdvancedSpecOpen(false)}>{t('짧은 화면으로', 'Back to the short desk', '回到简短工作台', '短い画面へ')}</button>
+                <HandoffFolderBoard
+                  folders={handoffFolders}
+                  studioState={studioState}
+                  onOpenProject={openHandoffProject}
+                />
                 <SpecDesk
                   specs={workspace.edit_specs ?? []}
                   recipes={workspace.style_recipes ?? []}
@@ -1022,6 +1047,7 @@ export default function DesktopWorkspace() {
                 />
               </div>
             ) : (
+              <div className="desktop-simple-wrap">
               <SimpleDesk
                 recipes={workspace.style_recipes ?? []}
                 busy={busy}
@@ -1059,12 +1085,23 @@ export default function DesktopWorkspace() {
                 onRefresh={() => refreshWorkspace(true)}
                 request={api}
               />
+              <HandoffFolderBoard
+                folders={handoffFolders}
+                studioState={studioState}
+                onOpenProject={openHandoffProject}
+              />
+              </div>
             )
           )
           : !timeline ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('타임라인을 불러오는 중', 'Loading the timeline', '正在加载时间线', 'タイムラインを読み込み中')}</h1><p>{t('프로젝트가 열려 있습니다. 규격 화면으로 돌아가지 않습니다.', 'A project is open. The spec desk stays hidden.', '项目已打开。不会回到规格页。', 'プロジェクトは開いています。仕様デスクには戻りません。')}</p><button type="button" className="desktop-secondary" onClick={() => void refreshProject(project.id)}>{t('다시 읽기', 'Reload', '重新读取', '再読み込み')}</button></div>
           : <>
             <div className="desktop-project-bar"><div><small>{t('현재 프로젝트', 'CURRENT PROJECT', '当前项目', '現在のプロジェクト')}</small><h1>{project.title}</h1></div><div className="desktop-project-chips">{project.handoff_agent ? <span className={project.handoff_door === 'editor' || project.handoff_door === 'grok' ? 'is-editor' : 'is-collector'}>{project.handoff_door === 'editor' || project.handoff_door === 'grok' ? t('편집 문', 'Editor door', '剪辑门', '編集ドア') : t('수집 문', 'Collector door', '收集门', '収集ドア')} · {handoffSenderLabel(project, t)}</span> : null}<span>v{timeline.revision}</span><span>{timeline.settings.width}×{timeline.settings.height}</span><span>{timeline.settings.fps}fps</span></div></div>
             {activePanel === 'setup' && <div className="desktop-setup-grid">
+              <HandoffFolderBoard
+                folders={projectFolders}
+                studioState={studioState}
+                expectEmpty={projectLooksImported}
+              />
               <section className="desktop-card desktop-source-card">
                 <div className="desktop-card-title"><span>01</span><div><b>{t('원본과 결과', 'Source & output', '素材与输出', '素材と出力')}</b><small>{relativeWorkspacePath(project.source_path)}</small></div></div>
                 <video controls preload="metadata" src={mediaUrl(project.source_path)} />
@@ -1106,6 +1143,12 @@ export default function DesktopWorkspace() {
             </div>}
 
             {activePanel === 'edit' && <div className="desktop-editor">
+              <HandoffFolderBoard
+                folders={projectFolders}
+                studioState={studioState}
+                compact
+                expectEmpty={projectLooksImported}
+              />
               <ProgramMonitor
                 projectId={project.id}
                 playhead={playhead}
