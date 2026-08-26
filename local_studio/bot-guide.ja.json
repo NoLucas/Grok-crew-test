@@ -87,10 +87,10 @@
   "terminal_cli_contract": {
     "api_base_url": "http://127.0.0.1:7214",
     "browser_site_base_url": "http://localhost:3000",
-    "browser_rule": "ポート 7214 は CLI のダウンロードと JSON API リクエスト専用です。ブラウザでの利用やスクリーンショットには python grok-crew.py site --page production を実行し、出力された http://localhost:3000 の URL を開いてください。ポート 7214 で /production を開かないでください。",
+    "browser_rule": "ポート 7214 は CLI のダウンロードと JSON API リクエスト専用です。ブラウザでの利用やスクリーンショットには python grok-crew.py site --page desktop を実行し、出力された http://localhost:3000 の URL を開いてください。ポート 7214 でデスクトップや /production を開かないでください。",
     "clone_cli_path": "local_studio/grok_crew.py",
     "clone_bootstrap": "python local_studio/grok_crew.py contract",
-    "browser_pages": { "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
+    "browser_pages": { "desktop": "http://localhost:3000/", "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
     "download": "GET /downloads/grok-crew.py",
     "bootstrap": "python grok-crew.py contract",
     "purpose": "同一 PC のターミナルで動作するボット向けの、依存関係のない CLI です。ブラウザ操作なしに Local Studio と Operations のエンドポイントを使用できます。",

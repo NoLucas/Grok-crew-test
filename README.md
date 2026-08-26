@@ -2,7 +2,7 @@
 
 <p align="center"><strong>English</strong> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**Turn rough short-form footage into a bot-ready edit plan, a local MP4, and an optional Instagram upload—without sending the project, media, or bot history to a cloud backend.**
+**Turn rough short-form footage into a bot-ready edit plan, a local MP4, and an optional Instagram, TikTok, or YouTube upload—without sending the project, media, or bot history to a cloud backend.**
 
 <p>
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-127.0.0.1-1d1d1b?style=flat-square">
@@ -11,9 +11,9 @@
   <img alt="Runs on your computer" src="https://img.shields.io/badge/runs-on%20your%20computer-f4c400?style=flat-square">
 </p>
 
-## Desktop control workspace (development preview)
+## Desktop control workspace
 
-Grok Crew now includes an Electron workspace built for people rather than a chat surface: project/version navigation, a source monitor, settings and publishing policy, verified Grok and local status, a multitrack timeline, local analysis/rendering, rollback, and signed encrypted Runner handoffs.
+The default workspace is the Desktop at [`/`](http://localhost:3000/). It is the same surface in the browser (`npm run local`) and in Electron (`npm run desktop`): project/version navigation, a program monitor, a multitrack timeline, local analysis/rendering, publish receipts, rollback, and signed encrypted Runner handoffs. Legacy pages such as `/production` still run, but they are planning or older consoles—open Desktop for everyday editing.
 
 ```sh
 npm install
@@ -38,7 +38,7 @@ cd grok-crew
 npm run local
 ```
 
-Open [Production](http://localhost:3000/production) when the setup finishes. The first run installs the local browser and renderer dependencies, creates a private Python environment, and prepares a bundled sample input — no cloud account or provider API key is required.
+Open the [Desktop](http://localhost:3000/) when the setup finishes. The first run installs the local browser and renderer dependencies, creates a private Python environment, and prepares a bundled sample input — no cloud account or provider API key is required. The older [Production](http://localhost:3000/production) console remains available.
 
 > **License:** Grok Crew is source-available under [BUSL-1.1](LICENSE), not an open-source project. See the [license](LICENSE) for the exact use rights.
 
@@ -95,11 +95,11 @@ Then open [Bot Check](http://localhost:3000/bots). The bot appears only after it
 
 ## The first useful workflow
 
-1. Open **Production** and create a project using media under `local_studio/workspace/inputs`.
+1. Open **Desktop** at `/` and create a project using media under `local_studio/workspace/inputs`.
 2. Let the bot read the [Bot Guide](http://localhost:3000/bot-guide), set its edit method, and save a transcript cut map.
 3. Use **Operations Center** to inspect media, save project memory, compare A/B edits, and run quality checks.
-4. Render locally. A bot can use `auto_local`, or choose a human-approval gate for its own renders.
-5. Add an Instagram job. Turn on **Auto-upload** to start immediately, or leave it in the local queue for direct execution later.
+4. Render locally from Desktop (or the older Production console). A bot can use `auto_local`, or choose a human-approval gate for its own renders.
+5. Publish from Desktop Export to Instagram, TikTok, or YouTube when local tokens are configured. Failed or interrupted receipts can be retried; an interrupted retry asks before sending a possible second copy.
 
 ## What it does
 
@@ -109,7 +109,7 @@ Then open [Bot Check](http://localhost:3000/bots). The bot appears only after it
 | Guessing where silences, retakes, and filler are | Transcript-first cut maps and media preflight reports |
 | Discovering problems after export | Pre-render, post-render, and delivery quality reports |
 | Losing editing context between bot runs | Local SQLite project memory, job history, and bot heartbeat records |
-| A publish action with unclear status | A local MP4 render queue and optional per-job Instagram auto-upload |
+| A publish action with unclear status | A local MP4 render queue and optional Instagram, TikTok, or YouTube publish with receipts |
 
 ### Built-in production tools
 
@@ -127,7 +127,7 @@ Then open [Bot Check](http://localhost:3000/bots). The bot appears only after it
 
 | Actually runs on this computer | Planning, preview, or non-destructive work |
 | --- | --- |
-| **Production** creates a Local Studio project and renders a real local MP4. An Instagram job can run only with the owner’s local Meta credentials. | **Studio, Edit Lab, Cut Log, Agent Desk, Connect, Packet, Gates, Export, and Library** help draft, preview, package, or move a plan. They do not cut source media, start a render, or upload anything. |
+| **Desktop (`/`)** is the default workspace: timeline edits, local renders, and Instagram / TikTok / YouTube publish (env tokens). The older **Production** console can still create a project and render a local MP4. | **Edit Lab, Cut Log, Agent Desk, Connect, Packet, Gates, Export, and Library** help draft, preview, package, or move a plan. They do not cut source media, start a render, or upload anything. |
 | **Bot Check** records real bot entries, heartbeats, policies, and job activity in local SQLite. The same-PC terminal CLI creates projects and runs jobs through the same local service. | **Operations Center** can save cut maps, memory, task assignments, A/B variants, audio/overlay plans, brand kits, and quality reports; these are local and useful, but non-destructive until a project is rendered in Production. |
 | **Operations Center** also performs local media inspection and pre-/post-render quality checks. | **Bot Guide, Terminal, and Privacy** are local instructions and status views; they do not themselves change media. |
 
@@ -135,10 +135,10 @@ Then open [Bot Check](http://localhost:3000/bots). The bot appears only after it
 
 The browser workspace at `localhost:3000` is split into these local pages. The live-action boundary above is deliberate: planning never silently changes a source file or publishes a post.
 
-- `/` Studio — see the current project's mood and concept at a glance
-- `/edit` Edit Lab — frame, motion, typography, timing, and caption preview (local-only, does not affect the real render)
+- **`/` Desktop — the default workspace. Timeline, local render, publish receipts, and Instagram / TikTok / YouTube export.**
+- `/edit` Edit Lab — frame, motion, typography, timing, and caption preview (planning only, does not affect the real render)
 - `/cut` Cut Log — mark kept/dropped segments from the transcript (does not cut the actual file)
-- **`/production` Production — create a project, set the source→output path, configure the Finish Rack, queue renders, and send to Instagram. This is the only page where a real local render or publish actually happens.**
+- `/production` Production — older create/render/Instagram console. Prefer Desktop for everyday work.
 - `/operations` Operations Center — media inspection, quality reports, project memory, the task board, A/B variants, audio/overlay plans, and brand kits
 - **`/bots` Bot Check — bot entry, heartbeat, and execution policy (`auto_local` vs. approval required). This is the only page where real bot activity is recorded.**
 - `/terminal` Terminal — CLI/API instructions for a bot on this same PC
@@ -172,15 +172,15 @@ python local_studio/grok_crew.py bots list
 python local_studio/grok_crew.py bots activity
 ```
 
-Available pages include `studio`, `edit`, `cut`, `production`, `operations`, `bots`, `guide`, `terminal`, `library`, `agent`, `connect`, `packet`, `gates`, `export`, and `privacy`.
+Available pages include `desktop`, `studio`, `edit`, `cut`, `production`, `operations`, `bots`, `guide`, `terminal`, `library`, `agent`, `connect`, `packet`, `gates`, `export`, and `privacy`.
 
 See [the local bot manual](local_studio/README.md) for the full command set, or open [Bot Guide](http://localhost:3000/bot-guide?lang=en) after starting the workspace.
 
-## Privacy and optional Instagram delivery
+## Privacy and optional social delivery
 
 The browser workspace runs at `localhost:3000`; Local Studio binds to `127.0.0.1:7214`. Source media, renders, SQLite records, and bot histories remain under `local_studio/` on the current computer.
 
-Instagram delivery is optional. It needs the owner's locally configured Meta credentials and a supported local MP4. A job can stay queued or start immediately with `--auto-upload`; credentials are never stored in SQLite or exposed to a bot through this project.
+Instagram, TikTok, and YouTube delivery is optional. Each needs the owner’s locally configured access token and a supported local MP4. Official OAuth apps stay outside this repository. Credentials are never stored in SQLite or exposed to a bot through this project.
 
 ## Cloud bot handoff (for a bot that isn't on this PC)
 
@@ -195,8 +195,8 @@ Local Studio still never accepts a connection from another machine — that does
 
 ## Roadmap
 
+- [x] Publish delivery for Instagram, TikTok, and YouTube Shorts (local env tokens; OAuth apps stay external)
 - [ ] Community-maintained example edit packs
-- [ ] Publish delivery beyond Instagram (TikTok, YouTube Shorts)
 
 ## Feedback and contributions
 

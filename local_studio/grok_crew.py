@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 BROWSER_PAGES = {
+    "desktop": "http://localhost:3000/",
     "studio": "http://localhost:3000/",
     "edit": "http://localhost:3000/edit",
     "cut": "http://localhost:3000/cut",
@@ -122,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
         commands.add_parser(name, help=help_text)
 
     site = commands.add_parser("site", help="Print the correct browser workspace URL; do not use port 7214 for browser pages.")
-    site.add_argument("--page", choices=tuple(BROWSER_PAGES), default="production")
+    site.add_argument("--page", choices=tuple(BROWSER_PAGES), default="desktop")
 
     entry = commands.add_parser("entry", help="Enter Local Studio and record the first bot heartbeat.")
     entry.add_argument("--bot-id", required=True); entry.add_argument("--display-name", required=True)

@@ -7,8 +7,8 @@ This companion service is a private, local production node for Local Video Works
 - Stores projects, render jobs, approval records, and event history in local SQLite.
 - Uses MoviePy locally to render EDLs into 1080×1920 H.264/AAC MP4 files.
 - Generates optional low-resolution H.264 proxies under `workspace/proxies/` for lighter desktop preview; proxy jobs expose progress and retry state, while final renders always resolve each Timeline v2 asset's original `path`.
-- Lets each local agent choose automatic local rendering or a human-approval gate for rendering; Instagram delivery is queued or auto-uploaded per job.
-- Can use Meta's resumable upload workflow to upload a rendered file to Instagram when local credentials are available.
+- Lets each local agent choose automatic local rendering or a human-approval gate for rendering.
+- Desktop Export can publish a rendered MP4 to Instagram, TikTok, or YouTube Shorts when local env tokens are set. Official OAuth apps stay outside this repository. Instagram still uses Meta's resumable upload workflow.
 - Runs renders and uploads on a background worker: starting a job returns immediately with a `queued`/`running` status, `GET /api/jobs/{id}` reports live `progress` (0–100), and `POST /api/jobs/{id}/cancel` requests cancellation before the next clip is processed. Pass `wait: true` in the request body (or `--wait` on the CLI) to block until the job finishes instead. A job still `running` when Local Studio stops unexpectedly is marked `failed` on the next startup.
 - `GET /api/presets` lists quality, caption-layout, and platform presets (Reels/TikTok/Shorts 9:16, Feed square 1:1, Landscape/X 16:9); merge one into a project's `render_settings` instead of setting every field by hand.
 - Captions can carry a background panel (`caption_bg` / `caption_bg_color`) and, per clip, an optional `word_timings` array for sequential word-by-word captions instead of one static line. A render fails fast with a clear error if no local font can be found, instead of silently skipping captions.
@@ -25,12 +25,12 @@ Copy `.env.example` to `local_studio/.env` to set any of these; all are optional
 ## Start
 
 1. From the repository's top-level folder, run `npm run local`. It starts this service and the browser workspace together, creating the local virtual environment and installing the two local libraries on first use.
-2. Copy `.env.example` to `.env` only if you want token protection or Instagram publishing.
+2. Copy `.env.example` to `.env` only if you want token protection or Instagram / TikTok / YouTube publishing.
 3. For a Local Studio-only Windows session, run `./run.ps1` from this folder.
 4. Or run `.venv\Scripts\python studio_server.py --port 7214` directly.
-5. Instagram upload needs local credentials. Use the website's Auto-upload checkbox or the CLI's `--auto-upload` option to start upload immediately.
+5. Social upload needs local credentials. Desktop Export is the everyday publish surface; the older Production console still has Instagram auto-upload, and the CLI can pass `--auto-upload`.
 
-The browser app is at `http://localhost:3000/production`. Create or queue jobs there, or use `bot-contract.json` from a local agent with the same workstation access.
+The default browser workspace is Desktop at `http://localhost:3000/`. The older Production console remains at `/production`. Create or queue jobs from either surface, or use `bot-contract.json` from a local agent with the same workstation access.
 
 ## Bot status and automation
 
@@ -54,7 +54,7 @@ Bots can read `GET /api/projects/{id}/operations`. They can create a timestamped
 
 Any Grok bot runtime that runs in a terminal on this same PC can use the dependency-free CLI already included in a Git clone: `python local_studio/grok_crew.py contract` from the repository's top-level folder. `GET /downloads/grok-crew.py` remains available only for a bot that cannot access the cloned folder. The Terminal page at `http://localhost:3000/terminal` includes copy-ready commands.
 
-`http://127.0.0.1:7214` is the CLI and JSON API service, not the browser workspace. For a page a bot needs to open or capture, run `python grok-crew.py site --page production` (or `operations`, `bots`, `guide`, `terminal`, or `privacy`) and use the printed `http://localhost:3000/...` URL. Opening a known browser page on port 7214 now redirects to the correct browser workspace.
+`http://127.0.0.1:7214` is the CLI and JSON API service, not the browser workspace. For a page a bot needs to open or capture, run `python grok-crew.py site --page desktop` (or `production`, `operations`, `bots`, `guide`, `terminal`, or `privacy`) and use the printed `http://localhost:3000/...` URL. Opening a known browser page on port 7214 now redirects to the correct browser workspace.
 
 The CLI covers bot entry and heartbeat, execution policy, projects, edit methods, P0–P2 operations, brand kits, and job queues. It refuses non-loopback URLs. If token protection is enabled, supply `LOCAL_STUDIO_TOKEN` only through that bot terminal's environment. A connected bot can use `policy set --bot-id <id> --mode auto_local` to queue and run its own local renders, or choose `approval_required` to require `--human-approved` for rendering. Use `jobs instagram --auto-upload` to start Instagram upload immediately, or leave it queued for direct execution.
 

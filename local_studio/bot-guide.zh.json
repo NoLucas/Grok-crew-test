@@ -87,10 +87,10 @@
   "terminal_cli_contract": {
     "api_base_url": "http://127.0.0.1:7214",
     "browser_site_base_url": "http://localhost:3000",
-    "browser_rule": "7214 端口仅用于 CLI 下载和 JSON API 请求。浏览器使用或截图请运行 python grok-crew.py site --page production,并打开输出的 http://localhost:3000 地址。切勿在 7214 端口打开 /production。",
+    "browser_rule": "7214 端口仅用于 CLI 下载和 JSON API 请求。浏览器使用或截图请运行 python grok-crew.py site --page desktop,并打开输出的 http://localhost:3000 地址。切勿在 7214 端口打开桌面或 /production。",
     "clone_cli_path": "local_studio/grok_crew.py",
     "clone_bootstrap": "python local_studio/grok_crew.py contract",
-    "browser_pages": { "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
+    "browser_pages": { "desktop": "http://localhost:3000/", "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
     "download": "GET /downloads/grok-crew.py",
     "bootstrap": "python grok-crew.py contract",
     "purpose": "面向在同一台电脑终端上运行的机器人的零依赖 CLI。它可以在不进行浏览器操作的情况下使用 Local Studio 和 Operations 端点。",

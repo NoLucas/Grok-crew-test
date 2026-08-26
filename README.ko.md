@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <strong>한국어</strong> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**거친 짧은 영상 소스를 봇이 이해할 수 있는 편집 계획, 로컬 MP4, 선택적 Instagram 업로드로 바꾸세요. 프로젝트·미디어·봇 이력을 클라우드 백엔드로 보낼 필요가 없습니다.**
+**거친 짧은 영상 소스를 봇이 이해할 수 있는 편집 계획, 로컬 MP4, 선택적 Instagram·TikTok·YouTube 업로드로 바꾸세요. 프로젝트·미디어·봇 이력을 클라우드 백엔드로 보낼 필요가 없습니다.**
 
 <p>
   <img alt="로컬 우선" src="https://img.shields.io/badge/local--first-127.0.0.1-1d1d1b?style=flat-square">
@@ -11,9 +11,9 @@
   <img alt="내 컴퓨터에서 실행" src="https://img.shields.io/badge/runs-on%20your%20computer-f4c400?style=flat-square">
 </p>
 
-## 사용자용 데스크톱 작업 공간 — 개발 프리뷰
+## 데스크톱 작업 공간
 
-채팅 입력창 대신 프로젝트·버전 탐색, 원본 모니터, 편집/게시 설정, 검증된 Grok·로컬 상태, 멀티트랙 타임라인, 로컬 분석·렌더, 롤백, 서명·암호화 Runner 전달을 하나의 Electron 앱에 통합했습니다.
+기본 화면은 [`/`](http://localhost:3000/) 데스크톱입니다. `npm run local` 브라우저와 `npm run desktop` Electron이 같은 작업 공간을 엽니다. 프로젝트·버전, 프로그램 모니터, 멀티트랙 타임라인, 로컬 분석·렌더, 게시 영수증, 롤백, 서명·암호화 Runner 전달이 여기에 있습니다. `/production` 같은 레거시 페이지는 남아 있지만, 일상 편집은 데스크톱을 쓰세요.
 
 ```sh
 npm install
@@ -38,7 +38,7 @@ cd grok-crew
 npm run local
 ```
 
-준비가 끝나면 [Production](http://localhost:3000/production)을 여세요. 첫 실행은 로컬 브라우저·렌더러 의존성을 설치하고, 독립 Python 환경과 내장 샘플 소스를 준비합니다. 클라우드 계정이나 제공자 API 키는 필요하지 않습니다.
+준비가 끝나면 [데스크톱](http://localhost:3000/)을 여세요. 첫 실행은 로컬 브라우저·렌더러 의존성을 설치하고, 독립 Python 환경과 내장 샘플 소스를 준비합니다. 클라우드 계정이나 제공자 API 키는 필요하지 않습니다. 이전 [Production](http://localhost:3000/production) 콘솔도 그대로 있습니다.
 
 > **라이선스:** Grok Crew는 오픈소스 프로젝트가 아니라 [BUSL-1.1](LICENSE)로 소스가 공개된 프로젝트입니다. 정확한 사용 권한은 [라이선스](LICENSE)를 확인하세요.
 
@@ -91,11 +91,11 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 ## 가장 빠른 작업 흐름
 
-1. **Production**을 열고 `local_studio/workspace/inputs`의 미디어로 프로젝트를 만듭니다.
+1. **데스크톱**(`/`)을 열고 `local_studio/workspace/inputs`의 미디어로 프로젝트를 만듭니다.
 2. 봇이 [Bot Guide](http://localhost:3000/bot-guide?lang=ko)를 읽고 편집 방식을 설정한 뒤 대본 컷 맵을 저장하게 합니다.
 3. **Operations Center**에서 미디어를 검사하고, 프로젝트 기억을 남기고, A/B 편집을 비교하며 품질 검사를 실행합니다.
-4. 로컬 렌더를 실행합니다. 봇은 `auto_local`을 사용하거나 자체 렌더에만 사람 승인 게이트를 선택할 수 있습니다.
-5. Instagram 작업을 추가합니다. **Auto-upload**을 켜면 즉시 시작하고, 끄면 로컬 대기열에서 필요할 때 직접 실행합니다.
+4. 데스크톱에서 로컬 렌더를 실행합니다. 봇은 `auto_local`을 사용하거나 자체 렌더에만 사람 승인 게이트를 선택할 수 있습니다.
+5. 데스크톱 내보내기에서 Instagram·TikTok·YouTube로 게시합니다. 중단된 영수증은 재시도 전에 중복 업로드 가능성을 확인합니다.
 
 ## 무엇이 달라지나요?
 
@@ -105,7 +105,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 | 침묵·재촬영·군더더기 위치를 추측 | 대본 우선 컷 맵과 미디어 사전 검사 보고서 |
 | 내보낸 뒤에야 문제 발견 | 렌더 전·렌더 후·전달 전 품질 보고서 |
 | 봇 실행 사이에 편집 맥락 유실 | 로컬 SQLite 프로젝트 기억, 작업 이력, 봇 heartbeat |
-| 상태를 알 수 없는 게시 작업 | 로컬 MP4 렌더 대기열과 작업별 선택적 Instagram 자동 업로드 |
+| 상태를 알 수 없는 게시 작업 | 로컬 MP4 렌더 대기열과 Instagram·TikTok·YouTube 게시 영수증 |
 
 ### 내장 제작 도구
 
@@ -123,7 +123,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 | 이 컴퓨터에서 실제로 실행되는 작업 | 계획·미리보기 또는 비파괴 작업 |
 | --- | --- |
-| **Production**은 Local Studio 프로젝트를 만들고 실제 로컬 MP4를 렌더합니다. Instagram 작업은 소유자의 로컬 Meta 자격 증명이 있을 때만 실행할 수 있습니다. | **Studio, Edit Lab, Cut Log, Agent Desk, Connect, Packet, Gates, Export, Library**는 계획을 만들고 미리 보고 패키징하거나 옮기는 용도입니다. 소스 미디어를 자르거나 렌더·업로드를 시작하지 않습니다. |
+| **데스크톱(`/`)** 이 기본 작업 공간입니다. 타임라인 편집, 로컬 렌더, Instagram·TikTok·YouTube 게시(로컬 토큰). 이전 **Production** 콘솔에서도 프로젝트 생성과 렌더는 가능합니다. | **Edit Lab, Cut Log, Agent Desk, Connect, Packet, Gates, Export, Library**는 계획을 만들고 미리 보고 패키징하거나 옮기는 용도입니다. 소스 미디어를 자르거나 렌더·업로드를 시작하지 않습니다. |
 | **Bot Check**은 실제 봇 입장·heartbeat·정책·작업 활동을 로컬 SQLite에 기록합니다. 같은 PC의 터미널 CLI도 같은 로컬 서비스로 프로젝트를 만들고 작업을 실행합니다. | **Operations Center**는 컷 맵, 프로젝트 기억, 작업 할당, A/B 버전, 오디오·오버레이 계획, 브랜드 키트, 품질 보고서를 저장할 수 있습니다. 모두 로컬에서 유용하지만 Production에서 렌더하기 전에는 미디어를 파괴적으로 바꾸지 않습니다. |
 | **Operations Center**는 로컬 미디어 검사와 렌더 전·후 품질 검사도 실제로 실행합니다. | **Bot Guide, Terminal, Privacy**는 로컬 안내·상태 화면이며 그 자체로 미디어를 바꾸지 않습니다. |
 
@@ -131,10 +131,10 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 `localhost:3000` 브라우저 작업 공간은 아래와 같은 로컬 페이지로 나뉘어 있습니다. 위의 실행 경계는 의도적입니다. 계획 화면은 소스 파일을 몰래 바꾸거나 게시물을 올리지 않습니다.
 
-- `/` 스튜디오 — 지금 프로젝트의 분위기와 컨셉을 한눈에 보기
-- `/edit` 편집실(Edit Lab) — 프레임·모션·타이포·타이밍·자막 미리보기 (로컬 전용, 실제 렌더에는 반영 안 됨)
+- **`/` 데스크톱 — 기본 작업 공간. 타임라인, 로컬 렌더, 게시 영수증, Instagram·TikTok·YouTube 내보내기.**
+- `/edit` 편집실(Edit Lab) — 프레임·모션·타이포·타이밍·자막 미리보기 (기획 전용, 실제 렌더에는 반영 안 됨)
 - `/cut` 컷 로그(Cut Log) — 대본 기준으로 남길/버릴 구간 표시 (실제 파일은 자르지 않음)
-- **`/production` 프로덕션(Production) — 프로젝트 생성, 소스→결과 경로 설정, Finish Rack 구성, 렌더 대기열, Instagram 전송. 실제 로컬 렌더와 게시가 일어나는 유일한 페이지입니다.**
+- `/production` 프로덕션 — 이전 생성/렌더/Instagram 콘솔. 일상 작업은 데스크톱을 권장합니다.
 - `/operations` 운영 센터(Operations Center) — 미디어 점검, 품질 리포트, 프로젝트 기억, 작업 보드, A/B 변형안, 오디오·오버레이 계획, 브랜드 키트
 - **`/bots` 봇 확인(Bot Check) — 봇 입장, 하트비트, 실행 정책(`auto_local` 또는 승인 필요). 실제 봇 활동이 기록되는 유일한 페이지입니다.**
 - `/terminal` 터미널 — 같은 PC의 봇을 위한 CLI/API 안내
@@ -168,15 +168,15 @@ python local_studio/grok_crew.py bots list
 python local_studio/grok_crew.py bots activity
 ```
 
-사용 가능한 화면은 `studio`, `edit`, `cut`, `production`, `operations`, `bots`, `guide`, `terminal`, `library`, `agent`, `connect`, `packet`, `gates`, `export`, `privacy`입니다.
+사용 가능한 화면은 `desktop`, `studio`, `edit`, `cut`, `production`, `operations`, `bots`, `guide`, `terminal`, `library`, `agent`, `connect`, `packet`, `gates`, `export`, `privacy`입니다.
 
 전체 명령은 [로컬 봇 설명서](local_studio/README.md)를 보거나, 작업 공간을 시작한 뒤 [Bot Guide](http://localhost:3000/bot-guide?lang=ko)를 여세요.
 
-## 개인정보와 선택적 Instagram 전달
+## 개인정보와 선택적 소셜 전달
 
 브라우저 작업 공간은 `localhost:3000`에서, Local Studio는 `127.0.0.1:7214`에서 실행됩니다. 소스 미디어, 렌더 결과, SQLite 기록, 봇 이력은 현재 컴퓨터의 `local_studio/` 아래에 남습니다.
 
-Instagram 전달은 선택 사항입니다. 소유자가 로컬에 설정한 Meta 자격 증명과 지원되는 로컬 MP4가 필요합니다. 작업은 대기열에 남기거나 `--auto-upload`으로 즉시 시작할 수 있으며, 자격 증명은 SQLite에 저장되거나 이 프로젝트를 통해 봇에 노출되지 않습니다.
+Instagram·TikTok·YouTube 전달은 선택 사항입니다. 각 플랫폼은 소유자가 로컬에 설정한 액세스 토큰과 지원되는 로컬 MP4가 필요합니다. 공식 OAuth 앱은 이 저장소 밖에 있습니다. 자격 증명은 SQLite에 저장되거나 이 프로젝트를 통해 봇에 노출되지 않습니다.
 
 ## 클라우드 봇 인계 (이 PC에 없는 봇을 위해)
 
@@ -191,8 +191,8 @@ Local Studio는 여전히 다른 기기의 접속을 절대 받아들이지 않�
 
 ## 로드맵
 
+- [x] Instagram·TikTok·YouTube Shorts 게시 (로컬 env 토큰, OAuth 앱은 외부)
 - [ ] 커뮤니티 유지 예제 편집 팩
-- [ ] Instagram 외 플랫폼(TikTok, YouTube Shorts) 게시 지원
 
 ## 피드백과 기여
 

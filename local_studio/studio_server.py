@@ -487,7 +487,7 @@ def terminal_contract() -> dict[str, Any]:
         "bootstrap": "python grok-crew.py contract",
         "auth": "Set LOCAL_STUDIO_TOKEN in the bot terminal only when Local Studio token protection is enabled.",
         "commands": {
-            "start": ["health", "contract", "guide", "site --page production", "entry", "policy get|set", "heartbeat", "bots list|activity|entries"],
+            "start": ["health", "contract", "guide", "site --page desktop", "entry", "policy get|set", "heartbeat", "bots list|activity|entries"],
             "editing": ["projects list|get|create", "method get|set", "ops show|inspect|cut-map|quality|artifact|update", "brand list|save"],
             "delivery": ["jobs list|render [auto local or human approved]|instagram|run|cancel", "render, instagram, and run accept --wait to poll until the job finishes; renders execute in the background and report progress via GET /api/jobs/{id}"],
         },

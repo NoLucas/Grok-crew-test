@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <strong>简体中文</strong> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**把粗剪的短视频素材,变成机器人可执行的剪辑方案、本地 MP4 文件,以及可选的 Instagram 自动上传——无需将项目、素材或机器人历史发送到任何云端。**
+**把粗剪的短视频素材,变成机器人可执行的剪辑方案、本地 MP4 文件,以及可选的 Instagram、TikTok 或 YouTube 上传——无需将项目、素材或机器人历史发送到任何云端。**
 
 <p>
   <img alt="本地优先" src="https://img.shields.io/badge/local--first-127.0.0.1-1d1d1b?style=flat-square">
@@ -27,7 +27,7 @@ cd grok-crew
 npm run local
 ```
 
-准备完成后，打开 [Production](http://localhost:3000/production)。第一次运行会安装本地浏览器与渲染依赖，创建独立的 Python 环境，并准备内置示例素材；无需云端账号或第三方 API 密钥。
+准备完成后，打开 [桌面](http://localhost:3000/)。第一次运行会安装本地浏览器与渲染依赖，创建独立的 Python 环境，并准备内置示例素材；无需云端账号或第三方 API 密钥。旧的 [Production](http://localhost:3000/production) 控制台仍然可用。
 
 > **许可证：**Grok Crew 以 [BUSL-1.1](LICENSE) 源码可见方式提供，并不是开源项目。准确的使用权利请查看 [许可证](LICENSE)。
 
@@ -80,11 +80,11 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 ## 最基本的工作流程
 
-1. 打开 **Production**,用 `local_studio/workspace/inputs` 下的素材创建一个项目。
+1. 打开 **桌面**(`/`),用 `local_studio/workspace/inputs` 下的素材创建一个项目。
 2. 让机器人阅读 [Bot Guide](http://localhost:3000/bot-guide?lang=en),设置它的编辑方式,并保存一份转录文本剪辑图。
 3. 在 **Operations Center** 中检查素材、保存项目记忆、比较 A/B 剪辑版本并运行质量检查。
-4. 在本地渲染。机器人可以使用 `auto_local`,也可以为自己的渲染设置人工审批。
-5. 添加一个 Instagram 任务。打开 **Auto-upload** 会立即开始上传,关闭则会留在本地队列中等待手动执行。
+4. 在桌面进行本地渲染。机器人可以使用 `auto_local`,也可以为自己的渲染设置人工审批。
+5. 从桌面导出发布到 Instagram、TikTok 或 YouTube。中断的回执会在重试前确认是否可能重复上传。
 
 ## 它能带来什么
 
@@ -94,7 +94,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 | 只能靠猜测判断静音、重拍和口癖的位置 | 以转录文本为核心的剪辑图和素材预检报告 |
 | 导出之后才发现问题 | 渲染前、渲染后与交付前的质量报告 |
 | 机器人多次运行之间会丢失编辑上下文 | 本地 SQLite 保存的项目记忆、任务历史和机器人心跳记录 |
-| 发布之后状态不明 | 本地 MP4 渲染队列,以及可按任务开启的 Instagram 自动上传 |
+| 发布之后状态不明 | 本地 MP4 渲染队列,以及 Instagram、TikTok、YouTube 发布回执 |
 
 ### 内置制作工具
 
@@ -112,7 +112,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 | 此电脑上真正执行的动作 | 规划、预览或非破坏性动作 |
 | --- | --- |
-| **Production** 创建 Local Studio 项目并渲染真实的本地 MP4。只有所有者在本地配置了 Meta 凭据时，Instagram 任务才能执行。 | **Studio、Edit Lab、Cut Log、Agent Desk、Connect、Packet、Gates、Export、Library** 用于制定、预览、整理或转移计划；不会剪切源媒体、开始渲染或上传。 |
+| **桌面(`/`)** 是默认工作区：时间线编辑、本地渲染，以及 Instagram / TikTok / YouTube 发布（本地令牌）。旧的 **Production** 控制台仍可创建项目并渲染。 | **Edit Lab、Cut Log、Agent Desk、Connect、Packet、Gates、Export、Library** 用于制定、预览、整理或转移计划；不会剪切源媒体、开始渲染或上传。 |
 | **Bot Check** 会将真实机器人的签到、心跳、策略和任务活动记录到本地 SQLite。同一台电脑上的终端 CLI 也通过同一个本地服务创建项目和执行任务。 | **Operations Center** 可保存剪辑图、项目记忆、任务分配、A/B 版本、音频/叠加层方案、品牌套件和质量报告；它们都保留在本地，并且在 Production 中渲染前不会破坏性地修改媒体。 |
 | **Operations Center** 也真正执行本地媒体检查以及渲染前/后的质量检查。 | **Bot Guide、Terminal、Privacy** 是本地说明或状态页，本身不改变媒体。 |
 
@@ -120,10 +120,10 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 `localhost:3000` 浏览器工作区分成下列本地页面。上面的执行边界是刻意设计的：规划页面不会悄悄改动源文件或发布内容。
 
-- `/` Studio —— 一眼看清当前项目的氛围与概念
-- `/edit` Edit Lab —— 构图、运镜、字体、时间轴与字幕预览(仅本地保存,不影响真正的渲染)
+- **`/` 桌面 —— 默认工作区。时间线、本地渲染、发布回执，以及 Instagram / TikTok / YouTube 导出。**
+- `/edit` Edit Lab —— 构图、运镜、字体、时间轴与字幕预览(仅策划,不影响真正的渲染)
 - `/cut` Cut Log —— 按转录文本标记要保留/丢弃的片段(不会真正剪切文件)
-- **`/production` Production —— 创建项目、设置源文件→输出路径、配置 Finish Rack、排队渲染、发送到 Instagram。真正的本地渲染和发布只在这个页面发生。**
+- `/production` Production —— 旧的创建/渲染/Instagram 控制台。日常工作请使用桌面。
 - `/operations` Operations Center —— 素材检查、质量报告、项目记忆、任务看板、A/B 版本、音频/叠加层方案、品牌套件
 - **`/bots` Bot Check —— 机器人签到、心跳、执行策略(`auto_local` 或需要审批)。真正的机器人活动只会记录在这个页面。**
 - `/terminal` Terminal —— 面向本机机器人的 CLI/API 说明
@@ -157,15 +157,15 @@ python local_studio/grok_crew.py bots list
 python local_studio/grok_crew.py bots activity
 ```
 
-可用页面包括 `studio`、`edit`、`cut`、`production`、`operations`、`bots`、`guide`、`terminal`、`library`、`agent`、`connect`、`packet`、`gates`、`export`、`privacy`。
+可用页面包括 `desktop`、`studio`、`edit`、`cut`、`production`、`operations`、`bots`、`guide`、`terminal`、`library`、`agent`、`connect`、`packet`、`gates`、`export`、`privacy`。
 
 完整命令请参见[本地机器人手册](local_studio/README.md),或在启动工作区后打开 [Bot Guide](http://localhost:3000/bot-guide?lang=en)。
 
-## 隐私与可选的 Instagram 投放
+## 隐私与可选的社交投放
 
 浏览器工作区运行在 `localhost:3000`;Local Studio 绑定在 `127.0.0.1:7214`。源素材、渲染结果、SQLite 记录和机器人历史都保留在本机的 `local_studio/` 目录下。
 
-Instagram 投放是可选功能,需要所有者在本地配置好 Meta 凭据以及受支持的本地 MP4 文件。任务可以留在队列中,也可以通过 `--auto-upload` 立即开始;凭据永远不会存入 SQLite,也不会通过本项目暴露给任何机器人。
+Instagram、TikTok 和 YouTube 投放是可选功能,各平台需要所有者在本地配置的访问令牌以及受支持的本地 MP4。官方 OAuth 应用不在本仓库内。凭据永远不会存入 SQLite,也不会通过本项目暴露给任何机器人。
 
 ## 云端机器人的交接方式(适用于不在本机的机器人)
 
@@ -180,8 +180,8 @@ Local Studio 依旧绝不接受来自其他设备的连接——即便是运行�
 
 ## 路线图
 
+- [x] Instagram、TikTok、YouTube Shorts 发布（本地 env 令牌；OAuth 应用仍为外部）
 - [ ] 社区维护的示例剪辑包
-- [ ] 支持 Instagram 之外的发布渠道(TikTok、YouTube Shorts)
 
 ## 反馈与贡献
 

@@ -87,10 +87,10 @@
   "terminal_cli_contract": {
     "api_base_url": "http://127.0.0.1:7214",
     "browser_site_base_url": "http://localhost:3000",
-    "browser_rule": "7214 포트는 CLI 다운로드와 JSON API 전용입니다. 브라우저 사용이나 스크린샷은 python grok-crew.py site --page production을 실행해 출력된 http://localhost:3000 주소에서 합니다. 7214 포트에 /production을 열지 마세요.",
+    "browser_rule": "7214 포트는 CLI 다운로드와 JSON API 전용입니다. 브라우저 사용이나 스크린샷은 python grok-crew.py site --page desktop을 실행해 출력된 http://localhost:3000 주소에서 합니다. 7214 포트에 데스크톱이나 /production을 열지 마세요.",
     "clone_cli_path": "local_studio/grok_crew.py",
     "clone_bootstrap": "python local_studio/grok_crew.py contract",
-    "browser_pages": { "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
+    "browser_pages": { "desktop": "http://localhost:3000/", "studio": "http://localhost:3000/", "edit": "http://localhost:3000/edit", "cut": "http://localhost:3000/cut", "production": "http://localhost:3000/production", "operations": "http://localhost:3000/operations", "bot_check": "http://localhost:3000/bots", "bot_guide": "http://localhost:3000/bot-guide", "terminal": "http://localhost:3000/terminal", "library": "http://localhost:3000/library", "agent_desk": "http://localhost:3000/agent", "local_desk": "http://localhost:3000/connect", "packet": "http://localhost:3000/packet", "gate_board": "http://localhost:3000/gates", "export": "http://localhost:3000/export", "privacy": "http://localhost:3000/privacy" },
     "download": "GET /downloads/grok-crew.py",
     "bootstrap": "python grok-crew.py contract",
     "purpose": "같은 PC의 터미널에서 실행되는 봇을 위한 의존성 없는 CLI입니다. 브라우저 조작 없이 Local Studio와 Operations 엔드포인트를 사용할 수 있습니다.",

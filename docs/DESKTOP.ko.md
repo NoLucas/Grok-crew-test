@@ -20,7 +20,7 @@ npm run desktop:dist
 
 `desktop:pack`은 `release/win-unpacked`를, `desktop:dist`는 NSIS 설치 파일을 만듭니다. macOS에서는 같은 명령이 DMG를 만들며, 공개 배포용 코드 서명과 notarization 자격 증명은 별도로 설정해야 합니다.
 
-브라우저 전용 개발 화면은 `npm run local`로 실행합니다. 데스크톱 앱은 임의의 loopback 포트와 실행별 토큰을 사용하며 renderer에 포트나 토큰을 노출하지 않습니다.
+브라우저 전용 개발 화면은 `npm run local`로 실행합니다. 브라우저의 `/`는 Electron과 같은 데스크톱 작업 공간입니다. `/production` 같은 레거시 페이지는 남아 있고, 기획·미리보기이거나 이전 콘솔입니다. 데스크톱 앱은 임의의 loopback 포트와 실행별 토큰을 사용하며 renderer에 포트나 토큰을 노출하지 않습니다.
 
 ## 현재 제공되는 흐름
 

@@ -81,7 +81,7 @@ async function main() {
   console.log('\nSample render complete.');
   console.log(`Project: ${project.title} (${project.id})`);
   console.log(`MP4: ${sampleOutput}`);
-  console.log('No Instagram job was created. Open http://localhost:3000/production or /bots to inspect the real local records.\n');
+  console.log('No Instagram job was created. Open http://localhost:3000/ or /bots to inspect the real local records.\n');
 }
 
 main().catch((error) => {

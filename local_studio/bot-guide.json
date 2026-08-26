@@ -149,10 +149,11 @@
   "terminal_cli_contract": {
     "api_base_url": "http://127.0.0.1:7214",
     "browser_site_base_url": "http://localhost:3000",
-    "browser_rule": "Port 7214 is only for CLI download and JSON API requests. For browser use or screenshots, run python grok-crew.py site --page production and open the printed http://localhost:3000 URL. Never open /production on port 7214.",
+    "browser_rule": "Port 7214 is only for CLI download and JSON API requests. For browser use or screenshots, run python grok-crew.py site --page desktop and open the printed http://localhost:3000 URL. Never open Desktop or /production on port 7214.",
     "clone_cli_path": "local_studio/grok_crew.py",
     "clone_bootstrap": "python local_studio/grok_crew.py contract",
     "browser_pages": {
+      "desktop": "http://localhost:3000/",
       "studio": "http://localhost:3000/",
       "edit": "http://localhost:3000/edit",
       "cut": "http://localhost:3000/cut",

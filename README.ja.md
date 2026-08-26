@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">English</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <strong>日本語</strong></p>
 
-**荒削りのショート動画素材を、ボットがそのまま実行できる編集プラン、ローカルMP4、そして任意のInstagram投稿へと変換します——プロジェクト、素材、ボットの履歴をクラウドバックエンドに送る必要はありません。**
+**荒削りのショート動画素材を、ボットがそのまま実行できる編集プラン、ローカルMP4、そして任意のInstagram・TikTok・YouTube投稿へと変換します——プロジェクト、素材、ボットの履歴をクラウドバックエンドに送る必要はありません。**
 
 <p>
   <img alt="ローカルファースト" src="https://img.shields.io/badge/local--first-127.0.0.1-1d1d1b?style=flat-square">
@@ -27,7 +27,7 @@ cd grok-crew
 npm run local
 ```
 
-準備が完了したら [Production](http://localhost:3000/production) を開いてください。初回実行ではローカルのブラウザ・レンダラー依存関係をインストールし、専用のPython環境と同梱サンプル素材を準備します。クラウドアカウントやプロバイダーのAPIキーは不要です。
+準備が完了したら [デスクトップ](http://localhost:3000/) を開いてください。初回実行ではローカルのブラウザ・レンダラー依存関係をインストールし、専用のPython環境と同梱サンプル素材を準備します。クラウドアカウントやプロバイダーのAPIキーは不要です。以前の [Production](http://localhost:3000/production) コンソールも残っています。
 
 > **ライセンス：**Grok Crewはオープンソースプロジェクトではなく、[BUSL-1.1](LICENSE)でソース公開されるプロジェクトです。正確な利用権は[ライセンス](LICENSE)を確認してください。
 
@@ -80,11 +80,11 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 ## 最初に試す作業の流れ
 
-1. **Production**を開き、`local_studio/workspace/inputs`内の素材でプロジェクトを作成します。
+1. **デスクトップ**(`/`)を開き、`local_studio/workspace/inputs`内の素材でプロジェクトを作成します。
 2. ボットに [Bot Guide](http://localhost:3000/bot-guide?lang=en) を読ませ、編集方式を設定させたうえで文字起こしカットマップを保存させます。
 3. **Operations Center**で素材を検査し、プロジェクトの記憶を保存し、A/B編集を比較し、品質チェックを実行します。
-4. ローカルでレンダリングします。ボットは `auto_local` を使うか、自分のレンダリングにだけ人による承認ゲートを設定できます。
-5. Instagramジョブを追加します。**Auto-upload**をオンにすればすぐに開始し、オフのままならローカルキューに残して後で手動実行できます。
+4. デスクトップでローカルレンダーします。ボットは `auto_local` を使うか、自分のレンダリングにだけ人による承認ゲートを設定できます。
+5. デスクトップの書き出しから Instagram・TikTok・YouTube に公開します。中断レシートは再試行前に重複アップロードの可能性を確認します。
 
 ## 何が変わるのか
 
@@ -94,7 +94,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 | 無音区間・撮り直し・フィラーの位置を推測に頼る | 文字起こしを起点にしたカットマップと素材のプリフライトレポート |
 | 書き出した後で問題に気づく | レンダリング前・後、配信前の品質レポート |
 | ボットの実行のたびに編集の文脈が失われる | ローカルSQLiteに残るプロジェクトの記憶、ジョブ履歴、ボットのハートビート記録 |
-| 状態が分からない公開アクション | ローカルMP4のレンダリングキューと、ジョブ単位で選べるInstagram自動アップロード |
+| 状態が分からない公開アクション | ローカルMP4のレンダリングキューと、Instagram・TikTok・YouTubeの公開レシート |
 
 ### 標準搭載の制作ツール
 
@@ -112,7 +112,7 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 | このPCで実際に実行される処理 | 計画、プレビュー、または非破壊の処理 |
 | --- | --- |
-| **Production** はLocal Studioプロジェクトを作成し、実際のローカルMP4をレンダリングします。Instagramジョブは、所有者のローカルMeta認証情報がある場合にのみ実行できます。 | **Studio、Edit Lab、Cut Log、Agent Desk、Connect、Packet、Gates、Export、Library** は計画の作成、プレビュー、整理、移動のためのものです。ソースメディアを切断したり、レンダリングやアップロードを開始したりしません。 |
+| **デスクトップ(`/`)** が基本の作業空間です。タイムライン編集、ローカルレンダー、Instagram / TikTok / YouTube 公開（ローカルトークン）。以前の **Production** コンソールでもプロジェクト作成とレンダーはできます。 | **Edit Lab、Cut Log、Agent Desk、Connect、Packet、Gates、Export、Library** は計画の作成、プレビュー、整理、移動のためのものです。ソースメディアを切断したり、レンダリングやアップロードを開始したりしません。 |
 | **Bot Check** は実際のボット入場、ハートビート、ポリシー、ジョブ活動をローカルSQLiteに記録します。同じPCのターミナルCLIも、同じローカルサービスを通じてプロジェクトの作成とジョブ実行を行います。 | **Operations Center** はカットマップ、プロジェクトの記憶、タスク割り当て、A/Bバリアント、音声/オーバーレイプラン、ブランドキット、品質レポートを保存できます。すべてローカルに保存され、Productionでレンダリングするまでメディアを破壊的に変更しません。 |
 | **Operations Center** はローカルの素材検査と、レンダリング前/後の品質チェックも実際に実行します。 | **Bot Guide、Terminal、Privacy** はローカルの説明・状態画面であり、それ自体はメディアを変更しません。 |
 
@@ -120,10 +120,10 @@ python local_studio/grok_crew.py entry --bot-id editor-01 --display-name "Editor
 
 `localhost:3000` のブラウザワークスペースは下記のローカルページに分かれています。上記の実行境界は意図的です。計画ページがソースファイルを勝手に変更したり投稿を公開したりすることはありません。
 
-- `/` Studio —— 現在のプロジェクトの雰囲気とコンセプトを一目で確認
-- `/edit` Edit Lab —— フレーム・モーション・タイポグラフィ・タイミング・字幕のプレビュー(ローカル限定で、実際のレンダリングには反映されません)
+- **`/` デスクトップ —— 基本の作業空間。タイムライン、ローカルレンダー、公開レシート、Instagram / TikTok / YouTube 書き出し。**
+- `/edit` Edit Lab —— フレーム・モーション・タイポグラフィ・タイミング・字幕のプレビュー(企画専用で、実際のレンダリングには反映されません)
 - `/cut` Cut Log —— 文字起こしを基準に残す/落とす区間を表示(実際のファイルは切断されません)
-- **`/production` Production —— プロジェクトの作成、ソース→出力パスの設定、Finish Rackの構成、レンダリングキュー、Instagramへの送信。実際のローカルレンダリングと配信が行われる唯一のページです。**
+- `/production` Production —— 以前の作成/レンダー/Instagramコンソール。日常作業はデスクトップを使ってください。
 - `/operations` Operations Center —— 素材の検査、品質レポート、プロジェクトの記憶、タスクボード、A/Bバリアント、音声・オーバーレイのプラン、ブランドキット
 - **`/bots` Bot Check —— ボットの入場、ハートビート、実行ポリシー(`auto_local`または承認必須)。実際のボット活動が記録される唯一のページです。**
 - `/terminal` Terminal —— 同一PC上のボット向けCLI/API案内
@@ -157,15 +157,15 @@ python local_studio/grok_crew.py bots list
 python local_studio/grok_crew.py bots activity
 ```
 
-利用できるページは `studio`、`edit`、`cut`、`production`、`operations`、`bots`、`guide`、`terminal`、`library`、`agent`、`connect`、`packet`、`gates`、`export`、`privacy` です。
+利用できるページは `desktop`、`studio`、`edit`、`cut`、`production`、`operations`、`bots`、`guide`、`terminal`、`library`、`agent`、`connect`、`packet`、`gates`、`export`、`privacy` です。
 
 コマンドの全体は[ローカルボットマニュアル](local_studio/README.md)を、ワークスペース起動後は [Bot Guide](http://localhost:3000/bot-guide?lang=en) を開いて確認してください。
 
-## プライバシーと任意のInstagram配信
+## プライバシーと任意のソーシャル配信
 
 ブラウザワークスペースは `localhost:3000` で、Local Studioは `127.0.0.1:7214` で動作します。ソース素材、レンダリング結果、SQLiteの記録、ボットの履歴は、すべて現在のコンピューターの `local_studio/` 配下に残ります。
 
-Instagramへの配信は任意機能です。所有者がローカルに設定したMetaの認証情報と、対応するローカルMP4が必要です。ジョブはキューに残すことも `--auto-upload` で即座に開始することもでき、認証情報がSQLiteに保存されたり、本プロジェクトを通じてボットに露出したりすることは一切ありません。
+Instagram・TikTok・YouTubeへの配信は任意機能です。各プラットフォームには所有者がローカルに設定したアクセストークンと、対応するローカルMP4が必要です。公式OAuthアプリはこのリポジトリの外にあります。認証情報がSQLiteに保存されたり、本プロジェクトを通じてボットに露出したりすることはありません。
 
 ## クラウドボットの引き継ぎ(このPC上にいないボット向け)
 
@@ -180,8 +180,8 @@ Local Studioは、クラウドサンドボックスや別のコンピュータ�
 
 ## ロードマップ
 
+- [x] Instagram・TikTok・YouTube Shorts 公開（ローカル env トークン。OAuthアプリは外部）
 - [ ] コミュニティ管理のサンプル編集パック
-- [ ] Instagram以外のプラットフォーム(TikTok、YouTube Shorts)への配信対応
 
 ## フィードバックと貢献
 

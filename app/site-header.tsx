@@ -2,14 +2,13 @@
 
 import { LanguageSwitcher, useLanguage } from './language';
 import Link from 'next/link';
+import { PlanningBanner } from './planning-banner';
 import { useWorkspaceProfile } from './workspace-profile';
 
-// `live: true` marks the only two pages where something real actually happens on
-// this PC (a render/publish runs, or a bot's presence is recorded) — see the
-// "Actually runs on this computer" vs. "planning, preview" table in README.md.
-// Every other page is a draft/preview surface and never touches media or bots.
+// Desktop (/) is the default live workspace. Production and Bot check can still
+// run real jobs; every other page is planning or preview.
 const sections = [
-  { id: 'studio', href: '/', ko: '스튜디오', en: 'Studio', zh: '工作室', ja: 'スタジオ' },
+  { id: 'desktop', href: '/', ko: '데스크', en: 'Desktop', zh: '桌面', ja: 'デスクトップ', live: true },
   { id: 'edit', href: '/edit', ko: '편집실', en: 'Edit lab', zh: '编辑室', ja: '編集ラボ' },
   { id: 'cut', href: '/cut', ko: '컷 로그', en: 'Cut log', zh: '剪辑记录', ja: 'カットログ' },
   { id: 'production', href: '/production', ko: '제작', en: 'Production', zh: '制作', ja: '制作', live: true },
@@ -36,5 +35,10 @@ function NavLabel({ section, t }: { section: (typeof sections)[number]; t: (ko: 
 export function SiteHeader({ current }: { current: string }) {
   const { t } = useLanguage();
   const { profile } = useWorkspaceProfile();
-  return <header className="site-header"><Link href="/" className="wordmark"><span>{profile.workspaceName}</span><i>{t('로컬 스튜디오', 'Local Studio', '本地工作室', 'ローカルスタジオ')}</i></Link><nav aria-label={t('주요 메뉴', 'Primary navigation', '主导航', 'メインナビゲーション')}>{primarySections.map((section) => <Link className={section.id === current ? 'current' : ''} href={section.href} key={section.id}><NavLabel section={section} t={t} /></Link>)}<details className={`header-more ${moreSections.some((section) => section.id === current) ? 'current' : ''}`}><summary>{t('더보기', 'More', '更多', 'もっと見る')}</summary><div>{moreSections.map((section) => <Link className={section.id === current ? 'current' : ''} href={section.href} key={section.id}><NavLabel section={section} t={t} /></Link>)}</div></details></nav><LanguageSwitcher /><div className="header-meta"><span>{t('이 기기에서만 실행', 'This device only', '仅在本设备运行', 'この端末でのみ動作')}</span><b>LOCAL FIRST</b></div></header>;
+  return (
+    <>
+      <header className="site-header"><Link href="/" className="wordmark"><span>{profile.workspaceName}</span><i>{t('로컬 스튜디오', 'Local Studio', '本地工作室', 'ローカルスタジオ')}</i></Link><nav aria-label={t('주요 메뉴', 'Primary navigation', '主导航', 'メインナビゲーション')}>{primarySections.map((section) => <Link className={section.id === current ? 'current' : ''} href={section.href} key={section.id}><NavLabel section={section} t={t} /></Link>)}<details className={`header-more ${moreSections.some((section) => section.id === current) ? 'current' : ''}`}><summary>{t('더보기', 'More', '更多', 'もっと見る')}</summary><div>{moreSections.map((section) => <Link className={section.id === current ? 'current' : ''} href={section.href} key={section.id}><NavLabel section={section} t={t} /></Link>)}</div></details></nav><LanguageSwitcher /><div className="header-meta"><span>{t('이 기기에서만 실행', 'This device only', '仅在本设备运行', 'この端末でのみ動作')}</span><b>LOCAL FIRST</b></div></header>
+      <PlanningBanner current={current} />
+    </>
+  );
 }
