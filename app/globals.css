@@ -6801,6 +6801,16 @@ select {
 .desktop-side-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 9px; }
 .desktop-side-head b { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .desktop-side-head button { display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 1px solid var(--desktop-line); border-radius: 7px; background: white; }
+.desktop-side-head-actions { display: flex; align-items: center; gap: 6px; }
+.desktop-side-head-actions button:not([aria-label]) {
+  width: auto;
+  min-height: 25px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.desktop-side-head-actions button.active { border-color: var(--desktop-blue); color: var(--desktop-blue); }
 .desktop-side-head > span { color: var(--desktop-muted); font-size: 9px; }
 .desktop-create-card { display: grid; gap: 7px; margin-bottom: 12px; padding: 10px; border: 1px solid var(--desktop-line); border-radius: 10px; background: white; }
 .desktop-create-card input,

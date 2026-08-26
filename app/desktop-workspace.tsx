@@ -181,6 +181,7 @@ export default function DesktopWorkspace() {
   const { t } = useLanguage();
   const [workspace, setWorkspace] = useState<Workspace>({ projects: [], control_jobs: [], runner_events: [], runners: [], media: [] });
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [specDeskOpen, setSpecDeskOpen] = useState(false);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [history, setHistory] = useState<TimelineHistoryState>(() => emptyTimelineHistory());
@@ -312,7 +313,7 @@ export default function DesktopWorkspace() {
     runners: workspace.runners.length,
   });
   const unclaimedJobs = projectJobs.filter((job) => isUnclaimedHold(job.status) && !job.runner_id);
-  const hideInspectorColumn = !project || !timeline;
+  const hideInspectorColumn = specDeskOpen || !project || !timeline;
   const selected = timeline ? findClip(timeline, selectedClipId) : null;
   const outputReady = project ? workspace.media.some((item) => item.area === 'outputs' && relativeWorkspacePath(project.output_path) === item.path) : false;
   const videoAssets = useMemo(
@@ -880,9 +881,9 @@ export default function DesktopWorkspace() {
 
       <div className={`desktop-body${hideInspectorColumn ? ' local-first' : ''}`}>
         <aside className={`desktop-sidebar ${drawer === 'projects' ? 'open' : ''}`}>
-          <div className="desktop-side-head"><b>{t('프로젝트', 'Projects', '项目', 'プロジェクト')}</b><button type="button" aria-label={t('새 프로젝트', 'New project', '新建项目', '新規プロジェクト')} onClick={() => setCreateOpen((value) => !value)}>＋</button></div>
+          <div className="desktop-side-head"><b>{t('프로젝트', 'Projects', '项目', 'プロジェクト')}</b><div className="desktop-side-head-actions"><button type="button" className={specDeskOpen || !project ? 'active' : ''} onClick={() => { setSpecDeskOpen(true); setDrawer('none'); }}>{t('새 규격', 'New brief', '新规格', '新しい仕様')}</button><button type="button" aria-label={t('새 프로젝트', 'New project', '新建项目', '新規プロジェクト')} onClick={() => setCreateOpen((value) => !value)}>＋</button></div></div>
           {createOpen && <section className="desktop-create-card">{sampleAvailable ? <button type="button" className="desktop-primary" disabled={busy} onClick={() => void openSampleProject()}>{t('샘플로 시작', 'Start with the sample', '从示例开始', 'サンプルで始める')}</button> : null}<input value={newProject.title} onChange={(event) => setNewProject({ ...newProject, title: event.target.value })} placeholder={t('프로젝트 이름', 'Project name', '项目名称', 'プロジェクト名')} /><select value={newProject.source_path} onChange={(event) => setNewProject({ ...newProject, source_path: event.target.value })}><option value="">{t('원본 선택', 'Choose source', '选择素材', '素材を選択')}</option>{workspace.media.filter((item) => item.kind === 'video' && item.area === 'inputs').map((item) => <option value={item.path} key={item.path}>{item.name}</option>)}</select><button className="desktop-secondary" disabled={busy} onClick={() => void importMedia()}>{t('내 컴퓨터에서 가져오기', 'Import from computer', '从电脑导入', 'コンピュータから読み込む')}</button><input value={newProject.output_path} onChange={(event) => setNewProject({ ...newProject, output_path: event.target.value })} /><button className="desktop-primary" disabled={busy} onClick={() => void createProject()}>{t('만들기', 'Create', '创建', '作成')}</button></section>}
-          <div className="desktop-project-list">{workspace.projects.map((item) => <button className={item.id === selectedProjectId ? 'active' : ''} key={item.id} onClick={() => { setSelectedProjectId(item.id); setDrawer('none'); }}><span>▣</span><div><b>{item.title}</b><small>v{item.current_revision} · {new Date(item.updated_at).toLocaleDateString()}</small></div></button>)}{studioState === 'loading' && !workspace.projects.length ? <p className="desktop-side-empty">{t('Local Studio에 연결하는 중…', 'Connecting to Local Studio…', '正在连接本地工作室…', 'Local Studio に接続しています…')}</p> : null}{studioState === 'error' && !workspace.projects.length ? <p className="desktop-side-empty">{t('연결하지 못했습니다. 다시 시도하세요.', 'Could not connect. Retry from the banner.', '无法连接。请从横幅重试。', '接続できません。バナーから再試行してください。')}</p> : null}{studioState === 'ready' && !workspace.projects.length ? <div className="desktop-side-empty"><p>{t('아직 봇이 넘긴 컷이 없습니다. 가운데에서 규격을 적으세요.', 'No bot cut yet. Write the brief in the center.', '还没有机器人剪辑。请在中间写规格。', 'ボットのカットはまだありません。中央で仕様を書いてください。')}</p></div> : null}</div>
+          <div className="desktop-project-list">{workspace.projects.map((item) => <button className={!specDeskOpen && item.id === selectedProjectId ? 'active' : ''} key={item.id} onClick={() => { setSpecDeskOpen(false); setSelectedProjectId(item.id); setDrawer('none'); }}><span>▣</span><div><b>{item.title}</b><small>v{item.current_revision} · {new Date(item.updated_at).toLocaleDateString()}</small></div></button>)}{studioState === 'loading' && !workspace.projects.length ? <p className="desktop-side-empty">{t('Local Studio에 연결하는 중…', 'Connecting to Local Studio…', '正在连接本地工作室…', 'Local Studio に接続しています…')}</p> : null}{studioState === 'error' && !workspace.projects.length ? <p className="desktop-side-empty">{t('연결하지 못했습니다. 다시 시도하세요.', 'Could not connect. Retry from the banner.', '无法连接。请从横幅重试。', '接続できません。バナーから再試行してください。')}</p> : null}{studioState === 'ready' && !workspace.projects.length ? <div className="desktop-side-empty"><p>{t('아직 봇이 넘긴 컷이 없습니다. 가운데 두 문 중 하나에 규격을 적으세요.', 'No bot cut yet. Write the brief on one of the two doors.', '还没有机器人剪辑。请在中间两扇门之一写规格。', 'ボットのカットはまだありません。中央の2つのドアに仕様を書いてください。')}</p></div> : null}</div>
           <div className="desktop-side-head desktop-version-head"><b>{t('버전 기록', 'Versions', '版本', 'バージョン')}</b><span>{versions.length}</span></div>
           <div className="desktop-version-list">{!versions.length ? <p className="desktop-side-empty">{project ? t('이 프로젝트의 버전은 아직 없습니다.', 'No versions for this project yet.', '此项目还没有版本。', 'このプロジェクトのバージョンはまだありません。') : t('프로젝트를 열면 버전 기록이 여기에 쌓입니다.', 'Open a project to collect version history here.', '打开项目后版本会显示在这里。', 'プロジェクトを開くと履歴がここに残ります。')}</p> : null}{versions.slice(0, 8).map((version, index) => (
             <button
@@ -919,17 +920,18 @@ export default function DesktopWorkspace() {
           {studioState === 'error' && project ? <div className="desktop-banner error" role="alert"><div><b>{t('Local Studio에 연결하지 못했습니다', 'Could not reach Local Studio', '无法连接 Local Studio', 'Local Studio に接続できません')}</b><p>{t('사이드카가 꺼져 있으면 프로젝트와 렌더를 읽을 수 없습니다.', 'The sidecar is offline, so projects and renders cannot load.', '侧车离线时无法读取项目和渲染。', 'サイドカーが停止しているとプロジェクトとレンダーを読めません。')}</p></div><button type="button" className="desktop-secondary" onClick={() => void refreshWorkspace()}>{t('다시 연결', 'Reconnect', '重新连接', '再接続')}</button></div> : null}
           {studioState === 'loading' && !project ? <div className="desktop-empty" aria-busy="true"><span className="desktop-spinner" /><h1>{t('작업 공간을 불러오는 중', 'Loading the workspace', '正在加载工作区', 'ワークスペースを読み込み中')}</h1><p>{t('Local Studio의 프로젝트와 게시 영수증을 확인합니다.', 'Checking Local Studio projects and publish receipts.', '正在检查本地工作室项目和发布回执。', 'Local Studio のプロジェクトと公開レシートを確認しています。')}</p></div>
           : studioState === 'error' && !project ? <div className="desktop-empty"><span>!</span><h1>{t('데스크톱이 로컬 서비스에 닿지 않습니다', 'The desktop cannot reach the local service', '桌面无法连接本地服务', 'デスクトップがローカルサービスに届きません')}</h1><p>{t('npm run local 또는 데스크톱 앱을 실행한 뒤 다시 연결하세요.', 'Start npm run local or the desktop app, then reconnect.', '请先运行 npm run local 或桌面应用，然后重试。', 'npm run local かデスクトップアプリを起動してから再接続してください。')}</p><button type="button" className="desktop-primary" onClick={() => void refreshWorkspace()}>{t('다시 시도', 'Try again', '重试', '再試行')}</button></div>
-          : !project ? <SpecDesk
+          : specDeskOpen || !project ? <SpecDesk
               specs={workspace.edit_specs ?? []}
               handoff={workspace.handoff}
               busy={busy}
               studioReady={studioState === 'ready'}
               sampleAvailable={sampleAvailable}
-              onOpenSample={() => void openSampleProject()}
-              onOpenOwnFootage={() => { setCreateOpen(true); setDrawer('projects'); }}
+              onOpenSample={() => { setSpecDeskOpen(false); void openSampleProject(); }}
+              onOpenOwnFootage={() => { setSpecDeskOpen(false); setCreateOpen(true); setDrawer('projects'); }}
               request={api}
               onRefresh={() => refreshWorkspace(true)}
               onImported={async (projectId) => {
+                setSpecDeskOpen(false);
                 setSelectedProjectId(projectId);
                 setActivePanel('edit');
                 await refreshWorkspace(true);
