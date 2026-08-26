@@ -3,7 +3,7 @@
   "version": "0.2.3",
   "license": "BUSL-1.1",
   "author": "Grok Crew contributors",
-  "description": "Local-first video editing workspace for people and same-PC bots.",
+  "description": "Local-first short-form desk: you write the brief, a Grok bot supplies source and cut.",
   "main": "desktop/main.mjs",
   "keywords": [
     "video-editing",

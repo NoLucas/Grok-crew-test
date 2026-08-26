@@ -185,6 +185,17 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_sub = bundle.add_subparsers(dest="command", required=True)
     bundle_export = bundle_sub.add_parser("export", help="Export a project as a portable JSON bundle."); bundle_export.add_argument("--project", required=True); bundle_export.add_argument("--out", help="Write the bundle to this file instead of stdout.")
     bundle_import = bundle_sub.add_parser("import", help="Import a project bundle JSON file as a new local project."); bundle_import.add_argument("--file", required=True)
+
+    spec = commands.add_parser("spec", help="Write an edit spec. A bot supplies the source video and the cut.")
+    spec_sub = spec.add_subparsers(dest="command", required=True)
+    spec_sub.add_parser("list", help="List saved edit specs.")
+    spec_create = spec_sub.add_parser("create", help="Save an edit spec from JSON."); spec_create.add_argument("--file", required=True)
+    spec_brief = spec_sub.add_parser("brief", help="Print the text to give a bot on another computer."); spec_brief.add_argument("--id", required=True)
+
+    handoff = commands.add_parser("handoff", help="Receive a package a remote bot already wrote.")
+    handoff_sub = handoff.add_subparsers(dest="command", required=True)
+    handoff_sub.add_parser("status", help="Show the local inbox and whether a git remote is set.")
+    handoff_pull = handoff_sub.add_parser("pull", help="Import pending local inbox packages."); handoff_pull.add_argument("--demo", action="store_true", help="Write a sample package as if a bot sent source and a cut."); handoff_pull.add_argument("--spec-id", default="")
     return parser
 
 
@@ -284,6 +295,27 @@ def main() -> None:
                 print(text)
         else:
             print_json(client.request("/api/projects/import", {"bundle": read_json_file(args.file)}))
+        return
+
+    if args.group == "spec":
+        if args.command == "list":
+            print_json(client.request("/api/v2/edit-specs"))
+        elif args.command == "create":
+            print_json(client.request("/api/v2/edit-specs", read_json_file(args.file)))
+        else:
+            print_json(client.request(f"/api/v2/edit-specs/{args.id}/brief"))
+        return
+
+    if args.group == "handoff":
+        if args.command == "status":
+            print_json(client.request("/api/v2/handoff"))
+        else:
+            payload: dict[str, Any] = {}
+            if args.demo:
+                payload["demo"] = True
+            if args.spec_id:
+                payload["edit_spec_id"] = args.spec_id
+            print_json(client.request("/api/v2/handoff/pull", payload))
 
 
 if __name__ == "__main__":

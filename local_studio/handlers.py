@@ -71,6 +71,8 @@ from studio_server import (
     update_artifact,
 )
 from first_run import first_run_status, open_sample_project
+from edit_spec import create_spec, get_spec, list_specs, spec_brief
+from handoff_inbox import handoff_status, pull_handoff
 from desktop_domain import (
     TimelinePatchError,
     answer_control_job,
@@ -272,6 +274,15 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, launch_status())
             elif path == "/api/v2/first-run":
                 self._json(200, first_run_status())
+            elif path == "/api/v2/edit-specs":
+                self._json(200, {"edit_specs": list_specs()})
+            elif path == "/api/v2/handoff":
+                self._json(200, handoff_status())
+            elif path.startswith("/api/v2/edit-specs/") and path.endswith("/brief"):
+                self._json(200, spec_brief(path.split("/")[4]))
+            elif path.startswith("/api/v2/edit-specs/"):
+                record = get_spec(path.split("/")[4])
+                self._json(200, {"edit_spec": record}) if record else self._json(404, {"error": "Edit spec not found"})
             elif path == "/api/v2/media":
                 self._json(200, {"media": media_catalog()})
             elif path == "/api/v2/runners":
@@ -380,6 +391,10 @@ class StudioHandler(BaseHTTPRequestHandler):
             elif path == "/api/v2/first-run/sample":
                 opened = open_sample_project()
                 self._json(201, {**opened, **get_timeline(opened["project"]["id"])})
+            elif path == "/api/v2/edit-specs":
+                self._json(201, {"edit_spec": create_spec(body)})
+            elif path == "/api/v2/handoff/pull":
+                self._json(200, pull_handoff(body))
             elif path == "/api/v2/runners/pair":
                 self._json(201, {"runner": pair_runner(body)})
             elif path == "/api/v2/runner-events":

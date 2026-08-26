@@ -1,6 +1,10 @@
 {
   "schema": "local-video-workspace.handoff-guide/v1",
-  "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドホストのボットのための契約です。このPCへのネットワーク呼び出しの代わりに、専用の git ブランチを通じて完成した素材と編集計画を引き継ぎます。",
+  "purpose": "Local Studio のループバック API に直接アクセスできないリモート/クラウドボット向けの契約です。操作者は仕様だけ書きます。ボットが素材と編集を作り、このPCへ接続せず専用 git ブランチで渡します。",
+  "roles": {
+    "operator": "仕様だけ書く（タイトル、目的、長さ、字幕、ルック）。原版は付けない。",
+    "bot": "素材を用意して編集し、動画ファイルと edit_spec_id 入りの bundle.json を push する。"
+  },
   "why_this_exists": "Local Studio は設計上 127.0.0.1 にのみバインドされ、別のマシンやコンテナからはアクセスできません(README.md と CONTRIBUTING.md を参照)。このチャネルはリモート API ではなくオフラインの引き継ぎであり、本リポジトリがリモートボットから受け付けるのは、下記に指定されたブランチへの git push だけです。",
   "channel": {
     "medium": "git",
@@ -28,6 +32,7 @@
         "output_path": "レンダー結果のワークスペース相対パス。例: outputs/handoff/<フォルダ名>.mp4",
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "文字列", "word_timings": "任意、bot-guide.json を参照" }], "render_settings": "任意。Production の Finish Rack と同じフィールド(platform、quality、caption_bg、music_track など)" },
         "caption": "Instagram キャプションのテキスト、最大2200文字",
+        "edit_spec_id": "操作者の仕様を満たすときは必須 — 渡された id をそのまま入れる",
         "handoff_auto_upload_requested": "真偽値、任意——下記 auto_upload_policy を参照"
       },
       "jobs": [

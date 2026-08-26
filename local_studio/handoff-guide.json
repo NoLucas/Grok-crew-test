@@ -1,6 +1,10 @@
 {
   "schema": "local-video-workspace.handoff-guide/v1",
-  "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. It hands off finished media and an edit plan through a dedicated git branch instead of any network call to this PC.",
+  "purpose": "A contract for a remote or cloud-hosted bot that cannot reach Local Studio's loopback API directly. The operator only writes an edit spec. The bot supplies the source video and the cut, then hands both off through a dedicated git branch — never a network call to this PC.",
+  "roles": {
+    "operator": "Write the spec only (title, goal, length, captions, look). Do not attach footage.",
+    "bot": "Find or make the source, edit it, and push a package that includes the video file plus bundle.json with edit_spec_id."
+  },
   "why_this_exists": "Local Studio binds to 127.0.0.1 only and is not reachable from another machine or container by design (see README.md and CONTRIBUTING.md). This channel is an offline handoff, not a remote API — the only thing this repository accepts from a remote bot is a git push to the branch named below.",
   "channel": {
     "medium": "git",
@@ -28,6 +32,7 @@
         "output_path": "workspace-relative path for the render, e.g. outputs/handoff/<folder-name>.mp4",
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "string", "word_timings": "optional, see bot-guide.json" }], "render_settings": "optional, same fields Production's Finish Rack uses (platform, quality, caption_bg, music_track, ...)" },
         "caption": "Instagram caption text, up to 2200 characters",
+        "edit_spec_id": "required when fulfilling an operator spec — copy the id from the brief the operator sent",
         "handoff_auto_upload_requested": "boolean, optional — see auto_upload_policy below"
       },
       "jobs": [
@@ -36,7 +41,7 @@
       ],
       "artifacts": []
     },
-    "media_file": "The actual video file referenced by source_path, placed at the top level of the same folder and named with just its final path segment (e.g. source.mp4, not inputs/handoff/.../source.mp4).",
+    "media_file": "The bot must include the actual video file. The operator does not provide it. Place it at the folder root using only the final path segment (source.mp4). Extra B-roll files listed on timeline.assets[].path go in the same folder.",
     "rule": "Omit a job's 'status' field entirely so it is created fresh as queued+approved. Do not set 'status' to succeeded/failed unless you are intentionally replaying history, not requesting new work."
   },
   "auto_upload_policy": {

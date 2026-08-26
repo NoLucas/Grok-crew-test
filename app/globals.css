@@ -6839,6 +6839,28 @@ select {
 .desktop-empty .desktop-primary { margin-top: 6px; }
 .desktop-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 .desktop-empty-actions .desktop-primary { margin-top: 0; }
+.desktop-spec-desk { width: min(720px, 100%); margin: 0 auto; padding: 28px 20px 40px; display: grid; gap: 18px; }
+.desktop-spec-hero { display: grid; gap: 10px; text-align: center; justify-items: center; }
+.desktop-spec-hero > span { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid var(--desktop-line); border-radius: 50%; color: var(--desktop-blue); font-size: 22px; }
+.desktop-spec-hero h1 { margin: 0; font-size: 24px; letter-spacing: -.04em; line-height: 1.25; }
+.desktop-spec-hero p { margin: 0; max-width: 520px; color: var(--desktop-muted); font-size: 13px; line-height: 1.55; }
+.desktop-spec-form, .desktop-spec-brief { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--desktop-line); border-radius: 12px; background: white; text-align: left; }
+.desktop-spec-form label, .desktop-spec-brief label { display: grid; gap: 4px; font-size: 11px; color: var(--desktop-muted); }
+.desktop-spec-form input, .desktop-spec-form select, .desktop-spec-form textarea, .desktop-spec-brief textarea { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--desktop-line); border-radius: 8px; background: #fafafa; font: inherit; font-size: 13px; color: inherit; }
+.desktop-spec-form textarea, .desktop-spec-brief textarea { resize: vertical; }
+.desktop-spec-wide { grid-column: 1 / -1; }
+.desktop-spec-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, .8fr)); gap: 8px; }
+.desktop-spec-check { display: flex; align-items: center; gap: 8px; color: inherit; font-size: 13px; }
+.desktop-spec-check input { width: auto; }
+.desktop-spec-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.desktop-spec-error { margin: 0; color: #b42318; font-size: 13px; }
+.desktop-spec-meta { margin: 0; color: var(--desktop-muted); font-size: 12px; text-align: center; }
+.desktop-spec-advanced { color: var(--desktop-muted); font-size: 12px; }
+.desktop-spec-advanced summary { cursor: pointer; }
+.desktop-spec-advanced .desktop-empty-actions { justify-content: flex-start; }
+@media (max-width: 720px) {
+  .desktop-spec-row { grid-template-columns: 1fr; }
+}
 .desktop-spinner {
   width: 28px; height: 28px; border: 2px solid #dddde3; border-top-color: var(--desktop-blue);
   border-radius: 50%; animation: desktop-spin .8s linear infinite;

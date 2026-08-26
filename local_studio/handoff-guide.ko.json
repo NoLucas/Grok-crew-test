@@ -1,6 +1,10 @@
 {
   "schema": "local-video-workspace.handoff-guide/v1",
-  "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 이 PC로의 네트워크 호출 대신, 완성된 미디어와 편집 계획을 전용 git 브랜치로 인계합니다.",
+  "purpose": "Local Studio의 loopback API에 직접 접속할 수 없는 원격/클라우드 봇을 위한 계약입니다. 사용자는 규격만 적습니다. 봇이 소스 영상과 편집을 만들어, 이 PC로 네트워크 호출을 하지 않고 전용 git 브랜치로 넘깁니다.",
+  "roles": {
+    "operator": "규격만 적습니다(제목, 목표, 길이, 자막, 룩). 원본 파일을 붙이지 않습니다.",
+    "bot": "소스를 구하고 편집한 뒤, 영상 파일과 edit_spec_id가 들어 있는 bundle.json 패키지를 push합니다."
+  },
   "why_this_exists": "Local Studio는 설계상 127.0.0.1에만 바인딩되며 다른 기기나 컨테이너에서 접근할 수 없습니다(README.md, CONTRIBUTING.md 참고). 이 채널은 원격 API가 아니라 오프라인 인계이며, 이 저장소가 원격 봇으로부터 받아들이는 유일한 것은 아래 지정된 브랜치로의 git push입니다.",
   "channel": {
     "medium": "git",
@@ -28,6 +32,7 @@
         "output_path": "렌더 결과의 워크스페이스 상대경로, 예: outputs/handoff/<폴더명>.mp4",
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "문자열", "word_timings": "선택 사항, bot-guide.json 참고" }], "render_settings": "선택 사항, Production의 Finish Rack과 같은 필드(platform, quality, caption_bg, music_track 등)" },
         "caption": "Instagram 캡션, 최대 2200자",
+        "edit_spec_id": "운영자 규격을 이행할 때 필수 — 받은 글에 있는 id를 그대로 넣습니다",
         "handoff_auto_upload_requested": "불리언, 선택 사항 — 아래 auto_upload_policy 참고"
       },
       "jobs": [
@@ -36,7 +41,7 @@
       ],
       "artifacts": []
     },
-    "media_file": "source_path가 가리키는 실제 영상 파일을 같은 폴더 최상위에, 경로의 마지막 부분만 딴 파일명으로 둡니다 (예: inputs/handoff/.../source.mp4이 아니라 그냥 source.mp4).",
+    "media_file": "봇이 실제 영상 파일을 넣어야 합니다. 운영자는 원본을 주지 않습니다. 폴더 맨 위에 source.mp4처럼 마지막 이름만 둡니다. B-roll은 같은 폴더에 두고 timeline.assets[].path에 적습니다.",
     "rule": "새 작업을 요청하려면 job의 'status' 필드를 아예 생략하세요 — 그러면 새로 만들어져 queued+approved 상태가 됩니다. 과거 이력을 재현하려는 의도가 아니라면 'status'를 succeeded/failed로 설정하지 마세요."
   },
   "auto_upload_policy": {

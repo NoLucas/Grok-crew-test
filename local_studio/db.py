@@ -132,6 +132,11 @@ def init_db() -> None:
             error_text TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
             FOREIGN KEY(project_id) REFERENCES projects(id)
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS edit_specs (
+            id TEXT PRIMARY KEY, spec_json TEXT NOT NULL, status TEXT NOT NULL,
+            project_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+        _ensure_column(conn, "projects", "edit_spec_id", "TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_project_created ON jobs(project_id, created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_open_status ON jobs(status, created_at DESC) WHERE status NOT IN ('succeeded', 'failed')")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_project_created ON events(project_id, created_at DESC)")
@@ -192,7 +197,7 @@ def row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
     value = dict(row)
-    for key in ("timeline_json", "payload_json", "result_json", "detail_json", "settings_json", "publish_policy_json", "media_json", "transcript_json", "thumbnails_json", "conflict_json", "undo_json", "redo_json"):
+    for key in ("timeline_json", "payload_json", "result_json", "detail_json", "settings_json", "publish_policy_json", "media_json", "transcript_json", "thumbnails_json", "conflict_json", "undo_json", "redo_json", "spec_json"):
         if key in value and value[key]:
             value[key] = json.loads(value[key])
     return value

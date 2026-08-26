@@ -69,10 +69,14 @@ def new_project(body: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("timeline.clips must be a list.")
     project_id = str(uuid.uuid4())
     now = utc_now()
+    edit_spec_id = str(body.get("edit_spec_id") or "").strip() or None
     with db() as conn:
-        conn.execute("INSERT INTO projects (id, title, source_path, output_path, timeline_json, caption, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (project_id, title, str(source), str(output), json.dumps(timeline), str(body.get("caption", ""))[:2200], now, now))
+        conn.execute(
+            "INSERT INTO projects (id, title, source_path, output_path, timeline_json, caption, created_at, updated_at, edit_spec_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (project_id, title, str(source), str(output), json.dumps(timeline), str(body.get("caption", ""))[:2200], now, now, edit_spec_id),
+        )
         row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
-    event(project_id, None, "project_created", {"title": title, "source": str(source), "output": str(output)})
+    event(project_id, None, "project_created", {"title": title, "source": str(source), "output": str(output), "edit_spec_id": edit_spec_id})
     return row_dict(row) or {}
 
 
@@ -434,7 +438,12 @@ def import_project_bundle(body: dict[str, Any]) -> dict[str, Any]:
         "output_path": project_data.get("output_path", "outputs/final-video.mp4"),
         "timeline": project_data.get("timeline", {}),
         "caption": project_data.get("caption", ""),
+        "edit_spec_id": project_data.get("edit_spec_id"),
     })
+    spec_id = str(project_data.get("edit_spec_id") or "").strip()
+    if spec_id:
+        from edit_spec import attach_spec_project
+        attach_spec_project(spec_id, project["id"])
     imported_jobs = []
     for job_data in bundle.get("jobs") if isinstance(bundle.get("jobs"), list) else []:
         if not isinstance(job_data, dict) or job_data.get("kind") not in {"render", "instagram_publish"}:

@@ -36,6 +36,28 @@ def test_copy_media_rejects_file_over_size_cap(tmp_path, monkeypatch):
         hw.copy_media(folder, workspace, "source.mp4")
 
 
+def test_process_folder_copies_broll_named_in_timeline(tmp_path):
+    folder = tmp_path / "20260826-pkg"
+    workspace = tmp_path / "workspace"
+    folder.mkdir()
+    (folder / "source.mp4").write_bytes(b"src")
+    (folder / "broll.mp4").write_bytes(b"brl")
+    (folder / "bundle.json").write_text(
+        '{"schema":"local-video-workspace.project-bundle/v1","project":{"title":"Bot","source_path":"inputs/handoff/pkg/source.mp4","timeline":{"clips":[{"in":0,"out":1,"keep":true}],"assets":[{"path":"inputs/handoff/pkg/broll.mp4"}]}}}',
+        encoding="utf-8",
+    )
+
+    class _ImportClient:
+        def request(self, path, body=None):
+            if path == "/api/projects/import":
+                return {"project": {"id": "imported"}, "jobs": []}
+            raise AssertionError(path)
+
+    hw.process_folder(_ImportClient(), folder, workspace, allow_auto_upload=False)
+    assert (workspace / "inputs/handoff/pkg/source.mp4").read_bytes() == b"src"
+    assert (workspace / "inputs/handoff/pkg/broll.mp4").read_bytes() == b"brl"
+
+
 def test_copy_media_accepts_file_within_limits(tmp_path):
     folder = tmp_path / "pkg"
     workspace = tmp_path / "workspace"

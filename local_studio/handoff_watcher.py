@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from grok_crew import LocalStudioClient
+from handoff_inbox import media_relpaths
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -178,7 +179,8 @@ def process_folder(client: LocalStudioClient, folder: Path, workspace: Path, *, 
         log(f"Skipping {folder.name}: bundle.project.source_path is required.")
         return
     try:
-        copy_media(folder, workspace, str(project["source_path"]))
+        for relative in media_relpaths(project):
+            copy_media(folder, workspace, relative)
     except RuntimeError as exc:
         log(f"Skipping {folder.name}: {exc}")
         return

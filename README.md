@@ -2,30 +2,27 @@
 
 <p align="center"><strong>English</strong> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a> &nbsp;·&nbsp; <a href="README.ja.md">日本語</a></p>
 
-**Grok Crew is a short-form video editor that stays on your computer.**
+**Grok Crew is a short-form desk on your computer. You write the brief. A Grok bot brings the footage and the cut.**
 
-You bring in a talking-head clip or a phone recording. You cut it on a timeline. You get a finished file on this PC. You post to Instagram, TikTok, or YouTube only if you choose to. If you never ask it to upload, the video never leaves.
+You do not have to drop a source file here. You say how it should feel — length, captions, what to keep. A bot on **another computer** makes the video and the edit, then hands the folder over. This PC receives it and shows the timeline. You post to Instagram, TikTok, or YouTube only if you choose to.
 
-It is not a website that holds your footage. It is not a social app. It is the desk between “I filmed this” and “this is the Reel.”
+It is not a website that holds your footage. The bot never opens this PC. It only pushes a package.
 
 ```
-my clip  →  edit on this PC  →  finished file  →  post only if I say so
+your brief  →  bot finds/makes source + cut  →  this PC receives it  →  post only if you say so
 ```
 
 ## Who it is for
 
-- Creators who want a tight vertical cut without sending the raw file to someone else’s cloud
-- Small teams who want the cut, the file, and the “did it post?” status in one place
-- Anyone who may later ask an AI helper on the **same computer** to draft the edit — and still wants to see and approve what changed
+- People who want to specify the Reel, not hunt for the raw file on this machine
+- Creators who let a Grok bot on another computer do the sourcing and the first cut
+- Anyone who still wants the finished file to land on this PC, not in a cloud editor
 
 You do not need an account to start.
 
 ## What you see
 
-The first screen is **Start the first video on this PC**.
-
-- **Start with the sample** — try a short ready-made project
-- **Start with my footage** — import a video from this computer
+The first screen asks you to **write the brief**. Save it, copy the text, and give that text to Grok on another computer. When the bot has pushed a package, click **Receive the bot cut**. **See a sample delivery** shows the same arrival using a bundled clip.
 
 Then you work in three tabs:
 
@@ -35,7 +32,7 @@ Then you work in three tabs:
 | **Setup** | Look, captions, speed |
 | **Export** | Save an MP4 here, or post after it asks |
 
-The preview is a fast draft so the picture keeps up while you edit. The file you save is made from the original footage.
+The preview is a fast draft. The file you save is made from the footage the bot sent. Opening a file already on this computer is optional and tucked under the brief.
 
 ## Your video stays on this computer
 

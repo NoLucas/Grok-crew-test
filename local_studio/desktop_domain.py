@@ -1216,5 +1216,17 @@ def workspace_v2() -> dict[str, Any]:
         version = ensure_timeline_version(project["id"])
         project["current_revision"] = version["revision"]
     from first_run import first_run_status
+    from edit_spec import list_specs
+    from handoff_inbox import handoff_status
 
-    return {"schema": "grok-crew.desktop-workspace/v1", "projects": projects, "control_jobs": list_control_jobs(), "runner_events": list_runner_events(), "runners": list_runners(), "media": media_catalog(), "first_run": first_run_status()}
+    return {
+        "schema": "grok-crew.desktop-workspace/v1",
+        "projects": projects,
+        "control_jobs": list_control_jobs(),
+        "runner_events": list_runner_events(),
+        "runners": list_runners(),
+        "media": media_catalog(),
+        "first_run": first_run_status(),
+        "edit_specs": list_specs(),
+        "handoff": handoff_status(),
+    }

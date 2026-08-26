@@ -1,6 +1,10 @@
 {
   "schema": "local-video-workspace.handoff-guide/v1",
-  "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。它不通过任何网络调用连接这台 PC,而是通过一个专用的 git 分支交接完成的素材和剪辑计划。",
+  "purpose": "面向无法直接访问 Local Studio 环回 API 的远程或云端机器人的契约。操作者只写规格。机器人提供原片和剪辑，再通过专用 git 分支交接，而不是连接这台电脑。",
+  "roles": {
+    "operator": "只写规格（标题、目标、时长、字幕、风格）。不要附上原片。",
+    "bot": "准备原片并剪辑，然后推送包含视频文件和带 edit_spec_id 的 bundle.json 的包裹。"
+  },
   "why_this_exists": "Local Studio 按设计只绑定 127.0.0.1,无法从另一台机器或容器访问(参见 README.md 和 CONTRIBUTING.md)。这个通道是离线交接,不是远程 API——本仓库从远程机器人那里接受的唯一内容,就是向下面指定的分支执行一次 git push。",
   "channel": {
     "medium": "git",
@@ -28,6 +32,7 @@
         "output_path": "渲染结果的工作区相对路径,例如 outputs/handoff/<文件夹名>.mp4",
         "timeline": { "clips": [{ "in": 0, "out": 1.4, "keep": true, "caption": "字符串", "word_timings": "可选,参见 bot-guide.json" }], "render_settings": "可选,字段与 Production 的 Finish Rack 相同(platform、quality、caption_bg、music_track 等)" },
         "caption": "Instagram 文案,最多 2200 字符",
+        "edit_spec_id": "履行操作者规格时必填 — 复制对方发来的 id",
         "handoff_auto_upload_requested": "布尔值,可选——参见下方 auto_upload_policy"
       },
       "jobs": [
