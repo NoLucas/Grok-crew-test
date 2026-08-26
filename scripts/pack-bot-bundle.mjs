@@ -16,9 +16,14 @@ const python = [
 const code = `
 from pathlib import Path
 import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 sys.path.insert(0, ${JSON.stringify(resolve(root, 'local_studio'))})
 from bot_pack import write_bot_pack
-print(write_bot_pack(Path(sys.argv[1])))
+result = write_bot_pack(Path(sys.argv[1]))
+print("packed {bytes} bytes -> {name}".format(bytes=result["bytes"], name=Path(result["path"]).name))
 `;
 
 let last = null;
