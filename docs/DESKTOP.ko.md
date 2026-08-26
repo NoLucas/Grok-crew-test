@@ -24,7 +24,7 @@ npm run desktop:dist
 
 ## 현재 제공되는 흐름
 
-1. `Videos/Grok Crew/inputs`의 원본으로 프로젝트를 만듭니다.
+1. 빈 작업 공간이면 **샘플로 시작**을 누르거나, `Videos/Grok Crew/inputs`의 원본으로 프로젝트를 만듭니다. `npm run desktop`은 Local Studio용 Python 환경을 먼저 준비합니다.
 2. 콘텐츠 유형, 훅, 속도, 자막, 룩, 음향, FPS, 품질과 플랫폼별 게시 정책을 고릅니다.
 3. 로컬 분석이 장면 썸네일·미디어 정보와 선택적으로 whisper.cpp 단어 대본을 만듭니다.
 4. `Grok으로 제작 시작`이 현재 timeline revision에 고정된 control job을 만듭니다.

@@ -1189,4 +1189,6 @@ def workspace_v2() -> dict[str, Any]:
     for project in projects:
         version = ensure_timeline_version(project["id"])
         project["current_revision"] = version["revision"]
-    return {"schema": "grok-crew.desktop-workspace/v1", "projects": projects, "control_jobs": list_control_jobs(), "runner_events": list_runner_events(), "runners": list_runners(), "media": media_catalog()}
+    from first_run import first_run_status
+
+    return {"schema": "grok-crew.desktop-workspace/v1", "projects": projects, "control_jobs": list_control_jobs(), "runner_events": list_runner_events(), "runners": list_runners(), "media": media_catalog(), "first_run": first_run_status()}

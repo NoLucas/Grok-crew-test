@@ -24,7 +24,7 @@ Copy `.env.example` to `local_studio/.env` to set any of these; all are optional
 
 ## Start
 
-1. From the repository's top-level folder, run `npm run local`. It starts this service and the browser workspace together, creating the local virtual environment and installing the two local libraries on first use.
+1. From the repository's top-level folder, run `npm run local` or `npm run desktop`. Both prepare this service, the Python renderer, and the bundled sample clip. Later starts skip `pip` when requirements have not changed.
 2. Copy `.env.example` to `.env` only if you want token protection or Instagram / TikTok / YouTube publishing.
 3. For a Local Studio-only Windows session, run `./run.ps1` from this folder.
 4. Or run `.venv\Scripts\python studio_server.py --port 7214` directly.

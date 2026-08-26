@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { ensureLocalRuntime, root } from './local-runtime.mjs';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const electron = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'electron.cmd' : 'electron');
 const shell = process.platform === 'win32';
+
+await ensureLocalRuntime({ startStudio: false });
+
 const web = spawn(npm, ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort'], { cwd: root, stdio: 'inherit', shell });
 
 function webReady() {

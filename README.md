@@ -38,13 +38,13 @@ cd grok-crew
 npm run local
 ```
 
-Open the [Desktop](http://localhost:3000/) when the setup finishes. The first run installs the local browser and renderer dependencies, creates a private Python environment, and prepares a bundled sample input — no cloud account or provider API key is required. The older [Production](http://localhost:3000/production) console remains available.
+Open the [Desktop](http://localhost:3000/) when the setup finishes. The first run installs local dependencies once, then skips that work on later starts. If the project list is empty, click **Start with the sample** — no second terminal, cloud account, or API key. The older [Production](http://localhost:3000/production) console remains available.
 
 > **License:** Grok Crew is source-available under [BUSL-1.1](LICENSE), not an open-source project. See the [license](LICENSE) for the exact use rights.
 
 ### Render a real sample immediately
 
-Keep `npm run local` running. In a second terminal from this repository, run `npm run sample`. It creates a real two-cut project, records a local sample-bot check-in, and renders `local_studio/workspace/outputs/grok-crew-sample-render.mp4`. It does **not** create an Instagram job. See [sample-project](sample-project/README.md) for the portable project payload.
+On Desktop, click **Start with the sample** to open the bundled two-cut project. Optional: keep `npm run local` running and run `npm run sample` in a second terminal to also render `local_studio/workspace/outputs/grok-crew-sample-render.mp4`. That command does **not** create an Instagram job. See [sample-project](sample-project/README.md).
 
 ## Tell a Grok bot what to do
 
@@ -78,7 +78,7 @@ It is a **local production desk for people and same-PC bots**, not a cloud video
 - Python 3.10 or newer
 - A local clone of this repository
 
-`npm run local` starts the browser workspace at `localhost:3000` and Local Studio at `127.0.0.1:7214`. Stop with `Ctrl+C`; running the same command later resumes the local workspace.
+`npm run local` (browser) and `npm run desktop` (Electron) both prepare the Python renderer and the bundled sample. Later starts skip `pip` when requirements have not changed. Stop with `Ctrl+C`; running the same command later resumes the local workspace.
 
 `npm run launch:verify` prints the P3 local 1.0 gates (publish receipts, loopback sidecar) and marks OAuth apps, code signing, and in-place auto-update as external.
 

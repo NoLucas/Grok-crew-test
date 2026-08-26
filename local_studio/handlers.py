@@ -70,6 +70,7 @@ from studio_server import (
     terminal_contract,
     update_artifact,
 )
+from first_run import first_run_status, open_sample_project
 from desktop_domain import (
     TimelinePatchError,
     answer_control_job,
@@ -268,6 +269,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(200, workspace_v2())
             elif path == "/api/v2/launch":
                 self._json(200, launch_status())
+            elif path == "/api/v2/first-run":
+                self._json(200, first_run_status())
             elif path == "/api/v2/media":
                 self._json(200, {"media": media_catalog()})
             elif path == "/api/v2/runners":
@@ -368,6 +371,9 @@ class StudioHandler(BaseHTTPRequestHandler):
                 self._json(201, {"project": new_project(body)})
             elif path == "/api/v2/projects":
                 project = new_project(body); self._json(201, {"project": project, **get_timeline(project["id"])})
+            elif path == "/api/v2/first-run/sample":
+                opened = open_sample_project()
+                self._json(201, {**opened, **get_timeline(opened["project"]["id"])})
             elif path == "/api/v2/runners/pair":
                 self._json(201, {"runner": pair_runner(body)})
             elif path == "/api/v2/runner-events":

@@ -27,13 +27,13 @@ cd grok-crew
 npm run local
 ```
 
-準備が完了したら [デスクトップ](http://localhost:3000/) を開いてください。初回実行ではローカルのブラウザ・レンダラー依存関係をインストールし、専用のPython環境と同梱サンプル素材を準備します。クラウドアカウントやプロバイダーのAPIキーは不要です。以前の [Production](http://localhost:3000/production) コンソールも残っています。
+準備が完了したら [デスクトップ](http://localhost:3000/) を開いてください。依存関係のインストールは初回だけ行い、以降はスキップします。プロジェクトが空なら **サンプルで始める** を押してください。2つ目のターミナルもクラウドアカウントも不要です。以前の [Production](http://localhost:3000/production) コンソールも残っています。
 
 > **ライセンス：**Grok Crewはオープンソースプロジェクトではなく、[BUSL-1.1](LICENSE)でソース公開されるプロジェクトです。正確な利用権は[ライセンス](LICENSE)を確認してください。
 
-### 実際のサンプルをすぐにレンダリングする
+### 実際のサンプルをすぐ開く
 
-`npm run local` を実行したまま、このリポジトリの2つ目のターミナルで `npm run sample` を実行してください。実際の2クリッププロジェクトが作成され、ローカルのサンプルボットのチェックインが記録され、`local_studio/workspace/outputs/grok-crew-sample-render.mp4` がレンダリングされます。Instagramジョブは**作成されません**。ポータブルなプロジェクト内容は [sample-project](sample-project/README.md) を参照してください。
+デスクトップで **サンプルで始める** を押すと同梱の2クリッププロジェクトが開きます。任意: `npm run local` を動かしたまま2つ目のターミナルで `npm run sample` を実行すると `local_studio/workspace/outputs/grok-crew-sample-render.mp4` までレンダーします。Instagramジョブは**作成されません**。[sample-project](sample-project/README.md) を参照してください。
 
 ## Grok bot への頼み方
 
@@ -65,7 +65,7 @@ npm run local
 - Python 3.10以上
 - このリポジトリのローカルクローン
 
-`npm run local` は `localhost:3000` のブラウザワークスペースと `127.0.0.1:7214` のLocal Studioを起動します。`Ctrl+C`で停止し、同じコマンドを再実行すれば同じローカルワークスペースを再開できます。
+`npm run local`（ブラウザ）と `npm run desktop`（Electron）はどちらも Python レンダラーと同梱サンプルを用意します。requirements が同じなら以降の起動では `pip` をスキップします。`Ctrl+C`で停止し、同じコマンドを再実行すれば同じローカルワークスペースを再開できます。
 
 ### ローカルボットに最初のタスクを与える
 

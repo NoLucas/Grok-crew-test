@@ -27,13 +27,13 @@ cd grok-crew
 npm run local
 ```
 
-准备完成后，打开 [桌面](http://localhost:3000/)。第一次运行会安装本地浏览器与渲染依赖，创建独立的 Python 环境，并准备内置示例素材；无需云端账号或第三方 API 密钥。旧的 [Production](http://localhost:3000/production) 控制台仍然可用。
+准备完成后，打开 [桌面](http://localhost:3000/)。只有第一次会安装依赖，之后会跳过。项目列表为空时点击**从示例开始**，不需要第二个终端或云端账号。旧的 [Production](http://localhost:3000/production) 控制台仍然可用。
 
 > **许可证：**Grok Crew 以 [BUSL-1.1](LICENSE) 源码可见方式提供，并不是开源项目。准确的使用权利请查看 [许可证](LICENSE)。
 
-### 立即渲染真实示例
+### 立即打开真实示例
 
-保持 `npm run local` 运行，在此仓库的第二个终端执行 `npm run sample`。它会创建真实的双片段项目、记录本地示例机器人签到，并渲染 `local_studio/workspace/outputs/grok-crew-sample-render.mp4`。它**不会**创建 Instagram 任务。可移植项目内容请见 [sample-project](sample-project/README.md)。
+在桌面点击**从示例开始**即可打开内置双片段项目。可选：保持 `npm run local` 运行，再在第二个终端执行 `npm run sample`，会渲染 `local_studio/workspace/outputs/grok-crew-sample-render.mp4`。它**不会**创建 Instagram 任务。见 [sample-project](sample-project/README.md)。
 
 ## 如何向 Grok bot 下达任务
 
@@ -65,7 +65,7 @@ npm run local
 - Python 3.10 或更高版本
 - 本仓库的本地克隆
 
-`npm run local` 会启动 `localhost:3000` 的浏览器工作区和 `127.0.0.1:7214` 的 Local Studio。按 `Ctrl+C` 停止；再次运行同一命令会继续使用同一个本地工作区。
+`npm run local`（浏览器）和 `npm run desktop`（Electron）都会准备 Python 渲染器和内置示例。requirements 未变时会跳过 `pip`。按 `Ctrl+C` 停止；再次运行同一命令会继续使用同一个本地工作区。
 
 ### 给本地机器人分配第一个任务
 

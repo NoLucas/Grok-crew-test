@@ -38,13 +38,13 @@ cd grok-crew
 npm run local
 ```
 
-준비가 끝나면 [데스크톱](http://localhost:3000/)을 여세요. 첫 실행은 로컬 브라우저·렌더러 의존성을 설치하고, 독립 Python 환경과 내장 샘플 소스를 준비합니다. 클라우드 계정이나 제공자 API 키는 필요하지 않습니다. 이전 [Production](http://localhost:3000/production) 콘솔도 그대로 있습니다.
+준비가 끝나면 [데스크톱](http://localhost:3000/)을 여세요. 첫 실행만 의존성을 설치하고, 이후에는 그 과정을 건너뜁니다. 프로젝트가 비어 있으면 **샘플로 시작**을 누르세요. 두 번째 터미널이나 클라우드 계정은 필요 없습니다. 이전 [Production](http://localhost:3000/production) 콘솔도 그대로 있습니다.
 
 > **라이선스:** Grok Crew는 오픈소스 프로젝트가 아니라 [BUSL-1.1](LICENSE)로 소스가 공개된 프로젝트입니다. 정확한 사용 권한은 [라이선스](LICENSE)를 확인하세요.
 
-### 실제 샘플을 바로 렌더하기
+### 실제 샘플을 바로 열기
 
-`npm run local`을 계속 실행한 채, 이 저장소에서 두 번째 터미널을 열어 `npm run sample`을 실행하세요. 실제 두 컷 프로젝트가 만들어지고 로컬 샘플 봇 체크인이 기록되며 `local_studio/workspace/outputs/grok-crew-sample-render.mp4`가 렌더됩니다. Instagram 작업은 **만들지 않습니다**. 이식 가능한 프로젝트 내용은 [sample-project](sample-project/README.md)에서 확인할 수 있습니다.
+데스크톱에서 **샘플로 시작**을 누르면 번들 두 컷 프로젝트가 열립니다. 선택 사항: `npm run local`을 켠 채 두 번째 터미널에서 `npm run sample`을 실행하면 `local_studio/workspace/outputs/grok-crew-sample-render.mp4`까지 렌더합니다. Instagram 작업은 **만들지 않습니다**. 내용은 [sample-project](sample-project/README.md)를 보세요.
 
 ## Grok bot에게 이렇게 명령하세요
 
@@ -76,7 +76,7 @@ Grok Crew는 **사람과 같은 PC에서 실행되는 봇을 위한 로컬 제�
 - Python 3.10 이상
 - 이 저장소의 로컬 복제본
 
-`npm run local`은 `localhost:3000`의 브라우저 작업 공간과 `127.0.0.1:7214`의 Local Studio를 시작합니다. `Ctrl+C`로 멈추고 같은 명령을 다시 실행하면 이전 로컬 작업 공간을 이어서 사용합니다.
+`npm run local`(브라우저)과 `npm run desktop`(Electron) 모두 Python 렌더러와 번들 샘플을 준비합니다. requirements가 같으면 이후 실행에서 `pip`을 건너뜁니다. `Ctrl+C`로 멈추고 같은 명령을 다시 실행하면 이전 로컬 작업 공간을 이어서 사용합니다.
 
 ### 로컬 봇에 첫 작업 주기
 

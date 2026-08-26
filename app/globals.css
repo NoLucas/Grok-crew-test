@@ -6835,6 +6835,8 @@ select {
 .desktop-empty h1 { margin: 0; font-size: 24px; letter-spacing: -.04em; }
 .desktop-empty p { margin: 0; max-width: 420px; color: var(--desktop-muted); font-size: 13px; line-height: 1.5; }
 .desktop-empty .desktop-primary { margin-top: 6px; }
+.desktop-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.desktop-empty-actions .desktop-primary { margin-top: 0; }
 .desktop-spinner {
   width: 28px; height: 28px; border: 2px solid #dddde3; border-top-color: var(--desktop-blue);
   border-radius: 50%; animation: desktop-spin .8s linear infinite;

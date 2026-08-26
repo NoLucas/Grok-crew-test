@@ -107,7 +107,19 @@ async function startStudio() {
   studioProcess.stderr?.on('data', (chunk) => console.error(`[studio] ${String(chunk).trimEnd()}`));
   studioProcess.once('exit', (code) => { if (!app.isQuitting && code) console.error(`Local Studio exited with ${code}.`); });
   await waitForStudio(apiBase);
+  await openSampleIfEmpty(apiBase, studioToken);
   return apiBase;
+}
+
+async function openSampleIfEmpty(apiBase, token) {
+  const headers = { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  try {
+    const workspace = await fetch(`${apiBase}/api/v2/workspace`, { headers }).then((response) => response.json());
+    if (workspace.projects?.length) return;
+    await fetch(`${apiBase}/api/v2/first-run/sample`, { method: 'POST', headers });
+  } catch (error) {
+    console.log(`Sample project was not opened automatically: ${error instanceof Error ? error.message : error}`);
+  }
 }
 
 async function startRenderer() {

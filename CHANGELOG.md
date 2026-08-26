@@ -33,6 +33,8 @@ All notable changes to Grok Crew are documented here.
 
 ### Added
 
+- First-run no longer needs a second terminal: Desktop can open the bundled sample project in one click (`POST /api/v2/first-run/sample`). `npm run local` and `npm run desktop` share the same Python + sample bootstrap, and later starts skip `pip` when `requirements.txt` is unchanged.
+
 - P3 publish receipts: list recent Instagram/TikTok/YouTube attempts, retry a failed receipt with the same idempotency key, and mark receipts left `running` as failed on the next Local Studio start.
 - Publish failures redact bearer/access tokens before they are stored or returned.
 - `GET /api/v2/launch` reports local 1.0 gates versus external OAuth, code signing, and in-place auto-update.
@@ -66,6 +68,7 @@ All notable changes to Grok Crew are documented here.
 - Desktop Export asks before retrying an interrupted publish receipt, because the platform may already have the first upload. Receipt retry buttons stay visible when the error text is long.
 - Legacy browser pages keep their routes and show a banner that points to Desktop. Production and Bot Check can still run live jobs; the other header pages stay planning or preview. Production no longer crashes when a Desktop Timeline v2 project has no legacy `clips` array.
 - `npm run local` and `site --page desktop` open `/` instead of sending operators to `/production`.
+- First-run docs tell operators to click Start with the sample instead of opening a second terminal for `npm run sample`.
 
 - Core verification now runs every focused timeline UI test, so P1-01 and P1-02 interaction regressions are included in CI.
 

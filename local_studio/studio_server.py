@@ -929,6 +929,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Local Video Studio on loopback only.")
     parser.add_argument("--port", type=int, default=7214)
     args = parser.parse_args(); load_dotenv(); init_db()
+    from first_run import provision_sample_media
+    if provision_sample_media():
+        print("Bundled sample clip is in workspace/inputs/grok-crew-sample.mp4")
     from handlers import StudioHandler  # deferred: handlers.py imports this module, so avoid a top-level cycle
     with db() as conn:
         conn.execute("UPDATE jobs SET status = 'failed', error_text = ?, updated_at = ? WHERE status = 'running'", ("Interrupted by an unclean Local Studio shutdown.", utc_now()))
