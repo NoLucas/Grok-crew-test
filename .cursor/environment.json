@@ -1,0 +1,20 @@
+{
+  "name": "Grok Crew",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "Local Studio (sidecar)",
+      "command": "cd local_studio && .venv/bin/python studio_server.py --port 7214",
+      "description": "Python video-render sidecar (Local Studio). Health check: http://127.0.0.1:7214/health"
+    },
+    {
+      "name": "Web desk",
+      "command": "npm run dev -- --host 127.0.0.1 --port 3000 --strictPort",
+      "description": "Grok Crew browser desk (vinext/Vite). Open http://localhost:3000/"
+    }
+  ],
+  "ports": [
+    { "name": "Web desk", "port": 3000 },
+    { "name": "Local Studio sidecar", "port": 7214 }
+  ]
+}
